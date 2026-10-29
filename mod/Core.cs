@@ -722,12 +722,10 @@ public class Core : MelonMod
     [HarmonyPatch(typeof(Il2Cpp.TrackData), nameof(Il2Cpp.TrackData.IsOwned))]
     public static class Global_TrackData_IsOwned_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
 
-    [HarmonyPatch]
-    public static class TrackLoader_TrackData_IsOwned_Patch
-    {
-        public static MethodBase TargetMethod() => AccessTools.PropertyGetter(AccessTools.TypeByName("Il2CppSixtarGate.TrackLoader+TrackData"), "IsOwned");
-        public static bool Prefix(ref bool __result) => Unlocked(ref __result);
-    }
+    // Typed targets, not AccessTools.TypeByName: that scans every assembly and logs a yellow ReflectionTypeLoadException
+    // warning for UnityEngine.CoreModule (LightProbesQueryDisposeJob) each time.
+    [HarmonyPatch(typeof(TrackLoader.TrackData), nameof(TrackLoader.TrackData.IsOwned), MethodType.Getter)]
+    public static class TrackLoader_TrackData_IsOwned_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
 
     #endregion
 
@@ -778,15 +776,9 @@ public class Core : MelonMod
         }
     }
 
-    [HarmonyPatch]
+    [HarmonyPatch(typeof(Il2CppSixtarGate.Web.BackEndRankingService.TravelHighScoreRequest), nameof(Il2CppSixtarGate.Web.BackEndRankingService.TravelHighScoreRequest.Start))]
     public static class BackEnd_TravelHighScoreRequest_Patch
     {
-        public static MethodBase TargetMethod()
-        {
-            var type = AccessTools.TypeByName("Il2CppSixtarGate.Web.BackEndRankingService+TravelHighScoreRequest");
-            return AccessTools.Method(type, "Start");
-        }
-
         public static bool Prefix()
         {
             if (BlockServerUpload)
