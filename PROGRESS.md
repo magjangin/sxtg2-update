@@ -29,3 +29,4 @@
 - [진행] 15. 곡 선택 커스텀 곡 보정 (2026-10-29) — `Features\CustomMusicSelect.cs` — 결과 화면에서 돌아올 때 플레이한 커스텀 곡으로 커서 복귀(MAX COMBO 계산은 실기에서 안 나와 제거). 빌드·배포 완료, 실기 미확인. 상세는 `AGENTS.md` 4장 21.
 - [진행] 20. AllPerfect 안 누른 롱노트 불빛 수정 (2026-10-30) — `Features\PlayAssist.cs` `GearObject_PlayNoteEffect_Patch` — AllPerfect가 RedStar(미스) 틱을 BlueStar로 바꿔 레인 히트 이펙트가 눌린 것처럼 켜지던 문제. 원래 미스였던 틱은 이펙트만 생략. 빌드·배포 완료, 실기 미확인.
 - [진행] 21. 성능·코드 정리 + README (2026-10-30) — 오버레이 값 캐시/managed 기하, 앨범 `Has*` 디스크 접근 제거, 차트 텍스트 캐시, 노트 효과·랜덤 스킨 캐시, 죽은 구버전 훅 7개 제거, 로더 축소(4,217 → 3,746줄). 파서는 기존 구현과 실제 차트 15개 결과 동일. 빌드·배포 완료, 실기 미확인. 상세는 `AGENTS.md` 4장 23.
+- [진행] 22. 출석 보상 팝업 자동 표시 끄기 (2026-10-30) — `Features\AttendancePopup.cs`, config v6 `SkipAttendancePopup=1` — 모드 선택 진입 시 매일 뜨던 출석 보상 창 생략(보상은 안 받은 채로 남음). 빌드·배포 완료, 실기 미확인.

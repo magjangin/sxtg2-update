@@ -90,6 +90,7 @@ Mono 시절 모드 **sxtg2**의 기능을 현재 IL2CPP 빌드로 옮겼습니�
 | `NoteSpeedChaos` | 0 | 노트마다 다른 낙하 속도 (`…Min`, `…Max`, `…PerLane`) |
 | `Hidden`, `FadeIn`, `FadeOut` | 0 | 레인 가리기. 게임을 켤 때마다 0으로 돌아갑니다 |
 | `CustomMarathon` | 0 | 커스텀 곡 마라톤 (`CustomMarathonAutoNext` 초 뒤 자동 진행) |
+| `SkipAttendancePopup` | 1 | 모드 선택 화면의 출석 보상 창을 자동으로 띄우지 않음 (보상은 안 받은 채로 남음) |
 | `DebugLog` | 0 | 자세한 로그 |
 
 노트 흔들림과 서든은 게임 옵션("노트 흔들림 설정", "실링 다운")에 이미 있어서 모드에서는 다루지 않습니다.
