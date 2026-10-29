@@ -54,9 +54,7 @@
      - 구버전 씬(`ManagerPlayOld`)이 아닌 현재 버전 리뉴얼 플레이 씬(`Renewal_Play` / `PlayManager`)으로의 진입을 `SixtarGlobal.GotoPlayScene` Prefix에서 정확히 감지하여 `IsCustomTrackActive = true` 활성화.
      - `Renewal_Play` 진입 시 `PatternConverter.Initialize`가 `MikazukiConverter.Parse`를 호출할 때 Prefix로 가로채, `BMSConverter.Parse`를 실행하여 1노트 BMS(`#BPM 160\n#00111:01000000\n`)로 파싱된 `Sixtarithm.Pattern` 객체를 반환.
      - 원본 템플릿(Starting Point)의 BGM 및 MP4 BGA는 그대로 유지하면서 인게임 차트만 첫 마디 1개 블루 노트로 교체 주입.
-4. **All-Perfect 판정 조작:**
-   - **타깃:** `Il2Cpp.JudgeCounter::AddJudge(EJudge judge)` (RVA `0x59B2B0`)
-   - **역할:** 노트를 칠 때 판정 등급 누적. `judge = EJudge.BlueStar`로 고정 시 올 퍼펙트 달성 가능.
+4. **All-Perfect 판정 조작:** 구버전 `Il2Cpp.JudgeCounter::AddJudge`(RVA `0x59B2B0`) 훅은 아무것도 안 하는 빈 Prefix라 제거함(2026-10-30). 실제 AllPerfect는 리뉴얼 판정 경로 `JudgeProcessor.OnTickEvent`(아래 18번).
 5. **전곡 & 모든 DLC 해금:**
    - **타깃:** `ItemUnlockChecker::IsUnlocked`, `ItemUnlockChecker::IsDLCUnlocked`, `TrackLoader.TrackData::get_IsOwned`, `ItemProvideModule::IsOwned`
    - **역할:** 항상 `true` 반환으로 모든 DLC 및 해금곡 즉시 플레이 가능.
@@ -70,7 +68,7 @@
      - 1-노트 차트는 최대 틱이 1개 노트(약 0.5초)뿐이므로, 원본 로직상 `LatestNoteTiming`이 0.5초로 잡히고 `TrackEndTiming`이 초기화되지 않아(0초), `0.0 + 0.0 + 3.0f(_finishOffset) <= patternTime` 조건에 의해 노트를 치고 3초 만에 `OnFinished`가 발동되어 클리어 씬으로 강제 전환되는 버그가 발생함.
      - `FinishProcessor.Initialize` Postfix에서 선택된 앨범의 실제 곡 길이(`album.Duration`)에 맞춰 `TrackEndTiming`을 동적으로 확장 설정. 검증 완료 후 주기적 디버그 로그는 제거하여 최적화.
 8. **`sxtg2` 핵심 로직 이식 & 미디어 에셋 오버라이드 (v2.0.0):**
-   - **타깃:** `Il2CppSixtarGate.Play.BackgroundUIProcessor::Initialize(string trackID)` (RVA `0x63CD80`), `Il2CppSixtarGate.MusicSelect.TrackInfoViewer::Set(ITrack track, TrackSelectArgs args)` (RVA `0x634CB0`), `Il2CppSixtarGate.MusicSelect.TrackObject::SetTrack(ITrack track)` (RVA `0x636620`), `CustomTrackManager`, `BmsParser`, `TrackInfoParser`, `MediaOverrideManager`
+   - **타깃:** `Il2CppSixtarGate.Play.BackgroundUIProcessor::Initialize(string trackID)` (RVA `0x63CD80`), `Il2CppSixtarGate.MusicSelect.TrackInfoViewer::Set(ITrack track, TrackSelectArgs args)` (RVA `0x634CB0`), `CustomTrackManager`, `BmsParser`, `TrackInfoParser`, `MediaOverrideManager`
    - **역할:**
      - `{게임폴더}\hwa\` 하위 앨범 폴더를 자동 스캔하여 `trackinfo.txt`/`info.txt`, `chart.bms`(`hwa2.bms` 등), `music.ogg`/`.mp3`/`.wav`, `video.mp4`/`bg.mp4`, `thumbnail.png`/`thumb.png`/`jacket.png`를 자동 매핑.
      - "CUSTOM" 카테고리 진입 시 스캔된 모든 앨범을 `TrackData` 리스트로 변환하여 GUI에 등록 (제목, 작곡가, BPM, 난이도 반영).
@@ -129,6 +127,16 @@
 
 ---
 
+23. **성능 원칙 (2026-10-30 정리):**
+   - **Unity 값 형식 헬퍼는 전부 네이티브 호출:** 이 Il2CppInterop 빌드에서 `new Rect(...)`, `rect.x`/`width`/`yMax`, `Rect ==`, `Mathf.Clamp01`/`Lerp`, `Color.white`, `new Color(r,g,b,a)` 등은 `IL2CPP.il2cpp_runtime_invoke` + 결과 boxing(IL2CPP 힙 할당)임(`ilspycmd -t UnityEngine.Rect`로 확인). 매 프레임 코드에서는 managed `Box`(Features/Overlay.cs), `Overlay.Rgba`(필드 초기화 `new Color { r = .. }`는 순수 managed), `MathF`/`Math`만 쓸 것. `Color`/`Vector2`의 `r,g,b,a`/`x,y`는 public 필드라 직접 접근은 무료.
+   - **오버레이(판정바/키뷰어/마라톤 배너):** 풀링된 Image/Text마다 표시 중인 값(위치·색·스프라이트·글자·활성)을 managed로 기억해 바뀔 때만 IL2CPP 호출. 형제 순서(그리기 순서)는 이번 프레임의 그리기 순서가 지난 프레임과 다를 때만 `SetAsLastSibling`으로 다시 맞춤(전에는 매 요소 매 프레임 호출 → 캔버스 재빌드). 판정바 모양 텍스처는 `SetPixel` 픽셀당 호출 대신 RGBA 배열을 `MediaOverrideManager.TextureFromRgba`로 한 번에 업로드.
+   - **`CustomAlbumInfo.Has*`:** 전에는 읽을 때마다 `File.Exists`(디스크 syscall). `BackgroundUIProcessor.IsVideoPlayable` getter 같은 잦은 훅에서 불림 → 스캔할 때 존재하는 파일만 경로를 넣고 `Has* = 경로 != null`.
+   - **차트 텍스트:** `GotoPlayScene b__12`와 `MikazukiConverter.Parse`가 같은 로딩에서 각각 파일 읽기 + sxtg2 변환을 했음 → `CustomTrackManager.LoadChartText`가 (경로, 수정 시각)으로 마지막 결과를 캐시.
+   - **노트 효과(속도 카오스/히든/페이드):** 노트마다 매 프레임 `transform.parent.GetInstanceID()`, 렌더러 필드 2개, `CanvasGroup.alpha` 대입을 하던 것 → 노트 포인터별 레인 캐시, 스크롤 배율은 프레임당 1번(`NoteEffects.OnFrame`), alpha는 바뀔 때만.
+   - **랜덤 노트 스킨:** 노트 스폰마다 `GetNoteReferance(lane).name`을 읽던 것 → 레인별 접미사를 플레이당 1번.
+   - **제거한 죽은 훅:** `ManagerPlayOld.Set`, `SXGTReader.ReadByTextAsset`(구버전 플레이 씬 — 커스텀 곡은 리뉴얼 경로만 탐, 실측 씬 목록에 구버전 플레이 씬 없음), `BMSConverter.Parse` Prefix(Mikazuki Prefix가 넘긴 차트를 다시 검사만 함, 바꾸는 경우 없음), `SelectableTrackObject.Fetch`(구버전 목록, 커스텀은 `TrackLoader.TrackData`라 매칭 불가), `TrackObject.SetTrack`/`<LoadThumbnail>b__1`(리뉴얼 목록 프리팹에 썸네일 Image 없음, 12번), `JudgeCounter.AddJudge`(빈 Prefix). `FindAlbum`의 제목(DisplayName) 폴백도 제거 — 공식 곡 제목이 커스텀 앨범 제목과 같으면 엉뚱한 자켓이 붙을 수 있었음.
+   - `BmsParser`/`TrackInfoParser`는 실제로 쓰는 값(기본 BPM, 마지막 노트 끝 시각, 제목/아티스트/난이도)만 남김. 이전 구현과 실제 hwa 차트 15개 + 경계 사례(3자리 값, OPEN, 짝 없는 롱노트 끝) 결과 동일 확인.
+
 ## 5. 시도했다가 실패한 것들 (Dead Ends / Failed Attempts)
 - **IL2CPP 동일 코드 접기(ICF) 주의 — 패치 전 반드시 확인:** 내용이 같은 메서드들이 하나의 네이티브 주소를 공유함. 공유 주소를 패치하면 Postfix가 엉뚱한 클래스의 `this`로 실행됨(필드 오프셋 오독 → 크래시/오작동). 실제 사례: `TrackInfoViewerModule._Set_b__3_1`(11개 공유: 프로필 아이콘·언락 리스트 등), `BackgroundUIProcessor.<Initialize>b__1`(인벤토리 썸네일 2개와 공유), `NoteObject.SetTickData`(102개), `JudgeProcessor.set_IsAutoJudge`(44개), `FinishProcessor.set_TrackEndTiming`(11개), `GearObject.NoteJudgedObserver.Notify`(`InputEventArgs.Invoke`와 공유). 확인법: `il2cpp_dump/script.json`의 `ScriptMethod[].Address` 중복 개수 세기.
 - **로컬 음원을 `SoundModuleForFMOD.PlayLocalSound`(programmer sound 이벤트)로 재생:** 그 이벤트 타임라인이 약 3분 고정이라 긴 곡은 중간부터 무음, 그 길이가 `GetGamePlayAudioLength`로 새어 186초에 결과 화면 강제 전환. → FMOD Core `createStream`으로 교체.
@@ -137,7 +145,8 @@
 - **자켓 PNG 동기 디코딩 (`ImageConversion.LoadImage`):** 1080p PNG 하나에 메인 스레드 50~100ms. CUSTOM 탭 진입 시 우측 목록 행(썸네일 슬롯 없음)용 진단 폴백이 10장을 한꺼번에 디코딩해 0.75초 멈춤 + 곡 이동마다 끊김. → 목록 행 폴백 제거, 가운데 자켓은 `MediaOverrideManager.RequestAlbumSprite`(UnityWebRequestTexture 비동기 디코딩, 콜백) + 탭 진입 시 `PreloadAll` 백그라운드 순차 로드. 플레이 흐름 화면은 캐시된 sprite를 동기 조회.
 - **매 프레임·매 노트 훅 상시 부착:** `NoteObject.set_HeadPosition/set_NoteLength`는 화면의 모든 노트에 대해 매 프레임 호출됨 → IL2CPP 디트로 비용+래퍼 할당. 속도 카오스/히든/페이드를 쓸 때만 `Register` Postfix에서 `HarmonyInstance.Patch`, 아니면 `Unpatch`.
 - **루틴 로그 남발:** 곡 선택마다 5~6줄(TrackInfoViewer.Set ×2, 자켓, 프리뷰 Play/Streaming, LoadImage)이 콘솔 출력 비용까지 유발. → `Core.DebugLog`(config `DebugLog=1`일 때만 출력).
-- **uGUI 풀 재사용 시 그리기 순서:** 풀링된 Image/Text를 호출 순서대로 재사용하면 렌더 순서(형제 순서=생성 순서)와 어긋나, 나중에 생성된 반투명 키 박스가 키 글자를 덮어 글자가 회색↔흰색으로 깜빡임. → Rect/Label 호출마다 `SetAsLastSibling()`.
+- **매 프레임 Unity 값 형식 헬퍼 사용:** 오버레이가 프레임마다 `new Rect`/`Rect.x`/`Mathf`/`new Color`를 수백 번 호출 → 전부 `il2cpp_runtime_invoke` + boxing. 23번 원칙 참조.
+- **uGUI 풀 재사용 시 그리기 순서:** 풀링된 Image/Text를 호출 순서대로 재사용하면 렌더 순서(형제 순서=생성 순서)와 어긋나, 나중에 생성된 반투명 키 박스가 키 글자를 덮어 글자가 회색↔흰색으로 깜빡임. → 그리기 순서가 바뀐 프레임에만 그린 순서대로 `SetAsLastSibling()`(23번).
 - **곡 선택 MAX COMBO(`---`) 직접 채우기:** `TrackInfoViewer.CalcTotalCombo`(RVA `0x6344E0`)는 `"---"`를 쓰고 `MaxComboLoader`가 곡 번들 패턴을 읽어 `RefreshMaxCombo`로 채우는데, 커스텀은 번들이 없어 `---`. Prefix에서 BMS → `StartrailPattern` → `SixtarTickFactory.Interprete(p, null)` → `TickCount` 합으로 채워 봤으나 실기에서 표시되지 않아 제거(원인 미확인).
 - **`InputListener.Instance.playActionMap`으로 키 이름 읽기:** 리뉴얼 플레이 씬엔 InputListener 자체가 없음.
 - **BGA를 `BackgroundUIProcessor.Initialize` Postfix에서 URL로만 교체:** 비동기 `b__2`가 나중에 `clip = null`을 대입해 URL을 덮어쓰고, `PlayBGA`가 clip null이라 재생 자체를 안 함 → 영상 안 나옴(로그상 "Overrode BGA"는 찍혀서 착각하기 쉬움).
