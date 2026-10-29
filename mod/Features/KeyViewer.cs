@@ -22,36 +22,38 @@ public static class KeyViewer
     private static readonly string[] Labels = new string[7];
     private static bool _bound;
 
-    public static void ResetBindings() { _bound = false; _bindAttempts = 0; }
+    public static void ResetBindings() { _bound = false; _bindAttempts = 0; _frame = 0; }
+
+    private static readonly Color BorderUp = Overlay.Rgba(1f, 1f, 1f, 0.35f), BorderDown = Overlay.Rgba(1f, 1f, 1f, 0.95f);
+    private static readonly Color TextUp = Overlay.Rgba(1f, 1f, 1f, 0.9f), TextDown = Overlay.Rgba(0.05f, 0.05f, 0.05f, 1f);
 
     public static void Draw()
     {
         if (!ModConfig.EnableKeyViewer || !PlayAssist.IsPlaying) return;
-        if (!_bound) TryBindLabels();
+        // The input module may be wired a little after the judge starts: retry for ~2 s, every 10th frame.
+        if (!_bound && _frame++ % 10 == 0) TryBindLabels();
 
         int[] order = Core.CurrentPlayStyleIsLunar ? LunarOrder : SolarOrder;
         const float size = 44f, gap = 6f;
         float total = order.Length * size + (order.Length - 1) * gap;
-        float x0 = (Screen.width - total) / 2f;
-        float y = Screen.height - 56f - size;
+        float x0 = (Overlay.ScreenWidth - total) / 2f;
+        float y = Overlay.ScreenHeight - 56f - size;
 
         for (int i = 0; i < order.Length; i++)
         {
             int lane = order[i];
-            var rect = new Rect(x0 + i * (size + gap), y, size, size);
+            var box = new Box(x0 + i * (size + gap), y, size, size);
             bool pressed = PlayAssist.LanePressed[lane];
-            Color normal = ModConfig.KeyViewerNormalColor;
             Color down = lane == GateLane ? ModConfig.KeyViewerGatePressedColor : ModConfig.KeyViewerPressedColor;
 
-            JudgmentBar.DrawColorRect(rect, pressed ? down : normal);
-            DrawBorder(rect, pressed ? new Color(1f, 1f, 1f, 0.95f) : new Color(1f, 1f, 1f, 0.35f));
-            Overlay.Label(rect, Labels[lane] ?? "-", pressed ? new Color(0.05f, 0.05f, 0.05f, 1f) : new Color(1f, 1f, 1f, 0.9f),
-                15, TextAnchor.MiddleCenter, outline: false);
+            Overlay.Rect(box, pressed ? down : ModConfig.KeyViewerNormalColor);
+            DrawBorder(box, pressed ? BorderDown : BorderUp);
+            Overlay.Label(box, Labels[lane] ?? "-", pressed ? TextDown : TextUp, 15, TextAnchor.MiddleCenter, outline: false);
         }
     }
 
     private static readonly string[] LaneNames = { "LL", "L", "R", "RR", "GATE", "LT", "RT" };
-    private static int _bindAttempts;
+    private static int _bindAttempts, _frame;
 
     private static void TryBindLabels()
     {
@@ -80,8 +82,7 @@ public static class KeyViewer
             var map = listener?.playActionMap;
             if (map == null)
             {
-                // Retry for ~2 s (input may be wired a little after the judge starts), then fall back to lane names.
-                if (++_bindAttempts < 120) return;
+                if (++_bindAttempts < 12) return; // ~2 s, then fall back to lane names
                 Array.Copy(LaneNames, Labels, Labels.Length);
                 _bound = true;
                 Melon<Core>.Logger.Warning("[KeyViewer] No input bindings found (SixtarInputAction / InputListener); showing lane names");
@@ -131,11 +132,11 @@ public static class KeyViewer
         };
     }
 
-    private static void DrawBorder(Rect r, Color c)
+    private static void DrawBorder(Box b, Color c)
     {
-        JudgmentBar.DrawColorRect(new Rect(r.x, r.y, r.width, 1.5f), c);
-        JudgmentBar.DrawColorRect(new Rect(r.x, r.yMax - 1.5f, r.width, 1.5f), c);
-        JudgmentBar.DrawColorRect(new Rect(r.x, r.y, 1.5f, r.height), c);
-        JudgmentBar.DrawColorRect(new Rect(r.xMax - 1.5f, r.y, 1.5f, r.height), c);
+        Overlay.Rect(new Box(b.X, b.Y, b.W, 1.5f), c);
+        Overlay.Rect(new Box(b.X, b.YMax - 1.5f, b.W, 1.5f), c);
+        Overlay.Rect(new Box(b.X, b.Y, 1.5f, b.H), c);
+        Overlay.Rect(new Box(b.XMax - 1.5f, b.Y, 1.5f, b.H), c);
     }
 }

@@ -44,7 +44,8 @@ public class Core : MelonMod
     {
         if (ModConfig.DebugLog) Melon<Core>.Logger.Msg(message);
     }
-    public const string CUSTOM_TRACK_FLAG = "CUSTOM_HWA_FLAG";
+    /// <summary>Chart for the CUSTOM tab's placeholder track (no album in hwa/): one blue note, ~128 s long.</summary>
+    private const string DefaultBms = "#BPM 160\n#00211:01000000\n#08511:00000000\n";
 
     public override void OnInitializeMelon()
     {
@@ -90,16 +91,20 @@ public class Core : MelonMod
         LoggerInstance.Msg($"[Scene] Loaded '{sceneName}'");
         if (!string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase))
             PlayAssist.EndPlay();
-        CustomMarathon.OnSceneLoaded(sceneName);    }
+        CustomMarathon.OnSceneLoaded(sceneName);
+    }
 
     public override void OnLateUpdate()
     {
         try
         {
+            NoteEffects.OnFrame();
             if (!Overlay.Begin()) return;
-            CustomMarathon.Update();
-            JudgmentBar.Draw();
-            CustomMarathon.Draw();            KeyViewer.Draw();
+            float now = Time.time;
+            CustomMarathon.Update(now);
+            JudgmentBar.Draw(now);
+            CustomMarathon.Draw(now);
+            KeyViewer.Draw();
             Overlay.End();
         }
         catch (Exception ex)
@@ -252,7 +257,7 @@ public class Core : MelonMod
             var track = __instance.track;
             if (track == null) return true;
 
-            string bmsContent = "#BPM 160\n#00211:01000000\n#08511:00000000\n";
+            string bmsContent = DefaultBms;
             var album = CustomTrackManager.CurrentSelectedAlbum;
             if (album != null && album.HasCustomBms)
             {
@@ -317,8 +322,7 @@ public class Core : MelonMod
 
                 if (string.IsNullOrEmpty(bmsContent))
                 {
-                    // Fallback: 160 BPM, 1 blue note at measure 002 (channel 11), dummy measure at 085 (~128 seconds song duration)
-                    bmsContent = "#BPM 160\n#00211:01000000\n#08511:00000000\n";
+                    bmsContent = DefaultBms;
                     Melon<Core>.Logger.Msg("[CustomChart] Using default 1-Note BMS.");
                 }
 
@@ -327,67 +331,6 @@ public class Core : MelonMod
                 return false;
             }
             return true;
-        }
-    }
-
-    [HarmonyPatch(typeof(ManagerPlayOld), nameof(ManagerPlayOld.Set), new Type[] { typeof(TrackData), typeof(ELevels), typeof(EPlayStyle), typeof(PlayOption) })]
-    public static class ManagerPlayOld_Set_Patch
-    {
-        public static void Prefix(TrackData track)
-        {
-            if (track != null && (track.LicenseCopy == CUSTOM_TRACK_FLAG || track.DisplayName.Contains("(Custom 1-Note)")))
-            {
-                IsCustomTrackActive = true;
-                if (CustomTrackManager.AlbumsByTrackId.TryGetValue(track.ID, out var album))
-                {
-                    CustomTrackManager.CurrentSelectedAlbum = album;
-                }
-            }
-            else
-            {
-                IsCustomTrackActive = false;
-                CustomTrackManager.CurrentSelectedAlbum = null;
-            }
-        }
-    }
-
-    [HarmonyPatch(typeof(SXGTReader), "ReadByTextAsset")]
-    public static class SXGTReader_ReadByTextAsset_Patch
-    {
-        public static void Prefix(SXGTReader __instance, ref SXGTData ret, ref string ta)
-        {
-            if (IsCustomTrackActive)
-            {
-                var album = CustomTrackManager.CurrentSelectedAlbum;
-                if (album != null && album.HasCustomBms)
-                {
-                    try { ta = CustomTrackManager.LoadChartText(album); return; } catch { }
-                }
-                ta = "#BPM 160\n#00211:01000000\n#08511:00000000\n";
-            }
-        }
-    }
-
-    [HarmonyPatch(typeof(BMSConverter), nameof(BMSConverter.Parse), new Type[] { typeof(string) })]
-    public static class BMSConverter_Parse_Patch
-    {
-        public static void Prefix(ref string content)
-        {
-            if (IsCustomTrackActive)
-            {
-                var album = CustomTrackManager.CurrentSelectedAlbum;
-                if (album != null && album.HasCustomBms)
-                {
-                    if (!content.Contains("#BPM") && !content.Contains("#00"))
-                    {
-                        try { content = CustomTrackManager.LoadChartText(album); } catch { }
-                    }
-                }
-                else if (!content.Contains("#08511") && !content.Contains("#00211"))
-                {
-                    content = "#BPM 160\n#00211:01000000\n#08511:00000000\n";
-                }
-            }
         }
     }
 
@@ -403,16 +346,7 @@ public class Core : MelonMod
                 if (customDuration <= 0f) customDuration = 125.0f;
 
                 __instance.TrackEndTiming = customDuration;
-                
-                try
-                {
-                    var prop = typeof(FinishProcessor).GetProperty("LatestNoteTiming");
-                    prop?.GetSetMethod(true)?.Invoke(__instance, new object[] { customDuration - 3.0f });
-                }
-                catch (Exception ex)
-                {
-                    Melon<Core>.Logger.Warning($"[FinishProcessor] Could not set LatestNoteTiming: {ex.Message}");
-                }
+                __instance.LatestNoteTiming = customDuration - 3.0f;
 
                 Melon<Core>.Logger.Msg($"[FinishProcessor] Custom track initialized: TrackEndTiming = {__instance.TrackEndTiming:F1}s");
             }
@@ -576,7 +510,7 @@ public class Core : MelonMod
             if (track == null) return;
             _shownTrackId = track.TrackID;
 
-            var album = CustomTrackManager.FindAlbum(track.TrackID, track.DisplayName);
+            var album = CustomTrackManager.FindAlbum(track.TrackID);
             if (album == null || !album.HasCustomJacket) return;
 
             var img = __instance.jacket;
@@ -592,73 +526,18 @@ public class Core : MelonMod
                 // The selection may have moved on while the PNG was decoding.
                 if (img == null || _shownTrackId != trackId) return;
                 img.sprite = sprite;
-                img.color = Color.white;
+                img.color = White;
                 img.enabled = true;
                 DebugLog($"[MusicSelect] Center jacket '{album.Title}'");
             });
         }
     }
 
-    // 8. Legacy MusicSelect (ManagerMusicSelect / SelectableTrackObject) list thumbnails.
-    [HarmonyPatch(typeof(SelectableTrackObject), nameof(SelectableTrackObject.Fetch), new Type[] { typeof(TrackData) })]
-    public static class SelectableTrackObject_Fetch_Patch
-    {
-        public static void Postfix(SelectableTrackObject __instance, TrackData t)
-        {
-            if (t == null) return;
-            var album = CustomTrackManager.FindAlbum(t.ID, t.DisplayName);
-            if (album == null || !album.HasCustomJacket) return;
-
-            var jackets = __instance.jacketImage;
-            if (jackets == null || jackets.Length == 0) return;
-            MediaOverrideManager.RequestAlbumSprite(album, sprite =>
-            {
-                for (int i = 0; i < jackets.Length; i++)
-                {
-                    var img = jackets[i];
-                    if (img == null) continue;
-                    img.sprite = sprite;
-                    img.color = Color.white;
-                    img.enabled = true;
-                    img.gameObject.SetActive(true);
-                }
-            });
-        }
-    }
-
-    // Renewal list rows (TrackObject): the prefab has no thumbnail Image (TrackObject.thumbnail is null, see AGENTS.md),
-    // so these only act if a future prefab adds one. TrackObject.LoadThumbnail is inlined into SetTrack; the async
-    // bundle callback <LoadThumbnail>b__1 assigns the (null) bundle sprite afterwards, so re-apply after it too.
-    private static void ApplyListThumbnail(TrackObject? owner, ITrack? track)
-    {
-        var thumb = owner?.thumbnail;
-        if (thumb == null || track == null) return;
-        var album = CustomTrackManager.FindAlbum(track.TrackID, track.DisplayName);
-        if (album == null || !album.HasCustomJacket) return;
-        MediaOverrideManager.RequestAlbumSprite(album, sprite =>
-        {
-            if (thumb == null) return;
-            thumb.sprite = sprite;
-            thumb.color = Color.white;
-            thumb.enabled = true;
-        });
-    }
-
-    [HarmonyPatch(typeof(TrackObject.__c__DisplayClass18_0), nameof(TrackObject.__c__DisplayClass18_0._LoadThumbnail_b__1))]
-    public static class TrackObject_LoadThumbnailCallback_Patch
-    {
-        public static void Postfix(TrackObject.__c__DisplayClass18_0 __instance) => ApplyListThumbnail(__instance.__4__this, __instance.track);
-    }
-
-    [HarmonyPatch(typeof(TrackObject), nameof(TrackObject.SetTrack), new Type[] { typeof(ITrack) })]
-    public static class TrackObject_SetTrack_Patch
-    {
-        public static void Postfix(TrackObject __instance, ITrack track) => ApplyListThumbnail(__instance, track);
-    }
-
     // 10. Play-flow jackets (loading screen, pause popup, result screen).
     // Each screen loads "{trackID}_jacket" / "Thumbnail" sprites from the track's asset bundle and assigns them in an
     // async callback; for a custom trackID the bundle hands back null, leaving a white box. Re-apply after each callback.
+    private static readonly Color White = Overlay.Rgba(1f, 1f, 1f, 1f);
+
     private static void ApplyCurrentAlbumJacket(Image? img, string where)
     {
         if (img == null || !IsCustomTrackActive) return;
@@ -667,7 +546,7 @@ public class Core : MelonMod
         var sprite = MediaOverrideManager.GetOrCreateAlbumSprite(album);
         if (sprite == null) return;
         img.sprite = sprite;
-        img.color = Color.white;
+        img.color = White;
         img.enabled = true;
         DebugLog($"[Jacket] Applied custom jacket to {where}");
     }
@@ -717,7 +596,7 @@ public class Core : MelonMod
             if (sprite != null && img.sprite != sprite)
             {
                 img.sprite = sprite;
-                img.color = Color.white;
+                img.color = White;
                 img.enabled = true;
                 DebugLog($"[Jacket] Re-applied custom jacket to {where} after async load");
             }
@@ -731,24 +610,22 @@ public class Core : MelonMod
             => ApplyCurrentAlbumJacketDeferred(__instance.jacket, "Pause.jacket");
     }
 
+    private static void ApplyResultJackets(Il2CppSixtarGate.Result.TrackInfoModule? module)
+    {
+        ApplyCurrentAlbumJacket(module?.jacket, "Result.jacket");
+        ApplyCurrentAlbumJacket(module?.thumbnail, "Result.thumbnail");
+    }
+
     [HarmonyPatch(typeof(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0), "_Show_b__3")]
     public static class ResultTrackInfo_Callback3_Patch
     {
-        public static void Postfix(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0 __instance)
-        {
-            ApplyCurrentAlbumJacket(__instance.__4__this?.jacket, "Result.jacket");
-            ApplyCurrentAlbumJacket(__instance.__4__this?.thumbnail, "Result.thumbnail");
-        }
+        public static void Postfix(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0 __instance) => ApplyResultJackets(__instance.__4__this);
     }
 
     [HarmonyPatch(typeof(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0), "_Show_b__4")]
     public static class ResultTrackInfo_Callback4_Patch
     {
-        public static void Postfix(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0 __instance)
-        {
-            ApplyCurrentAlbumJacket(__instance.__4__this?.jacket, "Result.jacket");
-            ApplyCurrentAlbumJacket(__instance.__4__this?.thumbnail, "Result.thumbnail");
-        }
+        public static void Postfix(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0 __instance) => ApplyResultJackets(__instance.__4__this);
     }
 
     [HarmonyPatch(typeof(Il2CppSixtarGate.Result.TravelBackgroundModule.__c__DisplayClass5_0), "_InitializeModule_b__1")]
@@ -794,80 +671,32 @@ public class Core : MelonMod
 
     #region --- 1. All Songs & DLC Unlock Hooks ---
 
-    [HarmonyPatch(typeof(ItemUnlockChecker), nameof(ItemUnlockChecker.IsUnlocked), new Type[] { typeof(string) })]
-    public static class ItemUnlockChecker_IsUnlocked_Patch
+    /// <summary>Shared prefix body: report "owned / unlocked" and skip the original check.</summary>
+    private static bool Unlocked(ref bool result)
     {
-        public static bool Prefix(string hash, ref bool __result)
-        {
-            if (UnlockAllTracks)
-            {
-                __result = true;
-                return false; // Skip original check
-            }
-            return true;
-        }
+        if (!UnlockAllTracks) return true;
+        result = true;
+        return false;
     }
 
+    [HarmonyPatch(typeof(ItemUnlockChecker), nameof(ItemUnlockChecker.IsUnlocked), new Type[] { typeof(string) })]
+    public static class ItemUnlockChecker_IsUnlocked_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
+
+    // Skips the Steam DLC ownership check.
     [HarmonyPatch(typeof(ItemUnlockChecker), nameof(ItemUnlockChecker.IsDLCUnlocked), new Type[] { typeof(string) })]
-    public static class ItemUnlockChecker_IsDLCUnlocked_Patch
-    {
-        public static bool Prefix(string hash, ref bool __result)
-        {
-            if (UnlockAllTracks)
-            {
-                __result = true;
-                return false; // Skip original Steam DLC check
-            }
-            return true;
-        }
-    }
+    public static class ItemUnlockChecker_IsDLCUnlocked_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
 
     [HarmonyPatch(typeof(ItemProvideModule), nameof(ItemProvideModule.IsOwned), new Type[] { typeof(string) })]
-    public static class ItemProvideModule_IsOwned_Patch
-    {
-        public static bool Prefix(string itemID, ref bool __result)
-        {
-            if (UnlockAllTracks)
-            {
-                __result = true;
-                return false;
-            }
-            return true;
-        }
-    }
+    public static class ItemProvideModule_IsOwned_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
 
     [HarmonyPatch(typeof(Il2Cpp.TrackData), nameof(Il2Cpp.TrackData.IsOwned))]
-    public static class Global_TrackData_IsOwned_Patch
-    {
-        public static bool Prefix(ref bool __result)
-        {
-            if (UnlockAllTracks)
-            {
-                __result = true;
-                return false;
-            }
-            return true;
-        }
-    }
+    public static class Global_TrackData_IsOwned_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
 
     [HarmonyPatch]
     public static class TrackLoader_TrackData_IsOwned_Patch
     {
-        public static MethodBase TargetMethod()
-        {
-            var type = AccessTools.TypeByName("Il2CppSixtarGate.TrackLoader+TrackData");
-            return AccessTools.PropertyGetter(type, "IsOwned");
-        }
-
-        public static bool Prefix(ref bool __result)
-        {
-            if (UnlockAllTracks)
-            {
-                __result = true;
-                return false;
-            }
-            return true;
-        }
+        public static MethodBase TargetMethod() => AccessTools.PropertyGetter(AccessTools.TypeByName("Il2CppSixtarGate.TrackLoader+TrackData"), "IsOwned");
+        public static bool Prefix(ref bool __result) => Unlocked(ref __result);
     }
 
     #endregion
@@ -936,20 +765,6 @@ public class Core : MelonMod
                 return false;
             }
             return true;
-        }
-    }
-
-    #endregion
-
-    #region --- 3. BMS Chart & Judge Hooks ---
-
-    [HarmonyPatch(typeof(JudgeCounter), nameof(JudgeCounter.AddJudge), new Type[] { typeof(EJudge) })]
-    public static class JudgeCounter_AddJudge_Patch
-    {
-        public static void Prefix(ref EJudge judge)
-        {
-            // All-Perfect mode hook point
-            // judge = EJudge.BlueStar;
         }
     }
 

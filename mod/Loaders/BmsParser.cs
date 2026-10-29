@@ -7,67 +7,24 @@ using MelonLoader;
 
 namespace SixtarGateMod.Loaders;
 
+/// <summary>
+/// Reads what the song list needs from an album chart (sxtg2 layout): the base BPM and when the last note ends,
+/// long notes included. Time = measure position * 240 / base BPM (BPM changes and measure lengths are ignored).
+/// sxtg2 lanes are channels 16/11/12/13/14/15/18 with the note type in the value (01 normal, 02/03 long start/end);
+/// channels 04/05 carry the OPEN gate (04/05 start/end). 3-character charts (#WAV001) use values like "002".
+/// </summary>
 public static class BmsParser
 {
-    public enum NoteType
-    {
-        Normal,
-        Long,
-        HoldEnd,
-        Open,
-        Close
-    }
+    public sealed record ParseResult(float BaseBpm, float MaxTime);
 
-    public class ParsedNote
-    {
-        public float Time { get; set; }
-        public int Lane { get; set; }
-        public NoteType NoteType { get; set; }
-        public float Length { get; set; }
-        public string OriginalNoteValue { get; set; } = "";
-    }
-
-    public class ParseResult
-    {
-        public float BaseBpm { get; set; }
-        public List<ParsedNote> Notes { get; set; } = new();
-        public float MaxTime { get; set; }
-        public int TotalNotes { get; set; }
-    }
-
-    private static readonly Dictionary<string, int> LaneMapping = new()
-    {
-        { "16", 0 },
-        { "11", 1 },
-        { "12", 2 },
-        { "13", 3 },
-        { "14", 4 },
-        { "15", 5 },
-        { "18", 6 }
-    };
-
-    private static readonly Dictionary<string, NoteType> NoteTypeMapping = new()
-    {
-        { "01", NoteType.Normal },
-        { "02", NoteType.Long },
-        { "03", NoteType.HoldEnd },
-        { "04", NoteType.Open },
-        { "05", NoteType.Close }
-    };
-
-    private const int DefaultNoteValueWidth = 2;
-    private const int ExtendedNoteValueWidth = 3;
     private const float DefaultBpm = 150f;
+    private static readonly HashSet<string> LaneChannels = new() { "16", "11", "12", "13", "14", "15", "18" };
 
     public static ParseResult? ParseBmsFile(string filePath)
     {
-        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
-            return null;
-
         try
         {
-            var lines = File.ReadAllLines(filePath);
-            return ParseBmsFromLines(lines);
+            return Parse(File.ReadAllLines(filePath));
         }
         catch (Exception ex)
         {
@@ -76,223 +33,56 @@ public static class BmsParser
         }
     }
 
-    public static ParseResult ParseBmsFromText(string text)
+    public static ParseResult Parse(string[] rawLines)
     {
-        if (string.IsNullOrEmpty(text))
-            return new ParseResult { BaseBpm = DefaultBpm };
+        var lines = rawLines.Select(l => l.Trim()).Where(l => l.Length > 1 && l[0] == '#').ToArray();
+        float bpm = lines.Select(BpmOf).FirstOrDefault(b => b > 0f, DefaultBpm);
+        int width = lines.Any(l => l.StartsWith("#WAV", StringComparison.OrdinalIgnoreCase) && l.Split(' ', '\t')[0].Length == 7) ? 3 : 2;
 
-        var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-        return ParseBmsFromLines(lines);
+        // (lane key, time, type): type 1 normal, 2/4 hold start, 3/5 hold end.
+        var notes = new List<(string Lane, float Time, int Type)>();
+        foreach (var line in lines)
+        {
+            int colon = line.IndexOf(':');
+            if (colon <= 2) continue;
+            string channel = line.Substring(1, colon - 1), data = line.Substring(colon + 1);
+            string ch = channel.Substring(channel.Length - 2);
+            int.TryParse(channel.Substring(0, channel.Length - 2), out int measure);
+
+            int count = data.Length / width;
+            for (int i = 0; i < count; i++)
+            {
+                string v = data.Substring(i * width, width);
+                if (width == 3) v = v[0] == '0' ? v.Substring(1) : "";
+                int type = v switch { "01" => 1, "02" => 2, "03" => 3, "04" => 4, "05" => 5, _ => 0 };
+                if (type == 0) continue;
+                string lane = type >= 4 ? "OPEN" : ch;
+                if (type < 4 && !LaneChannels.Contains(lane)) continue;
+                if (type >= 4 && ch != "04" && ch != "05" && !LaneChannels.Contains(ch)) continue;
+                notes.Add((lane, (measure + (float)i / count) * 240f / bpm, type));
+            }
+        }
+
+        // A hold ends at its end marker; an end marker with no open start in its lane is ignored.
+        float maxTime = 0f;
+        foreach (var lane in notes.GroupBy(n => n.Lane))
+        {
+            bool pending = false;
+            foreach (var n in lane.OrderBy(n => n.Time))
+            {
+                bool isEnd = n.Type == 3 || n.Type == 5;
+                if (isEnd && !pending) continue;
+                pending = n.Type == 2 || n.Type == 4 || (pending && !isEnd);
+                maxTime = Math.Max(maxTime, n.Time);
+            }
+        }
+        return new ParseResult(bpm, maxTime);
     }
 
-    public static ParseResult ParseBmsFromLines(string[] lines)
+    private static float BpmOf(string line)
     {
-        var result = new ParseResult { BaseBpm = DefaultBpm };
-        if (lines == null || lines.Length == 0)
-            return result;
-
-        try
-        {
-            float bpm = FindBaseBpm(lines);
-            int valueWidth = DetectNoteValueWidth(lines);
-            var notes = new List<ParsedNote>();
-
-            foreach (string rawLine in lines)
-            {
-                string line = rawLine?.Trim() ?? "";
-                if (string.IsNullOrEmpty(line) || line[0] != '#')
-                    continue;
-
-                int colon = line.IndexOf(':');
-                if (colon <= 1)
-                    continue;
-
-                ParseNoteData(
-                    line.Substring(1, colon - 1),
-                    line.Substring(colon + 1),
-                    valueWidth,
-                    bpm,
-                    notes);
-            }
-
-            PairHoldNotes(notes);
-            notes.RemoveAll(note =>
-                note.NoteType == NoteType.HoldEnd ||
-                note.NoteType == NoteType.Close);
-
-            float maxTime = 0f;
-            foreach (var n in notes)
-            {
-                float endTime = n.Time + n.Length;
-                if (endTime > maxTime)
-                    maxTime = endTime;
-            }
-
-            result.BaseBpm = bpm;
-            result.Notes = notes;
-            result.TotalNotes = notes.Count;
-            result.MaxTime = maxTime;
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            Melon<Core>.Logger.Error($"[BmsParser] BMS parsing error: {ex.Message}");
-            return result;
-        }
-    }
-
-    private static float FindBaseBpm(IEnumerable<string> lines)
-    {
-        foreach (string rawLine in lines)
-        {
-            string line = rawLine?.Trim() ?? "";
-            if (string.IsNullOrEmpty(line) ||
-                !line.StartsWith("#BPM", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            string[] split = line.Substring(1).Split(new[] { ' ', '\t' }, 2);
-            if (split.Length == 2 &&
-                split[0].Equals("BPM", StringComparison.OrdinalIgnoreCase) &&
-                float.TryParse(
-                    split[1].Trim(),
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture,
-                    out float bpm) &&
-                bpm > 0f)
-            {
-                return bpm;
-            }
-        }
-
-        return DefaultBpm;
-    }
-
-    private static int DetectNoteValueWidth(IEnumerable<string> lines)
-    {
-        foreach (string rawLine in lines)
-        {
-            string line = rawLine?.Trim() ?? "";
-            if (string.IsNullOrEmpty(line) ||
-                !line.StartsWith("#WAV", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            int keyEnd = line.IndexOfAny(new[] { ' ', '\t' });
-            string key = keyEnd >= 0
-                ? line.Substring(1, keyEnd - 1)
-                : line.Substring(1);
-            if (key.Length == 6)
-                return ExtendedNoteValueWidth;
-        }
-
-        return DefaultNoteValueWidth;
-    }
-
-    private static void ParseNoteData(
-        string channel,
-        string data,
-        int valueWidth,
-        float bpm,
-        List<ParsedNote> notes)
-    {
-        if (channel.Length < 2 || data.Length < valueWidth)
-            return;
-
-        string channelNumber = channel.Substring(channel.Length - 2);
-        if (!LaneMapping.ContainsKey(channelNumber) &&
-            channelNumber != "04" &&
-            channelNumber != "05")
-        {
-            return;
-        }
-
-        int measure = 0;
-        if (channel.Length > 2)
-        {
-            int.TryParse(
-                channel.Substring(0, channel.Length - 2),
-                out measure);
-        }
-
-        int objectCount = data.Length / valueWidth;
-        for (int index = 0; index < objectCount; index++)
-        {
-            string value = data.Substring(index * valueWidth, valueWidth);
-            if (value.All(character => character == '0'))
-                continue;
-
-            string typeKey = valueWidth == ExtendedNoteValueWidth && value[0] == '0'
-                ? value.Substring(1)
-                : value;
-            if (!NoteTypeMapping.TryGetValue(typeKey, out var noteType) ||
-                !TryResolveLane(noteType, channelNumber, out int lane))
-            {
-                continue;
-            }
-
-            // BMS Formula: time = (measure + index / objectCount) * 240 / bpm
-            float measurePosition = measure + (float)index / objectCount;
-            notes.Add(new ParsedNote
-            {
-                Time = measurePosition * 240f / bpm,
-                Lane = lane,
-                NoteType = noteType,
-                OriginalNoteValue = value
-            });
-        }
-    }
-
-    private static bool TryResolveLane(
-        NoteType noteType,
-        string channel,
-        out int lane)
-    {
-        if (noteType == NoteType.Open || noteType == NoteType.Close)
-        {
-            lane = 9;
-            return true;
-        }
-
-        return LaneMapping.TryGetValue(channel, out lane);
-    }
-
-    private static void PairHoldNotes(List<ParsedNote> notes)
-    {
-        foreach (var laneGroup in notes
-            .GroupBy(note => note.Lane)
-            .Select(group => new
-            {
-                Lane = group.Key,
-                Notes = group.OrderBy(note => note.Time).ToList()
-            }))
-        {
-            NoteType startType = laneGroup.Lane == 9
-                ? NoteType.Open
-                : NoteType.Long;
-            NoteType endType = laneGroup.Lane == 9
-                ? NoteType.Close
-                : NoteType.HoldEnd;
-            ParsedNote? pending = null;
-
-            foreach (var note in laneGroup.Notes)
-            {
-                if (note.NoteType == startType)
-                {
-                    pending = note;
-                }
-                else if (note.NoteType == endType)
-                {
-                    if (pending != null)
-                    {
-                        pending.Length = note.Time - pending.Time;
-                        pending = null;
-                    }
-                }
-            }
-        }
+        var parts = line.Substring(1).Split(new[] { ' ', '\t' }, 2);
+        return parts.Length == 2 && parts[0].Equals("BPM", StringComparison.OrdinalIgnoreCase)
+            && float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out float bpm) ? bpm : 0f;
     }
 }

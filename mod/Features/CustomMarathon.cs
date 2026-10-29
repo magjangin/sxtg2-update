@@ -67,7 +67,7 @@ public static class CustomMarathon
     public static void OnSceneLoaded(string sceneName)
     {
         if (!IsActive) return;
-        if (sceneName == "Result") { _resultShownAt = Time.time; _autoAdvanced = false; }
+        if (sceneName == "Result") { _resultShownAt = Time.time; _autoAdvanced = false; _banner = ""; }
     }
 
     /// <summary>GotoMusicSelect prefix: returns true when the next marathon song was started instead.</summary>
@@ -91,7 +91,7 @@ public static class CustomMarathon
         return true;
     }
 
-    public static void Update()
+    public static void Update(float now)
     {
         if (!IsActive || _resultShownAt < 0f) return;
         try
@@ -108,24 +108,31 @@ public static class CustomMarathon
         catch { }
 
         float auto = ModConfig.CustomMarathonAutoNext;
-        if (auto > 0f && !_autoAdvanced && Time.time - _resultShownAt >= auto)
+        if (auto > 0f && !_autoAdvanced && now - _resultShownAt >= auto)
         {
             _autoAdvanced = true;
             SixtarGlobal.GotoMusicSelect(); // diverted to the next song by Core's prefix
         }
     }
 
-    /// <summary>Result-screen banner, drawn on the Overlay.</summary>
-    public static void Draw()
+    private static readonly Color BannerBack = Overlay.Rgba(0.05f, 0.05f, 0.08f, 0.75f), BannerText = Overlay.Rgba(1f, 1f, 1f, 0.95f);
+    private static int _bannerSecond = -1;
+    private static string _banner = "";
+
+    /// <summary>Result-screen banner, drawn on the Overlay. The text is rebuilt only when the countdown second changes.</summary>
+    public static void Draw(float now)
     {
         if (!IsActive || _resultShownAt < 0f) return;
-        string next = Queue.Count > 0 ? Queue[0].DisplayName : "-";
-        string auto = ModConfig.CustomMarathonAutoNext > 0f
-            ? $"  ·  auto {Mathf.Max(0f, ModConfig.CustomMarathonAutoNext - (Time.time - _resultShownAt)):F0}s"
-            : "";
-        var rect = new Rect(Screen.width / 2f - 320f, 18f, 640f, 34f);
-        Overlay.Rect(rect, new Color(0.05f, 0.05f, 0.08f, 0.75f));
-        Overlay.Label(rect, $"MARATHON {_played}/{_total}  ·  NEXT: {next}  ·  [Enter] next  [Esc] stop{auto}",
-            new Color(1f, 1f, 1f, 0.95f), 16, TextAnchor.MiddleCenter, outline: true);
+        float autoNext = ModConfig.CustomMarathonAutoNext;
+        int second = autoNext > 0f ? (int)MathF.Ceiling(Math.Max(0f, autoNext - (now - _resultShownAt))) : -1;
+        if (second != _bannerSecond || _banner.Length == 0)
+        {
+            _bannerSecond = second;
+            string next = Queue.Count > 0 ? Queue[0].DisplayName : "-";
+            _banner = $"MARATHON {_played}/{_total}  ·  NEXT: {next}  ·  [Enter] next  [Esc] stop{(second >= 0 ? $"  ·  auto {second}s" : "")}";
+        }
+        var box = new Box(Overlay.ScreenWidth / 2f - 320f, 18f, 640f, 34f);
+        Overlay.Rect(box, BannerBack);
+        Overlay.Label(box, _banner, BannerText, 16, TextAnchor.MiddleCenter, outline: true);
     }
 }

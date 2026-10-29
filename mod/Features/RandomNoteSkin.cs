@@ -33,6 +33,7 @@ public static class RandomNoteSkin
     private static IntPtr _rendererPtr;
     private static readonly Dictionary<string, List<Parts>> SkinsBySuffix = new();
     private static readonly Dictionary<IntPtr, Parts> InstanceParts = new();
+    private static readonly Dictionary<LaneIndex, string> LaneSuffix = new();
     private static readonly System.Random Rng = new();
     private static bool _warned;
 
@@ -61,6 +62,7 @@ public static class RandomNoteSkin
         _rendererPtr = ui.Pointer;
         SkinsBySuffix.Clear();
         InstanceParts.Clear();
+        LaneSuffix.Clear();
 
         var prefabs = ui.notePackage?.noteObjects;
         if (prefabs == null) return;
@@ -112,8 +114,12 @@ public static class RandomNoteSkin
                 if (ui == null) return;
                 EnsureCatalog(ui);
 
-                var reference = ui.GetNoteReferance(index);
-                string suffix = reference != null ? SuffixOf(reference.name) : "";
+                // The lane prefab is fixed for the whole play; resolve its suffix once per lane.
+                if (!LaneSuffix.TryGetValue(index, out var suffix))
+                {
+                    var reference = ui.GetNoteReferance(index);
+                    LaneSuffix[index] = suffix = reference != null ? SuffixOf(reference.name) : "";
+                }
                 if (!SkinsBySuffix.TryGetValue(suffix, out var skins) || skins.Count == 0) return;
 
                 if (!InstanceParts.TryGetValue(__result.Pointer, out var target))

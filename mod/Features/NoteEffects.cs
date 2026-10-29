@@ -25,7 +25,9 @@ public static class NoteEffects
     private static float _baseRenderRange;
     private static readonly Dictionary<IntPtr, float> NoteFactor = new();
     private static readonly Dictionary<int, float> LaneFactor = new();
-    private static readonly Dictionary<IntPtr, CanvasGroup> Groups = new();
+    private static readonly Dictionary<IntPtr, int> NoteLane = new();
+    private static readonly Dictionary<IntPtr, Cover> Covers = new();
+    private static float _laneScale; // _scrollSpeed * _noteDistanceInterval, refreshed once per frame
     private static System.Random _random = new();
 
     [HarmonyPatch(typeof(StartrailPatternRenderer), nameof(StartrailPatternRenderer.Register))]
@@ -36,12 +38,14 @@ public static class NoteEffects
             ModConfig.ReloadIfChanged();
             NoteFactor.Clear();
             LaneFactor.Clear();
-            Groups.Clear();
+            NoteLane.Clear();
+            Covers.Clear();
             _random = new System.Random();
 
             if (_renderer == null || _renderer.Pointer != __instance.Pointer)
                 _baseRenderRange = __instance.renderRange;
             _renderer = __instance;
+            _laneScale = __instance._scrollSpeed * __instance._noteDistanceInterval;
 
             float range = _baseRenderRange;
             if (ModConfig.NoteSpeedChaos && ModConfig.NoteSpeedChaosMin < 1f)
@@ -57,6 +61,15 @@ public static class NoteEffects
         }
     }
 
+    /// <summary>Called once per frame: reads the renderer's scroll scale once instead of once per visible note.</summary>
+    public static void OnFrame()
+    {
+        if (_notePatchesActive && ModConfig.AnyLaneCover && _renderer != null)
+            _laneScale = _renderer._scrollSpeed * _renderer._noteDistanceInterval;
+    }
+
+    private static float Lerp(float min, float max) => min + (max - min) * (float)_random.NextDouble();
+
     private static float Factor(NoteObject note)
     {
         if (!ModConfig.NoteSpeedChaos) return 1f;
@@ -64,19 +77,21 @@ public static class NoteEffects
 
         if (ModConfig.NoteSpeedChaosPerLane)
         {
-            // Notes of one lane share a parent anchor (LaneComposer.GetNoteAnchor) and keep their order.
-            var parent = note.transform.parent;
-            int key = parent != null ? parent.GetInstanceID() : 0;
-            if (!LaneFactor.TryGetValue(key, out float f))
-                LaneFactor[key] = f = Mathf.Lerp(min, max, (float)_random.NextDouble());
+            // Notes are pooled per lane (one parent anchor per lane), so a NoteObject never changes lane: resolve
+            // its lane anchor once instead of walking transform.parent every frame.
+            if (!NoteLane.TryGetValue(note.Pointer, out int key))
+            {
+                var parent = note.transform.parent;
+                NoteLane[note.Pointer] = key = parent != null ? parent.GetInstanceID() : 0;
+            }
+            if (!LaneFactor.TryGetValue(key, out float f)) LaneFactor[key] = f = Lerp(min, max);
             return f;
         }
 
         // Pooled NoteObjects are reused for other notes: key by the note's tick, not by the object.
         var tick = note._tickData;
         IntPtr id = tick != null ? tick.Pointer : note.Pointer;
-        if (!NoteFactor.TryGetValue(id, out float g))
-            NoteFactor[id] = g = Mathf.Lerp(min, max, (float)_random.NextDouble());
+        if (!NoteFactor.TryGetValue(id, out float g)) NoteFactor[id] = g = Lerp(min, max);
         return g;
     }
 
@@ -123,37 +138,47 @@ public static class NoteEffects
         }
     }
 
+    private sealed class Cover
+    {
+        public CanvasGroup Group = null!; // cleared with Covers on every Register (pooled notes live for one play)
+        public float Alpha = -1f;
+    }
+
     private static void ApplyLaneCover(NoteObject note, float head)
     {
         bool active = ModConfig.AnyLaneCover;
-        if (!active && !Groups.ContainsKey(note.Pointer)) return; // never touched, nothing to restore
+        if (!active && !Covers.ContainsKey(note.Pointer)) return; // never touched, nothing to restore
 
         float alpha = 1f;
-        if (active && _renderer != null)
+        if (active)
         {
-            float full = _baseRenderRange * _renderer._scrollSpeed * _renderer._noteDistanceInterval;
+            float full = _baseRenderRange * _laneScale;
             if (full > 1f)
             {
-                float pct = Mathf.Clamp(head / full * 100f, 0f, 100f);
+                float pct = Math.Clamp(head / full * 100f, 0f, 100f);
                 if (ModConfig.Hidden > 0f)
                 {
                     float soft = ModConfig.LaneCoverSoftness / full * 100f;
-                    alpha = Mathf.Min(alpha, soft > 0.01f ? Mathf.Clamp01((pct - ModConfig.Hidden) / soft + 0.5f) : (pct >= ModConfig.Hidden ? 1f : 0f));
+                    alpha = Math.Min(alpha, soft > 0.01f ? Clamp01((pct - ModConfig.Hidden) / soft + 0.5f) : (pct >= ModConfig.Hidden ? 1f : 0f));
                 }
                 if (ModConfig.FadeIn)
-                    alpha = Mathf.Min(alpha, Mathf.Clamp01((ModConfig.FadeInStart - pct) / ModConfig.FadeInLength));
+                    alpha = Math.Min(alpha, Clamp01((ModConfig.FadeInStart - pct) / ModConfig.FadeInLength));
                 if (ModConfig.FadeOut)
-                    alpha = Mathf.Min(alpha, Mathf.Clamp01((pct - (ModConfig.FadeOutStart - ModConfig.FadeOutLength)) / ModConfig.FadeOutLength));
+                    alpha = Math.Min(alpha, Clamp01((pct - (ModConfig.FadeOutStart - ModConfig.FadeOutLength)) / ModConfig.FadeOutLength));
             }
         }
 
-        if (!Groups.TryGetValue(note.Pointer, out var group) || group == null)
+        if (!Covers.TryGetValue(note.Pointer, out var cover))
         {
-            group = note.gameObject.GetComponent<CanvasGroup>() ?? note.gameObject.AddComponent<CanvasGroup>();
+            var group = note.gameObject.GetComponent<CanvasGroup>() ?? note.gameObject.AddComponent<CanvasGroup>();
             group.interactable = false;
             group.blocksRaycasts = false;
-            Groups[note.Pointer] = group;
+            Covers[note.Pointer] = cover = new Cover { Group = group };
         }
-        group.alpha = alpha;
+        if (cover.Alpha == alpha) return; // most notes sit fully visible or fully hidden: skip the IL2CPP call
+        cover.Group.alpha = alpha;
+        cover.Alpha = alpha;
     }
+
+    private static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
 }

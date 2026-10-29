@@ -104,7 +104,6 @@ public static class CustomTrackManager
         {
             TrackId = trackId,
             AlbumFolder = folder,
-            AlbumName = albumName,
             BmsPath = bmsFile,
             Title = albumName,
             Artist = "Custom Artist"
@@ -138,30 +137,34 @@ public static class CustomTrackManager
         return album;
     }
 
+    private static string? _chartPath, _chart;
+    private static DateTime _chartWrite;
+
     /// <summary>
     /// Reads the album chart and, when it uses the sxtg2 encoding, rewrites it for the game's BMSConverter.
+    /// The play-scene bootstrap and MikazukiConverter.Parse both ask for it on one load, so the result is kept until
+    /// another chart is requested or the file changes.
     /// </summary>
     public static string LoadChartText(CustomAlbumInfo album)
     {
-        string content = SxtgBmsConverter.NormalizeValueWidth(File.ReadAllText(album.BmsPath!), out bool widened);
+        string path = album.BmsPath!;
+        var write = File.GetLastWriteTimeUtc(path);
+        if (_chart != null && _chartPath == path && _chartWrite == write) return _chart;
+
+        string content = SxtgBmsConverter.NormalizeValueWidth(File.ReadAllText(path), out bool widened);
         if (widened)
-            Core.DebugLog($"{LOG_PREFIX} '{Path.GetFileName(album.BmsPath)}' uses 3-character values (#WAV001); read as 2-character values");
-        if (!SxtgBmsConverter.IsSxtgFormat(content))
-            return content;
-
-        string converted = SxtgBmsConverter.Convert(content, out int notes);
-        Core.DebugLog($"{LOG_PREFIX} Converted sxtg2 chart '{Path.GetFileName(album.BmsPath)}' to game BMS layout ({notes} markers)");
-        return converted;
+            Core.DebugLog($"{LOG_PREFIX} '{Path.GetFileName(path)}' uses 3-character values (#WAV001); read as 2-character values");
+        if (SxtgBmsConverter.IsSxtgFormat(content))
+        {
+            content = SxtgBmsConverter.Convert(content, out int notes);
+            Core.DebugLog($"{LOG_PREFIX} Converted sxtg2 chart '{Path.GetFileName(path)}' to game BMS layout ({notes} markers)");
+        }
+        (_chartPath, _chartWrite, _chart) = (path, write, content);
+        return content;
     }
 
-    public static CustomAlbumInfo? FindAlbum(string? trackId, string? displayName = null)
-    {
-        if (!string.IsNullOrEmpty(trackId) && AlbumsByTrackId.TryGetValue(trackId, out var album))
-            return album;
-        if (!string.IsNullOrEmpty(displayName))
-            return LoadedAlbums.Find(a => a.Title == displayName);
-        return null;
-    }
+    public static CustomAlbumInfo? FindAlbum(string? trackId)
+        => !string.IsNullOrEmpty(trackId) && AlbumsByTrackId.TryGetValue(trackId, out var album) ? album : null;
 
     private static string? FindNamedFile(string folder, string baseName, string[] extensions)
     {
@@ -198,110 +201,50 @@ public static class CustomTrackManager
         var resultList = new Il2CppSystem.Collections.Generic.List<ITrack>();
         var templateData = template.TryCast<TrackLoader.TrackData>();
 
+        // With no album in hwa/ yet, the tab still shows a 1-note Starting Point so the pipeline can be tried out.
         if (LoadedAlbums.Count == 0)
-        {
-            // Fallback: If hwa/ has no custom albums yet, supply default 1-note Starting Point custom track
-            var custom = CloneTrackData(template, templateData, "CUSTOM_1NOTE_DEFAULT", "Starting Point (Custom 1-Note)", "Starting Point Custom", "LucaProject", 160f, 125f, null);
-            resultList.Add(custom.Cast<ITrack>());
-            return resultList;
-        }
+            resultList.Add(CloneTrackData(template, templateData, "CUSTOM_1NOTE_DEFAULT", "Starting Point (Custom 1-Note)", "Starting Point Custom", "LucaProject", 160f, null).Cast<ITrack>());
 
         foreach (var album in LoadedAlbums)
-        {
-            var custom = CloneTrackData(
-                template,
-                templateData,
-                album.TrackId,
-                album.Title,
-                album.Title,
-                album.Artist,
-                album.Bpm,
-                album.Duration,
-                album.Difficulties);
-
-            resultList.Add(custom.Cast<ITrack>());
-        }
+            resultList.Add(CloneTrackData(template, templateData, album.TrackId, album.Title, album.Title, album.Artist, album.Bpm, album.Difficulties).Cast<ITrack>());
 
         return resultList;
     }
 
     private static TrackLoader.TrackData CloneTrackData(
-        ITrack template,
-        TrackLoader.TrackData? templateData,
-        string trackId,
-        string displayName,
-        string displayNameEN,
-        string composer,
-        float bpm,
-        float duration,
-        List<int>? difficulties)
+        ITrack template, TrackLoader.TrackData? templateData, string trackId, string displayName, string displayNameEN,
+        string composer, float bpm, List<int>? difficulties)
     {
-        var custom = new TrackLoader.TrackData();
-
-        // Determine level array size (typically 4: Comet, Nova, SuperNova, Quasar)
-        int levelCount = (templateData?.solarLevels != null && templateData.solarLevels.Length > 0)
-            ? templateData.solarLevels.Length
-            : 4;
-
+        // Level array size follows the template (typically 4: Comet, Nova, SuperNova, Quasar).
+        var templateLevels = templateData?.solarLevels;
+        int levelCount = templateLevels != null && templateLevels.Length > 0 ? templateLevels.Length : 4;
         var solarArr = new Il2CppStringArray(levelCount);
         var lunarArr = new Il2CppStringArray(levelCount);
-
         for (int i = 0; i < levelCount; i++)
         {
-            string diffStr;
-            if (difficulties != null && i < difficulties.Count)
-            {
-                // Format with two digits (e.g. 1 -> "01", 10 -> "10")
-                diffStr = difficulties[i].ToString("D2");
-            }
-            else if (templateData?.solarLevels != null && i < templateData.solarLevels.Length)
-            {
-                diffStr = templateData.solarLevels[i];
-            }
-            else
-            {
-                diffStr = "10";
-            }
-
-            solarArr[i] = diffStr;
-            lunarArr[i] = diffStr;
+            string level = difficulties != null && i < difficulties.Count ? difficulties[i].ToString("D2")
+                : templateLevels != null && i < templateLevels.Length ? templateLevels[i]
+                : "10";
+            solarArr[i] = level;
+            lunarArr[i] = level;
         }
 
-        if (templateData != null)
+        return new TrackLoader.TrackData
         {
-            custom._TrackID_k__BackingField = trackId;
-            custom._DisplayName_k__BackingField = displayName;
-            custom._DisplayNameEN_k__BackingField = displayNameEN;
-            custom._Composer_k__BackingField = composer;
-            custom._Category_k__BackingField = Core.CUSTOM_CATEGORY_NAME;
-            custom._LicenseCopy_k__BackingField = "";
-            custom._DisplayBPM_k__BackingField = $"{bpm:F0}";
-            custom._BGAOffset_k__BackingField = templateData._BGAOffset_k__BackingField;
-            custom._VisibilityID_k__BackingField = templateData._VisibilityID_k__BackingField;
-            custom._UnlockID_k__BackingField = templateData._UnlockID_k__BackingField;
-            custom._UpdateData_k__BackingField = templateData._UpdateData_k__BackingField;
-            custom._ArtistInfos_k__BackingField = templateData._ArtistInfos_k__BackingField;
-            custom.solarLevels = solarArr;
-            custom.lunarLevels = lunarArr;
-        }
-        else
-        {
-            custom._TrackID_k__BackingField = trackId;
-            custom._DisplayName_k__BackingField = displayName;
-            custom._DisplayNameEN_k__BackingField = displayNameEN;
-            custom._Composer_k__BackingField = composer;
-            custom._Category_k__BackingField = Core.CUSTOM_CATEGORY_NAME;
-            custom._LicenseCopy_k__BackingField = "";
-            custom._DisplayBPM_k__BackingField = $"{bpm:F0}";
-            custom._BGAOffset_k__BackingField = template.BGAOffset;
-            custom._VisibilityID_k__BackingField = template.VisibilityID;
-            custom._UnlockID_k__BackingField = template.UnlockID;
-            custom._UpdateData_k__BackingField = template.UpdateData;
-            custom._ArtistInfos_k__BackingField = template.ArtistInfos;
-            custom.solarLevels = solarArr;
-            custom.lunarLevels = lunarArr;
-        }
-
-        return custom;
+            _TrackID_k__BackingField = trackId,
+            _DisplayName_k__BackingField = displayName,
+            _DisplayNameEN_k__BackingField = displayNameEN,
+            _Composer_k__BackingField = composer,
+            _Category_k__BackingField = Core.CUSTOM_CATEGORY_NAME,
+            _LicenseCopy_k__BackingField = "",
+            _DisplayBPM_k__BackingField = $"{bpm:F0}",
+            _BGAOffset_k__BackingField = template.BGAOffset,
+            _VisibilityID_k__BackingField = template.VisibilityID,
+            _UnlockID_k__BackingField = template.UnlockID,
+            _UpdateData_k__BackingField = template.UpdateData,
+            _ArtistInfos_k__BackingField = template.ArtistInfos,
+            solarLevels = solarArr,
+            lunarLevels = lunarArr,
+        };
     }
 }

@@ -82,6 +82,31 @@ public static class MediaOverrideManager
 
     private static bool _rawUploadBroken;
 
+    /// <summary>
+    /// Uploads a decoded RGBA32 buffer (bottom row first) in one call. Returns null when raw upload is unavailable,
+    /// so the caller can fall back to ImageConversion.LoadImage.
+    /// </summary>
+    public static Texture2D? TextureFromRgba(int w, int h, byte[] rgba)
+    {
+        if (_rawUploadBroken) return null;
+        try
+        {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            var pin = System.Runtime.InteropServices.GCHandle.Alloc(rgba, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try { tex.LoadRawTextureData(pin.AddrOfPinnedObject(), rgba.Length); }
+            finally { pin.Free(); }
+            tex.Apply(false, true);
+            tex.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            return tex;
+        }
+        catch (Exception ex)
+        {
+            _rawUploadBroken = true;
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} Raw texture upload unavailable, using LoadImage from now on: {ex.Message}");
+            return null;
+        }
+    }
+
     // PNG bytes are read and decoded on a worker thread (Loaders/PngDecoder); the main thread only uploads the
     // finished RGBA buffer. Unity's own async path is unusable here: DownloadHandlerTexture's constructor is
     // stripped from the game build ("Method not found").
@@ -97,24 +122,14 @@ public static class MediaOverrideManager
         while (!decode.IsCompleted) yield return null;
 
         Sprite? sprite = null;
-        if (decode.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && decode.Result.ok && !_rawUploadBroken)
+        if (decode.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && decode.Result.ok)
         {
             var (_, w, h, rgba) = decode.Result;
-            try
+            var tex = TextureFromRgba(w, h, rgba);
+            if (tex != null)
             {
-                var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-                var pin = System.Runtime.InteropServices.GCHandle.Alloc(rgba, System.Runtime.InteropServices.GCHandleType.Pinned);
-                try { tex.LoadRawTextureData(pin.AddrOfPinnedObject(), rgba.Length); }
-                finally { pin.Free(); }
-                tex.Apply(false, true);
-                tex.hideFlags = HideFlags.DontUnloadUnusedAsset;
-                sprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f));
+                sprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2 { x = 0.5f, y = 0.5f });
                 sprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
-            }
-            catch (Exception ex)
-            {
-                _rawUploadBroken = true;
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} Raw texture upload unavailable, using LoadImage from now on: {ex.Message}");
             }
         }
 
@@ -192,29 +207,5 @@ public static class MediaOverrideManager
             Melon<Core>.Logger.Error($"{LOG_PREFIX} Failed overriding BGA: {ex.Message}");
             return false;
         }
-    }
-
-    public static bool OverrideJacket(Image jacketImage, CustomAlbumInfo album)
-    {
-        if (jacketImage == null || album == null || !album.HasCustomJacket)
-            return false;
-
-        try
-        {
-            var sprite = GetOrCreateAlbumSprite(album);
-            if (sprite != null)
-            {
-                jacketImage.sprite = sprite;
-                jacketImage.color = Color.white;
-                jacketImage.enabled = true;
-                return true;
-            }
-        }
-        catch (Exception ex)
-        {
-            Melon<Core>.Logger.Warning($"{LOG_PREFIX} Failed overriding Jacket: {ex.Message}");
-        }
-
-        return false;
     }
 }
