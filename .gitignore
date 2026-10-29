@@ -1,0 +1,12 @@
+# Build output
+mod/bin/
+mod/obj/
+
+# Game-derived material: dumps, decompiled sources, binary slices, disassembly. Never publish.
+il2cpp_dump/
+cpp2il_out/
+src_dummy/
+slices/
+logs/
+input/
+*.dll
