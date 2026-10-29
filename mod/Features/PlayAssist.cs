@@ -110,9 +110,28 @@ public static class PlayAssist
         public static void Prefix(JudgeProcessor __instance, JudgeResult result)
         {
             EnsureSession(__instance);
+            _convertedMiss = false;
             if (ModConfig.AllPerfect && result != null)
+            {
+                _convertedMiss = result.judgeID == (int)EJudge.RedStar;
                 result.judgeID = 0;
+            }
         }
+
+        public static void Postfix() => _convertedMiss = false;
+    }
+
+    // Set while OnTickEvent broadcasts a RedStar that AllPerfect turned into BlueStar (an unpressed long-note tick from
+    // JudgeLongTick, or a missed head from CheckMissBreak/Missbreak). OnNoteJudged reaches the gear synchronously.
+    private static bool _convertedMiss;
+
+    // GearObject.PlayNoteEffect -> NoteEffectObject.Play(judge) skips RedStar (no effect entry), so vanilla shows no
+    // hit flash for those ticks. Converted to BlueStar they lit the lane on every body tick of a long note that was
+    // not held, as if the key were pressed. Keep the BlueStar for score/combo, drop only the flash.
+    [HarmonyPatch(typeof(GearObject), nameof(GearObject.PlayNoteEffect))]
+    public static class GearObject_PlayNoteEffect_Patch
+    {
+        public static bool Prefix() => !_convertedMiss;
     }
 
     // Key viewer feed: LaneComposer press/release events land here (lane = LaneIndex value).

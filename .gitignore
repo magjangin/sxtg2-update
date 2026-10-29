@@ -10,3 +10,6 @@ slices/
 logs/
 input/
 *.dll
+
+# Local tool workspace
+.reatool/

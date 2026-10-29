@@ -27,3 +27,4 @@
 - [진행] 17. 랜덤 노트 스킨 (2026-10-29) — `Features\RandomNoteSkin.cs`, config v4 `RandomNoteSkin` — 노트마다 게임 내 노트 스킨 무작위 적용. 빌드·배포 완료, 실기 미확인(스킨별 하위 Image 구성 차이·애니메이터가 있으면 일부 어긋날 수 있음).
 - [진행] 16. 커스텀 곡 종료 시점을 음원 길이 기준으로 (2026-10-29) — `Core.cs` `CustomSongLength`, `CustomAudioManager.GetStreamLength` — 마지막 노트 뒤 음원이 긴 곡이 일찍 끝나던 문제. 빌드·배포 완료, 실기 미확인.
 - [진행] 15. 곡 선택 커스텀 곡 보정 (2026-10-29) — `Features\CustomMusicSelect.cs` — 결과 화면에서 돌아올 때 플레이한 커스텀 곡으로 커서 복귀(MAX COMBO 계산은 실기에서 안 나와 제거). 빌드·배포 완료, 실기 미확인. 상세는 `AGENTS.md` 4장 21.
+- [진행] 20. AllPerfect 안 누른 롱노트 불빛 수정 (2026-10-30) — `Features\PlayAssist.cs` `GearObject_PlayNoteEffect_Patch` — AllPerfect가 RedStar(미스) 틱을 BlueStar로 바꿔 레인 히트 이펙트가 눌린 것처럼 켜지던 문제. 원래 미스였던 틱은 이펙트만 생략. 빌드·배포 완료, 실기 미확인.
