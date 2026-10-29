@@ -72,7 +72,7 @@
    - **역할:**
      - `{게임폴더}\hwa\` 하위 앨범 폴더를 자동 스캔하여 `trackinfo.txt`/`info.txt`, `chart.bms`(`hwa2.bms` 등), `music.ogg`/`.mp3`/`.wav`, `video.mp4`/`bg.mp4`, `thumbnail.png`/`thumb.png`/`jacket.png`를 자동 매핑.
      - "CUSTOM" 카테고리 진입 시 스캔된 모든 앨범을 `TrackData` 리스트로 변환하여 GUI에 등록 (제목, 작곡가, BPM, 난이도 반영).
-     - 곡 선택 화면(Music Select)에서 가운데 메인 정보창 큰 자켓(`TrackInfoViewer.Set`)을 로컬 PNG 스프라이트로 렌더링. (우측 목록은 썸네일 슬롯이 없음 — 아래 12번 참조)
+     - 곡 선택 화면(Music Select)에서 가운데 메인 정보창 큰 자켓(`TrackInfoViewer.Set`)을 로컬 PNG 스프라이트로 렌더링. (우측 목록 행 자켓은 아래 12번)
      - 곡 진입 시 실제 BMS 텍스트를 `MikazukiConverter.Parse`로 주입하고, `BackgroundUIProcessor.Initialize` Postfix에서 `VideoPlayer` URL을 로컬 MP4 경로로 교체하여 인게임 BGA 오버라이드 및 자켓 썸네일 교체 수행.
 
 9. **커스텀 곡 프리뷰/인게임 음원 (FMOD Core 스트림, v2.2):**
@@ -88,7 +88,7 @@
    - 게임 `BMSConverter.GetLaneIndex`(RVA `0x7ED300`) 채널표(10진): 일반 `11 LL, 12 L, 18 R, 19 RR, 14 Gate, 13 LT, 15 RT`, 롱 `51 52 58 59 54 53 55`(같은 레인), `56 → 99(GateAlarm)`. 값 `00/0A/04`는 무시, 나머지 값은 전부 마커. 롱노트는 같은 5x 채널의 연속 마커 쌍(`CreateLongMarker`가 채널별 buffer로 짝지음). 없는 채널(예: 16)은 `KeyNotFoundException`.
    - sxtg2 차트는 레인을 채널(`16 LL, 11 L, 12 R, 13 RR, 14 LT, 15 RT, 18 GATE`, `RhythmGame.LaneIndexOld` 순서)로, 종류를 값(`01` 일반, `02`/`03` 롱 시작/끝, `04`/`05` OPEN 시작/끝)으로 표현 → 위 표로 재배치. 채널 16 또는 값 02/03/05가 있고 19·5x가 없으면 sxtg2로 판정. `CustomTrackManager.LoadChartText`에서 일괄 적용.
    - **3자리 차트(sxtg2 확장):** `#WAV` 키가 3글자(`#WAV001`, `#WAV010 music.ogg`)면 데이터 값도 3글자씩(`001` 일반, `002`/`003` 롱, `010` BGM). sxtg2 `BmsParser`는 앞의 `0`을 떼서 해석(앞이 `0`이 아니면 무시). `SxtgBmsConverter.NormalizeValueWidth`가 변환 전에 2글자 값·`#WAVxx`로 다시 써서 변환기와 게임 `BMSConverter`(둘 다 2글자 단위)가 같은 노트를 보게 함. 모드 `Loaders/BmsParser`(곡 길이/BPM)는 원래부터 3글자 지원.
-12. **곡 선택 목록(우측) 썸네일:** 리뉴얼 목록 프리팹(`SelectedTrack`)에는 자켓 Image가 **없음**(`TrackObject.thumbnail` 필드 null, 계층 덤프로 확인 — BG/Locked/이름/랭크/클리어램프/즐겨찾기만 존재). 공식 곡도 목록에 썸네일이 안 나오는 게 원래 디자인. 표시하려면 행마다 Image를 새로 생성해야 함(미구현).
+12. **곡 선택 목록(우측) 썸네일:** 행마다 제목 왼쪽에 자켓 칸(`TrackObject.thumbnail`)이 **있음**(2026-10-30 실기 화면: 훅을 빼자 커스텀 곡 행의 자켓 칸이 빈 칸으로 나옴). 예전 계층 덤프의 "thumbnail null" 기록은 틀렸음 — 문서만 보고 훅을 지우지 말 것. `TrackObject.LoadThumbnail`은 `SetTrack`(RVA `0x636620`)에 인라인되고, 비동기 번들 콜백 `TrackObject.__c__DisplayClass18_0._LoadThumbnail_b__1`(RVA `0x63B4D0`)이 커스텀 ID에 대해 null 스프라이트를 넣음 → `Core.ApplyListThumbnail`을 두 곳 Postfix에서 호출(`MediaOverrideManager.RequestAlbumSprite` 비동기). 둘 다 ICF 없음.
 
 13. **인게임 BGA (URL 재생) — `BackgroundUIProcessor` 전면 대체:**
    - 원본 BGA 경로는 VideoClip 전용: `Initialize` → `Track/{id}` 번들 → `<Initialize>b__2(VideoClip)`이 `bgaPlayer.clip = vc`(커스텀은 null, 이 대입이 source를 VideoClip으로 되돌려 URL을 지움) + `Prepare()`. `PlayBGA()`/`PauseBGA()`/`IsVideoPlayable`은 모두 `clip == null`이면 즉시 return → URL 영상은 영원히 재생 안 되고 자켓(`jacket` GameObject, PlayBGA 안에서만 꺼짐)이 계속 덮음.
@@ -134,7 +134,8 @@
    - **차트 텍스트:** `GotoPlayScene b__12`와 `MikazukiConverter.Parse`가 같은 로딩에서 각각 파일 읽기 + sxtg2 변환을 했음 → `CustomTrackManager.LoadChartText`가 (경로, 수정 시각)으로 마지막 결과를 캐시.
    - **노트 효과(속도 카오스/히든/페이드):** 노트마다 매 프레임 `transform.parent.GetInstanceID()`, 렌더러 필드 2개, `CanvasGroup.alpha` 대입을 하던 것 → 노트 포인터별 레인 캐시, 스크롤 배율은 프레임당 1번(`NoteEffects.OnFrame`), alpha는 바뀔 때만.
    - **랜덤 노트 스킨:** 노트 스폰마다 `GetNoteReferance(lane).name`을 읽던 것 → 레인별 접미사를 플레이당 1번.
-   - **제거한 죽은 훅:** `ManagerPlayOld.Set`, `SXGTReader.ReadByTextAsset`(구버전 플레이 씬 — 커스텀 곡은 리뉴얼 경로만 탐, 실측 씬 목록에 구버전 플레이 씬 없음), `BMSConverter.Parse` Prefix(Mikazuki Prefix가 넘긴 차트를 다시 검사만 함, 바꾸는 경우 없음), `SelectableTrackObject.Fetch`(구버전 목록, 커스텀은 `TrackLoader.TrackData`라 매칭 불가), `TrackObject.SetTrack`/`<LoadThumbnail>b__1`(리뉴얼 목록 프리팹에 썸네일 Image 없음, 12번), `JudgeCounter.AddJudge`(빈 Prefix). `FindAlbum`의 제목(DisplayName) 폴백도 제거 — 공식 곡 제목이 커스텀 앨범 제목과 같으면 엉뚱한 자켓이 붙을 수 있었음.
+   - **제거한 죽은 훅:** `ManagerPlayOld.Set`, `SXGTReader.ReadByTextAsset`(구버전 플레이 씬 — 커스텀 곡은 리뉴얼 경로만 탐, 실측 씬 목록에 구버전 플레이 씬 없음), `BMSConverter.Parse` Prefix(Mikazuki Prefix가 넘긴 차트를 다시 검사만 함, 바꾸는 경우 없음), `SelectableTrackObject.Fetch`(구버전 목록, 커스텀은 `TrackLoader.TrackData`라 매칭 불가), `JudgeCounter.AddJudge`(빈 Prefix). `FindAlbum`의 제목(DisplayName) 폴백도 제거 — 공식 곡 제목이 커스텀 앨범 제목과 같으면 엉뚱한 자켓이 붙을 수 있었음.
+   - **잘못 지웠다가 되돌린 훅:** `TrackObject.SetTrack`/`<LoadThumbnail>b__1`(목록 행 자켓). 12번의 옛 기록("썸네일 Image 없음")을 믿고 지웠더니 CUSTOM 목록 자켓이 빈 칸이 됨 → 같은 날 복구.
    - `BmsParser`/`TrackInfoParser`는 실제로 쓰는 값(기본 BPM, 마지막 노트 끝 시각, 제목/아티스트/난이도)만 남김. 이전 구현과 실제 hwa 차트 15개 + 경계 사례(3자리 값, OPEN, 짝 없는 롱노트 끝) 결과 동일 확인.
 
 24. **출석 보상 팝업 자동 표시 끄기 (`Features/AttendancePopup.cs`, config v6 `SkipAttendancePopup`, 기본 1):** `AttendanceController.Initialize`(RVA `0x527920`)가 `<WaitUpdateCheck>d__6` 코루틴을 돌림. state 0~2는 업데이트 확인 대기, `IRequestService`로 출석 테이블, `IUserDataService`로 오늘 보상을 받아 `_attendanceTableData`/`_attendanceReward`에 저장. state 3에서 `_loadingAttendanceData = null` 후 보상이 받을 수 있는 상태면 `Debug.Log("receivable attendance reward!!!")` + `PopupModule.OpenPopup<AttendanceRewardPopup>`. `MoveNext`(RVA `0x53EC40`, ICF 없음) Prefix에서 state 3일 때만 원본과 같이 state=-1, `_loadingAttendanceData=null`로 끝내고 팝업만 생략. 데이터는 남아 있어 게임의 `OpenAttendancePopup`(RVA `0x5279C0`)은 그대로 동작. 서버로는 아무것도 안 보내며 보상은 받지 않은 채로 남음. (`<WaitUpdateCheck>b__7`은 2개 메서드와 주소 공유 — 패치 금지.)
@@ -144,7 +145,7 @@
 - **로컬 음원을 `SoundModuleForFMOD.PlayLocalSound`(programmer sound 이벤트)로 재생:** 그 이벤트 타임라인이 약 3분 고정이라 긴 곡은 중간부터 무음, 그 길이가 `GetGamePlayAudioLength`로 새어 186초에 결과 화면 강제 전환. → FMOD Core `createStream`으로 교체.
 - **`JudgeProcessor` 생성자 Harmony 패치:** 적용 에러는 없지만 한 번도 호출되지 않음. → 인스턴스 메서드에서 지연 초기화.
 - **IMGUI(`OnGUI`)로 판정바/키뷰어 그리기:** `Method unstripping failed`가 매 프레임 발생. → uGUI 캔버스.
-- **자켓 PNG 동기 디코딩 (`ImageConversion.LoadImage`):** 1080p PNG 하나에 메인 스레드 50~100ms. CUSTOM 탭 진입 시 우측 목록 행(썸네일 슬롯 없음)용 진단 폴백이 10장을 한꺼번에 디코딩해 0.75초 멈춤 + 곡 이동마다 끊김. → 목록 행 폴백 제거, 가운데 자켓은 `MediaOverrideManager.RequestAlbumSprite`(UnityWebRequestTexture 비동기 디코딩, 콜백) + 탭 진입 시 `PreloadAll` 백그라운드 순차 로드. 플레이 흐름 화면은 캐시된 sprite를 동기 조회.
+- **자켓 PNG 동기 디코딩 (`ImageConversion.LoadImage`):** 1080p PNG 하나에 메인 스레드 50~100ms. CUSTOM 탭 진입 시 우측 목록 행용 동기 진단 폴백이 10장을 한꺼번에 디코딩해 0.75초 멈춤 + 곡 이동마다 끊김. → 목록 행 폴백 제거, 가운데 자켓은 `MediaOverrideManager.RequestAlbumSprite`(UnityWebRequestTexture 비동기 디코딩, 콜백) + 탭 진입 시 `PreloadAll` 백그라운드 순차 로드. 플레이 흐름 화면은 캐시된 sprite를 동기 조회.
 - **매 프레임·매 노트 훅 상시 부착:** `NoteObject.set_HeadPosition/set_NoteLength`는 화면의 모든 노트에 대해 매 프레임 호출됨 → IL2CPP 디트로 비용+래퍼 할당. 속도 카오스/히든/페이드를 쓸 때만 `Register` Postfix에서 `HarmonyInstance.Patch`, 아니면 `Unpatch`.
 - **루틴 로그 남발:** 곡 선택마다 5~6줄(TrackInfoViewer.Set ×2, 자켓, 프리뷰 Play/Streaming, LoadImage)이 콘솔 출력 비용까지 유발. → `Core.DebugLog`(config `DebugLog=1`일 때만 출력).
 - **매 프레임 Unity 값 형식 헬퍼 사용:** 오버레이가 프레임마다 `new Rect`/`Rect.x`/`Mathf`/`new Color`를 수백 번 호출 → 전부 `il2cpp_runtime_invoke` + boxing. 23번 원칙 참조.
@@ -152,7 +153,7 @@
 - **곡 선택 MAX COMBO(`---`) 직접 채우기:** `TrackInfoViewer.CalcTotalCombo`(RVA `0x6344E0`)는 `"---"`를 쓰고 `MaxComboLoader`가 곡 번들 패턴을 읽어 `RefreshMaxCombo`로 채우는데, 커스텀은 번들이 없어 `---`. Prefix에서 BMS → `StartrailPattern` → `SixtarTickFactory.Interprete(p, null)` → `TickCount` 합으로 채워 봤으나 실기에서 표시되지 않아 제거(원인 미확인).
 - **`InputListener.Instance.playActionMap`으로 키 이름 읽기:** 리뉴얼 플레이 씬엔 InputListener 자체가 없음.
 - **BGA를 `BackgroundUIProcessor.Initialize` Postfix에서 URL로만 교체:** 비동기 `b__2`가 나중에 `clip = null`을 대입해 URL을 덮어쓰고, `PlayBGA`가 clip null이라 재생 자체를 안 함 → 영상 안 나옴(로그상 "Overrode BGA"는 찍혀서 착각하기 쉬움).
-- **`TrackObject.LoadThumbnail` 패치:** IL2CPP 빌드에서 `SetTrack`에 인라인되어 있어 패치가 절대 호출되지 않음. 비동기 콜백은 `TrackObject.__c__DisplayClass18_0._LoadThumbnail_b__1(Sprite)`이며, 이마저 `thumbnail == null`이면 로드 자체를 건너뜀(리뉴얼 목록이 그 경우).
+- **`TrackObject.LoadThumbnail` 패치:** IL2CPP 빌드에서 `SetTrack`에 인라인되어 있어 패치가 절대 호출되지 않음. 대신 `SetTrack` Postfix와 비동기 콜백 `TrackObject.__c__DisplayClass18_0._LoadThumbnail_b__1` Postfix를 씀(12번).
 - **`HarmonyInstance.PatchAll` 수동 호출 + MelonLoader 자동 패치 중복:** 모든 훅이 2번씩 실행됨(로그가 같은 타임스탬프로 2줄). 반환 false Prefix가 두 번 돌아 `b__14`(씬 이동)가 두 번 호출되며 로딩이 멈춤. → `[assembly: HarmonyDontPatchAll]` 추가.
 - **BGA URL `"file://" + 상대경로`:** `AppDomain.BaseDirectory` 기반 경로가 `hwa\...` 상대경로로 남아 VideoPlayer가 `*_Data/hwa/...`에서 찾음("WindowsMediaFoundation received empty file"). → `HwaFolderPath`와 BGA URL을 `Path.GetFullPath`로 절대경로화.
 - **게임 실행 중 DLL 덮어쓰기:** `Mods/SixtarGateMod.dll`은 실행 중 잠김(`Device or resource busy`). 게임 종료 후 복사.

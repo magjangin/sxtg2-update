@@ -533,6 +533,36 @@ public class Core : MelonMod
         }
     }
 
+    // 8. Renewal list rows (TrackObject.thumbnail, the square left of each title). TrackObject.LoadThumbnail is inlined
+    // into SetTrack; its async bundle callback <LoadThumbnail>b__1 assigns the bundle sprite (null for a custom ID,
+    // leaving an empty box), so re-apply after both. Each row costs one dictionary lookup for official songs.
+    private static void ApplyListThumbnail(TrackObject? owner, ITrack? track)
+    {
+        var thumb = owner?.thumbnail;
+        if (thumb == null || track == null) return;
+        var album = CustomTrackManager.FindAlbum(track.TrackID);
+        if (album == null || !album.HasCustomJacket) return;
+        MediaOverrideManager.RequestAlbumSprite(album, sprite =>
+        {
+            if (thumb == null) return;
+            thumb.sprite = sprite;
+            thumb.color = White;
+            thumb.enabled = true;
+        });
+    }
+
+    [HarmonyPatch(typeof(TrackObject.__c__DisplayClass18_0), nameof(TrackObject.__c__DisplayClass18_0._LoadThumbnail_b__1))]
+    public static class TrackObject_LoadThumbnailCallback_Patch
+    {
+        public static void Postfix(TrackObject.__c__DisplayClass18_0 __instance) => ApplyListThumbnail(__instance.__4__this, __instance.track);
+    }
+
+    [HarmonyPatch(typeof(TrackObject), nameof(TrackObject.SetTrack), new Type[] { typeof(ITrack) })]
+    public static class TrackObject_SetTrack_Patch
+    {
+        public static void Postfix(TrackObject __instance, ITrack track) => ApplyListThumbnail(__instance, track);
+    }
+
     // 10. Play-flow jackets (loading screen, pause popup, result screen).
     // Each screen loads "{trackID}_jacket" / "Thumbnail" sprites from the track's asset bundle and assigns them in an
     // async callback; for a custom trackID the bundle hands back null, leaving a white box. Re-apply after each callback.
