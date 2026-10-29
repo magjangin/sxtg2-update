@@ -30,3 +30,4 @@
 - [진행] 20. AllPerfect 안 누른 롱노트 불빛 수정 (2026-10-30) — `Features\PlayAssist.cs` `GearObject_PlayNoteEffect_Patch` — AllPerfect가 RedStar(미스) 틱을 BlueStar로 바꿔 레인 히트 이펙트가 눌린 것처럼 켜지던 문제. 원래 미스였던 틱은 이펙트만 생략. 빌드·배포 완료, 실기 미확인.
 - [진행] 21. 성능·코드 정리 + README (2026-10-30) — 오버레이 값 캐시/managed 기하, 앨범 `Has*` 디스크 접근 제거, 차트 텍스트 캐시, 노트 효과·랜덤 스킨 캐시, 죽은 구버전 훅 7개 제거, 로더 축소(4,217 → 3,746줄). 파서는 기존 구현과 실제 차트 15개 결과 동일. 빌드·배포 완료, 실기 미확인. 상세는 `AGENTS.md` 4장 23.
 - [진행] 22. 출석 보상 팝업 자동 표시 끄기 (2026-10-30) — `Features\AttendancePopup.cs`, config v6 `SkipAttendancePopup=1` — 모드 선택 진입 시 매일 뜨던 출석 보상 창 생략(보상은 안 받은 채로 남음). 빌드·배포 완료, 실기 미확인.
+- [완료] 23. 곡 목록 자켓 복구 (2026-10-30) — 21번 정리 때 `TrackObject.SetTrack`/`<LoadThumbnail>b__1` 훅을 잘못 지워 CUSTOM 목록 자켓이 빈 칸이 됨(사용자 화면으로 확인) → 복구. 22번 출석 창 생략은 실기 로그로 동작 확인(`[Attendance] Skipped ...`).
