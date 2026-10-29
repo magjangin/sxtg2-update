@@ -61,6 +61,9 @@ public static class ModConfig
     public static float FadeOutLength { get; private set; } = 20f;
     public static bool AnyLaneCover => Hidden > 0f || FadeIn || FadeOut;
 
+    // [화면]
+    public static bool SkipAttendancePopup { get; private set; } = true;
+
     // [진단]
     public static bool DebugLog { get; private set; }
 
@@ -96,7 +99,7 @@ public static class ModConfig
         ReloadIfChanged(force: true);
     }
 
-    private const int TEMPLATE_VERSION = 5;
+    private const int TEMPLATE_VERSION = 6;
 
     /// <summary>
     /// An existing file (e.g. one copied from the sxtg2 Mono install) is rebuilt from the current template when its
@@ -202,6 +205,7 @@ public static class ModConfig
         CustomMarathon = Bool(m, "CustomMarathon", false);
         CustomMarathonAutoNext = Math.Max(0f, Float(m, "CustomMarathonAutoNext", 0f));
 
+        SkipAttendancePopup = Bool(m, "SkipAttendancePopup", true);
         DebugLog = Bool(m, "DebugLog", false);
     }
 
@@ -314,7 +318,7 @@ public static class ModConfig
 # 게임에 이미 있는 기능은 게임 설정을 쓰세요: 노트 흔들림 = ""노트 흔들림 설정"", 서든 = ""실링 다운"".
 
 # 설정 파일 형식 버전 (모드가 관리합니다. 바꾸지 마세요)
-ConfigVersion=5
+ConfigVersion=6
 
 # ===== [플레이] =====
 
@@ -435,6 +439,12 @@ CustomMarathon=0
 
 # 결과창에서 몇 초 뒤 자동으로 다음 곡으로 넘어갈지 (0 = Enter를 누를 때만)
 CustomMarathonAutoNext=0
+
+# ===== [화면] =====
+
+# 모드 선택 화면에 들어갈 때 출석 보상 창이 자동으로 뜨지 않게 함 (1 = 안 띄움, 0 = 게임 원래대로 띄움)
+# 안 띄우면 그날 출석 보상(ARKK)도 받지 않은 상태로 남습니다. 받고 싶은 날은 0으로 바꾸고 게임을 다시 켜세요.
+SkipAttendancePopup=1
 
 # ===== [진단] =====
 
