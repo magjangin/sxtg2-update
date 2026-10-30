@@ -126,10 +126,11 @@ mod/
 ├── Loaders/                BMS 길이/BPM 읽기, sxtg2 → 게임 BMS 변환, PNG 디코더, 곡 정보
 └── Models/
 AGENTS.md                   기술 인수인계 문서 (훅 목록, 설계 이유, 실패한 시도)
-docs/hooks.md               후킹 대상 표
+docs/                       주제별 문서 (docs/README.md부터)
+tools/datadump/             게임 데이터 확인용 UnityPy 스크립트
 ```
 
-훅 주소와 우회 이유, IL2CPP에서 조심할 점(동일 코드 접기, 값 형식 호출 비용 등)은 [AGENTS.md](AGENTS.md)에 정리되어 있습니다.
+더 자세한 문서는 [docs/](docs/README.md)에 있습니다. 설정 키 전체, 기능별 동작 원리, 훅 표, IL2CPP 함정, 게임 자체 정보(모드 선택, 결과 화면 연출, 스킨, DLC)를 주제별로 나눠 두었습니다. 기술 인수인계 원본은 [AGENTS.md](AGENTS.md)입니다.
 
 ## 주의
 

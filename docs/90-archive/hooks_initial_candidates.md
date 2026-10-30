@@ -1,3 +1,5 @@
+> **보관 문서.** 프로젝트 초기(2026-10-29)의 후킹 후보 메모입니다. 일부는 실제로 쓰지 않았거나 틀렸습니다(예: `JudgeCounter.AddJudge`는 구버전 판정 경로라 AllPerfect에 쓰지 않음). 현재 훅은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+
 # Sixtar Gate STARTRAIL IL2CPP 후킹 후보 목록
 
 - 대상 모듈: `GameAssembly.dll`
