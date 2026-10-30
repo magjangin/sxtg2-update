@@ -130,7 +130,7 @@ docs/                       주제별 문서 (docs/README.md부터)
 tools/datadump/             게임 데이터 확인용 UnityPy 스크립트
 ```
 
-더 자세한 문서는 [docs/](docs/README.md)에 있습니다. 설정 키 전체, 기능별 동작 원리, 훅 표, IL2CPP 함정, 게임 자체 정보(모드 선택, 결과 화면 연출, 스킨, DLC)를 주제별로 나눠 두었습니다. 기술 인수인계 원본은 [AGENTS.md](AGENTS.md)입니다.
+궁금한 점은 먼저 [자주 묻는 질문](docs/01-user-guide/FAQ.md)을 보세요. 더 자세한 문서는 [docs/](docs/README.md)에 있습니다. 설정 키 전체, 기능별 동작 원리, 훅 표, IL2CPP 함정, 게임 자체 정보(모드 선택, 결과 화면 연출, 스킨, DLC)를 주제별로 나눠 두었습니다. 기술 인수인계 원본은 [AGENTS.md](AGENTS.md)입니다.
 
 ## 주의
 

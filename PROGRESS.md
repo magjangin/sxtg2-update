@@ -32,3 +32,4 @@
 - [진행] 22. 출석 보상 팝업 자동 표시 끄기 (2026-10-30) — `Features\AttendancePopup.cs`, config v6 `SkipAttendancePopup=1` — 모드 선택 진입 시 매일 뜨던 출석 보상 창 생략(보상은 안 받은 채로 남음). 빌드·배포 완료, 실기 미확인.
 - [완료] 23. 곡 목록 자켓 복구 (2026-10-30) — 21번 정리 때 `TrackObject.SetTrack`/`<LoadThumbnail>b__1` 훅을 잘못 지워 CUSTOM 목록 자켓이 빈 칸이 됨(사용자 화면으로 확인) → 복구. 22번 출석 창 생략은 실기 로그로 동작 확인(`[Attendance] Skipped ...`).
 - [완료] 24. 문서 묶음 `docs/` (2026-10-30) — sxtg2 커스텀 리드미 구성을 따라 00-overview / 01-user-guide / 02-systems / 03-development / 04-game-reference / 90-archive. 훅 표는 소스에서 생성. 결과 화면 특수 연출(시이 대신 Rath·Christmas_2022)과 모드 선택 7종을 게임 데이터로 확인. UnityPy 스크립트 `tools/datadump/`.
+- [완료] 25. FAQ (2026-10-30) — `docs/01-user-guide/FAQ.md`: 이번 세션 질문(올 퍼펙트 불빛, 난이도 4/5, DLC·스킨 짝, button01 정정, 결과 화면 시이 특수 곡, 모드 7종, 출석 창, 목록 자켓, 노란 줄) 정리.
