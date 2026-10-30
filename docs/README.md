@@ -9,6 +9,7 @@ Mono 시절 모드 `sxtg2`의 문서 구성(`sxtg2 커스텀 리드미`)을 따�
 
 | 문서 | 내용 |
 | --- | --- |
+| [01-user-guide/FAQ.md](01-user-guide/FAQ.md) | **자주 묻는 질문** (올 퍼펙트 불빛, 난이도, DLC 스킨, 결과 화면 시이, 모드 설명 등) |
 | [CURRENT_STATUS.md](CURRENT_STATUS.md) | 지금 되는 것 / 실기 확인 여부 / 최근 변경 |
 | [00-overview/PROJECT_OVERVIEW.md](00-overview/PROJECT_OVERVIEW.md) | 이 모드가 하는 일 한눈에 보기 |
 | [01-user-guide/INSTALL_AND_LAYOUT.md](01-user-guide/INSTALL_AND_LAYOUT.md) | 설치, `hwa` 폴더 배치 |
@@ -23,7 +24,7 @@ docs/
 ├── README.md               ← 지금 이 문서
 ├── CURRENT_STATUS.md
 ├── 00-overview/            # 개요, 구조, 데이터 흐름, 용어
-├── 01-user-guide/          # 설치·폴더 배치, 설정 키, 문제 해결
+├── 01-user-guide/          # FAQ, 설치·폴더 배치, 설정 키, 문제 해결
 ├── 02-systems/             # 기능별 동작 원리 (훅 대상, 이유)
 ├── 03-development/         # 코드 구조, 빌드·배포, IL2CPP 함정, 분석 방법, 디버깅
 ├── 04-game-reference/      # 게임 자체 정보 (모드, 결과 연출, 스킨, DLC, 난이도, 이벤트)
@@ -39,6 +40,7 @@ docs/
 - [GLOSSARY.md](00-overview/GLOSSARY.md): 용어집
 
 **01-user-guide**
+- [FAQ.md](01-user-guide/FAQ.md): 자주 묻는 질문
 - [INSTALL_AND_LAYOUT.md](01-user-guide/INSTALL_AND_LAYOUT.md)
 - [CONFIG_REFERENCE.md](01-user-guide/CONFIG_REFERENCE.md)
 - [TROUBLESHOOTING.md](01-user-guide/TROUBLESHOOTING.md)
