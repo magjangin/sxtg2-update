@@ -40,7 +40,7 @@
 ---
 
 ## 4. 핵심 후킹 타깃 및 커스텀 에셋 주입 파이프라인
-상세 목록은 `docs/hooks.md` 참조.
+상세 목록은 `docs/02-systems/HOOK_TABLE.md`(소스에서 생성한 전체 표), 주제별 설명은 `docs/README.md` 참조.
 
 1. **독립 "CUSTOM" 카테고리 탭 생성:**
    - **타깃:** `Il2CppSixtarGate.MusicSelect.CategorySelectController::LoadData()` (RVA `0x605740`) 및 `Il2CppRhythmGame.RhythmGameUtils::GetSelectableCategoty()` (RVA `0x6B72C0`)
@@ -142,6 +142,9 @@
 
 25. **스킨 구성 (2026-10-30, `sharedassets0.assets`의 `GearPackage`/`NotePackage`와 옵션 정의를 UnityPy로 직접 읽음):** 기어 22개, 노트 11개이고 둘은 독립 옵션(`GearSkin`/`NoteSkin`, `MultipleOperationsOption`: `_options` 이름 배열 + 같은 길이의 `_dlcHashs`, `UseUnlockFilter`면 `IItemChecker.IsUnlocked(hash)`로 거름). 이름이 같은 짝은 default, fkns, gothic, pianist, stellar, voyager, reincarnationOfKalpa, cosmicSymphony. WACCA는 기어 4개(WaccaLily/LilyR/Reverse/S) ↔ 노트 `wacca`. 기어 전용: defaultna, Arch, Cat, Equalizer, HeartBeat, Oriental, Relic, Rose, StarBeat, Steampunk. 노트 전용: voyagerorigin, snowflake. DLC 표시는 WACCA(`DLC_Wacca`)와 KALPA(`DLC_Kalpa`)뿐(상점 설명과 일치).
    - **`button01_*`는 숨은 노트 스킨이 아님:** 스프라이트만 있고(파랑/빨강/게이트, active/deactive/input, nov_bg, star_glow) 전부 참조됨 — default/defaultna/gothic/stellar/pianist/voyager 기어 양옆의 키 버튼(`Gear Side Object/.../KeyAnimation {레인}/Button Released|Pressed`, `Gear Gate Mask Object/KeyAnimation GATE`). 이전 22번 기록의 "NotePackage에 button01"은 틀렸음.
+
+26. **결과 화면 연출 (`ResultAnimationController`, 2026-10-30):** Travel 결과는 점수 > 700,000(`IResultArgs.Score`, slot 3) 이고 `RemainingLifeGauge`(slot 9) > 0이면 `ResultAnimationMap.Get(트랙 ID)`, 없으면 `"default"`. 맵(`contents_assets_all_*.bundle`의 `ResultAnimation/Travel`)은 `default`→`ShiiDefault` 모델(시이), `zantetsuken`→`Rath` 모델+`Result_zantetsuken` 영상, `lustroustravelremix`→`Christmas_2022` 모델/영상 3개뿐. OuterSpace·LicenseTest 맵은 `default`만. 커스텀 곡은 항상 기본(시이). 상세 `docs/04-game-reference/RESULT_ANIMATIONS.md`.
+27. **모드 선택 (`ModeItemController`, 2026-10-30):** `level5~12`의 항목 = TravelMode(→MusicSelect, Solar/Lunar 먼저), OuterSpace(코스), LicenseTest(단위 인정), Adventure(→AdventureTitle, 스토리), VoyageReport(→Statistics), Lesson(튜토리얼), UnityQuest. `isDevelop=1`이면 `OnDevelop`(효과음+개발 중 패널)만. UnityQuest는 모든 테마에서 개발 중, Lesson은 Default 테마에서만 들어감. 상세 `docs/04-game-reference/MODE_SELECT.md`.
 
 ## 5. 시도했다가 실패한 것들 (Dead Ends / Failed Attempts)
 - **IL2CPP 동일 코드 접기(ICF) 주의 — 패치 전 반드시 확인:** 내용이 같은 메서드들이 하나의 네이티브 주소를 공유함. 공유 주소를 패치하면 Postfix가 엉뚱한 클래스의 `this`로 실행됨(필드 오프셋 오독 → 크래시/오작동). 실제 사례: `TrackInfoViewerModule._Set_b__3_1`(11개 공유: 프로필 아이콘·언락 리스트 등), `BackgroundUIProcessor.<Initialize>b__1`(인벤토리 썸네일 2개와 공유), `NoteObject.SetTickData`(102개), `JudgeProcessor.set_IsAutoJudge`(44개), `FinishProcessor.set_TrackEndTiming`(11개), `GearObject.NoteJudgedObserver.Notify`(`InputEventArgs.Invoke`와 공유). 확인법: `il2cpp_dump/script.json`의 `ScriptMethod[].Address` 중복 개수 세기.
