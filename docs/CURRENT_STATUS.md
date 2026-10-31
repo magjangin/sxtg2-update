@@ -1,6 +1,6 @@
 # 현재 상태 (2026-10-31)
 
-게임 Steam Build `26218612`(현재 Steam 공개 빌드와 같음), MelonLoader 0.7.3, 패치 클래스 58개(실기 로그 `All patches applied successfully! (58)`).
+게임 Steam Build `26218612`(현재 Steam 공개 빌드와 같음), MelonLoader 0.7.3, 패치 클래스 117개(`All patches applied successfully! (117)`).
 
 ## 기능별 상태
 
@@ -21,11 +21,11 @@
 | 노트 속도 카오스, 히든, 페이드 | 실기 미확인 | |
 | 커스텀 노트 스킨 / 랜덤 노트 스킨 | 실기 미확인 | |
 | 마라톤 | 실기 미확인 | |
-| 오프라인 가드, 점수 업로드 차단 | 실기 확인 | 로그에 `[OfflineGuard]` |
+| 오프라인 가드·서버 종료 우회 (`OfflineBypass.cs`) | 구현 및 시그니처 검증 완료 | 리뉴얼 BACKND 39개 + `sxtg2 saver test` 24개 (총 63개 훅, 전부 `ICF=1`) |
 | 전곡·DLC 해금 | 실기 확인 | |
 | 출석 보상 창 자동 표시 끄기 | 실기 확인 | 로그 `[Attendance] Skipped ...` |
 
-## 최근 변경 (2026-10-30, PR 순서)
+## 최근 변경 (2026-10-30 ~ 2026-10-31, PR 순서)
 
 1. **#1** AllPerfect가 안 누른 롱노트 틱에 레인 불빛을 켜던 문제 수정
 2. **#2** README, 성능 정리(오버레이 IL2CPP 호출 제거, 디스크 접근 제거, 차트 캐시), 죽은 훅 제거 (4,217 → 3,746줄)
@@ -36,6 +36,7 @@
 7. **#7** 이 문서 묶음 추가
 8. **#8** 자주 묻는 질문(FAQ) 추가
 9. **#9** 비플레이 씬 `OnLateUpdate` 가드 + `Overlay.HideAll()`, BMS 파서/변환기 문자열 할당 제거, 잔여 Unity 구조체 생성자 제거 및 문서 최신화 (2026-10-31)
+10. **#10** `sxtg2 saver test` 레거시 오프라인 패치 이식 및 리뉴얼(`SixtarGate.Web.BackEnd*`) 서버 종료/오프라인 완전 우회(`Features/OfflineBypass.cs`, 63개 훅) 구현 (2026-10-31)
 
 ## 알려진 한계
 

@@ -29,10 +29,10 @@
    - 기존 "ALL TRACKS"나 "Original" 등의 공식 카테고리를 오염시키지 않고, 상단 카테고리 셀렉터에 완전히 독립된 **"CUSTOM"** 카테고리 탭을 생성.
    - `CategorySelectController.Categories` 및 `RhythmGameUtils.GetSelectableCategoty`에 "CUSTOM"을 등록하고, `TrackSelectController.GetTracks("CUSTOM")` 호출 시에만 커스텀 곡(`Starting Point (Custom 1-Note)`) 1곡을 제공.
    - ALL TRACKS 및 기타 공식 카테고리는 공식 곡만 순수하게 유지되어 완벽한 GUI 분리 및 단축키 배제 달성.
-3. **서버 의존성 격리 및 오프라인 보존 (Offline Guard):**
-   - 게임 구동 및 플레이 결과 화면에서 서버(독자 HTTP API 및 뒤끝 BACKND SDK)와 지속적으로 통신을 시도함.
-   - `ServerMaintenanceNotice::Show`를 Prefix 단계에서 억제하여 점검 중 또는 오프라인 상태에서도 타이틀 강제 종료를 차단.
-   - `ManagerWebRequest::PostHighScoreData` 및 `BackEndRankingService+TravelHighScoreRequest::Start`를 Prefix 단계에서 차단(`return false`)하고 클라이언트 내부 성공 콜백(`onComplete?.Invoke(1)`)을 에뮬레이션하여, 연출/결과창은 정상 진행되되 외부 서버로는 일체 패킷이 전송되지 않도록 보호.
+3. **서버 의존성 완전 격리 및 서버 종료 대비 오프라인 보존 (`Features/OfflineBypass.cs`):**
+   - 빌드 `26218612`는 리뉴얼 뒤끝(BACKND) 파이프라인(`SixtarGate.Web.BackEnd*`)과 구버전 HTTP 파이프라인(`ManagerWebRequest`, `UpdateChecker`, `UserAccountModule`, `ItemHelper`)을 함께 가짐.
+   - 서버나 BACKND가 완전히 종료/차단된 상태에서 원본 `BackEndWebRequest.InitializeModule`이 돌면 `InitializeCoroutine`에서 로그인·DB 초기화 실패 후 `Exit()`를 호출하고 `HasInitialized = true`에 도달하지 못해 `TableLoader`·`TrackLoader`·`ItemProvideModule`이 `WaitUntil(() => Web.HasInitialized)`에서 영구 멈춤.
+   - `Features/OfflineBypass.cs`(리뉴얼 39개 + `sxtg2 saver test` 레거시 24개 = 총 63개 훅, 전부 `ICF=1` 검증 완료)에서 부팅 초기화(`BackEndWebRequest.InitializeModule`), 테이블 버전(`GetTableVersions` 빈 리스트 → 로컬 캐시 및 내장 직렬화 `SXGT_TextAsset` 테이블 폴백), 해금 목록(`GetUnlockData` 빈 리스트), 모드 선택 버전 체크(`UpdateCheckController.Initialize` → `VersionCheckPass = true`), 결과 화면 Arkk 보상(`RequestTravelModeArkkRewards` → `TravelArkkRewardProvider` 로컬 계산), 랭킹 조회/업로드 차단, Steam 미실행 시 `ClientDataProvider.InitializeUnityEditor()` 폴백까지 전 구간을 로컬 완결 처리.
 4. **완전한 클라이언트 전곡/DLC 해금 (Full Unlock):**
    - 곡과 DLC 해금 검증이 `ItemUnlockChecker` 및 `TrackLoader.TrackData.get_IsOwned`에 집중되어 있음.
    - `ItemUnlockChecker.IsUnlocked`, `ItemUnlockChecker.IsDLCUnlocked`, `ItemProvideModule.IsOwned`, `TrackLoader+TrackData.IsOwned`를 일괄 `true`로 오버라이드하여 서버 검증 없이 전곡 및 DLC 해금 구현.
@@ -58,9 +58,9 @@
 5. **전곡 & 모든 DLC 해금:**
    - **타깃:** `ItemUnlockChecker::IsUnlocked`, `ItemUnlockChecker::IsDLCUnlocked`, `TrackLoader.TrackData::get_IsOwned`, `ItemProvideModule::IsOwned`
    - **역할:** 항상 `true` 반환으로 모든 DLC 및 해금곡 즉시 플레이 가능.
-6. **오프라인 팝업 억제 & 스코어 전송 차단:**
-   - **타깃:** `ServerMaintenanceNotice::Show`, `ManagerWebRequest::PostHighScoreData`, `TravelHighScoreRequest::Start`
-   - **역할:** 점검 화면 스킵 및 변조 스코어 서버 업로드 차단.
+6. **완전 오프라인 / 서버 종료 우회 (`Features/OfflineBypass.cs`, 63개 훅):**
+   - **리뉴얼(`SixtarGate.Web.BackEnd*` & `SixtarGate`, 39개 훅):** `BackEndWebRequest`(`InitializeModule`, `ShowMaintenance`, `CheckMaintenanceStatus`, `Exit`, `LoadUserData`, `UpdateUserData`×2, `SaveUserProfile`), `BackEndMaintenance`(`Enter`, `Observe`), `BackEndRequestService`(`GetTableVersions`, `FetchServer`, `GetAttendanceEventTable`, `Login`), `BackEndUserDataService`(`GetUnlockData`, `GetUserArkk`, `RefreshUserData`, `RequestItemUnlock`, `GetAttendanceReward`, `RequestTravelModeArkkRewards`, `RequestStartLicenseTest`), `BackEndShopService`(`RequestItemPurchase`), `BackEndRankingService`(`GetHighScoreList`, `GetRankingList`, `TravelRankingReadRequest.Start`, `PostHighScoreData`, `SubmitTravelHighScore`, `TravelHighScoreRequest.Start`, `GetUserLicenseLevel`, `PostClearLicense`), `UpdateCheckController.Initialize`, `UpdateCheckPopup.OpenPopup`, `ServerMaintenanceNotice.Show`, `UnitySessionLegacyConnector`(`Connect`, `ReqeustSessionPlayingCount`), `ClientDataProvider.InitializeModule`(Finalizer), `AchievementModule`(`InitializeModule`, `ContainsAchievement`, `UnlockReqeustAchievement` Finalizer).
+   - **레거시(`sxtg2 saver test` 이식, 24개 훅):** `ManagerWebRequest`(16개 메서드), `RhythmGame.ModeSelect.UpdateChecker.Check`, `UserAccountModule`(`CheckTutorial`, `LoadFavorites`), `ItemHelper`(`LoadUnlockCache`, `CheckItemsUnlock`, `CheckOwnedState`×2). 상세는 `docs/02-systems/OFFLINE_AND_UNLOCK.md` 참조.
 
 7. **인게임 조기 클리어 방지 & 곡 전체 완주 보장 (FinishProcessor Hook):**
    - **타깃:** `Il2CppSixtarGate.Play.FinishProcessor::Initialize(IPatternPlayer player)` (RVA `0x63FE10`)
@@ -150,7 +150,7 @@
 27. **모드 선택 (`ModeItemController`, 2026-10-30):** `level5~12`의 항목 = TravelMode(→MusicSelect, Solar/Lunar 먼저), OuterSpace(코스), LicenseTest(단위 인정), Adventure(→AdventureTitle, 스토리), VoyageReport(→Statistics), Lesson(튜토리얼), UnityQuest. `isDevelop=1`이면 `OnDevelop`(효과음+개발 중 패널)만. UnityQuest는 모든 테마에서 개발 중, Lesson은 Default 테마에서만 들어감. 상세 `docs/04-game-reference/MODE_SELECT.md`.
 
 ## 5. 시도했다가 실패한 것들 (Dead Ends / Failed Attempts)
-- **IL2CPP 동일 코드 접기(ICF) 주의 — 패치 전 반드시 확인:** 내용이 같은 메서드들이 하나의 네이티브 주소를 공유함. 공유 주소를 패치하면 Postfix가 엉뚱한 클래스의 `this`로 실행됨(필드 오프셋 오독 → 크래시/오작동). 실제 사례: `TrackInfoViewerModule._Set_b__3_1`(11개 공유: 프로필 아이콘·언락 리스트 등), `BackgroundUIProcessor.<Initialize>b__1`(인벤토리 썸네일 2개와 공유), `NoteObject.SetTickData`(102개), `JudgeProcessor.set_IsAutoJudge`(44개), `FinishProcessor.set_TrackEndTiming`(11개), `GearObject.NoteJudgedObserver.Notify`(`InputEventArgs.Invoke`와 공유). 확인법: `il2cpp_dump/script.json`의 `ScriptMethod[].Address` 중복 개수 세기.
+- **IL2CPP 동일 코드 접기(ICF) 주의 — 패치 전 반드시 확인:** 내용이 같은 메서드들이 하나의 네이티브 주소를 공유함. 공유 주소를 패치하면 Postfix가 엉뚱한 클래스의 `this`로 실행됨(필드 오프셋 오독 → 크래시/오작동). 실제 사례: `NeedClientUpdatePopup.OpenPopup`/`ServerDisconnectedPopup.OpenPopup`(5192개 공유 `0x450BA0`), `TrackInfoViewerModule._Set_b__3_1`(11개 공유: 프로필 아이콘·언락 리스트 등), `BackgroundUIProcessor.<Initialize>b__1`(인벤토리 썸네일 2개와 공유), `NoteObject.SetTickData`(102개), `JudgeProcessor.set_IsAutoJudge`(44개), `FinishProcessor.set_TrackEndTiming`(11개), `GearObject.NoteJudgedObserver.Notify`(`InputEventArgs.Invoke`와 공유). 확인법: `il2cpp_dump/script.json`의 `ScriptMethod[].Address` 중복 개수 세기.
 - **로컬 음원을 `SoundModuleForFMOD.PlayLocalSound`(programmer sound 이벤트)로 재생:** 그 이벤트 타임라인이 약 3분 고정이라 긴 곡은 중간부터 무음, 그 길이가 `GetGamePlayAudioLength`로 새어 186초에 결과 화면 강제 전환. → FMOD Core `createStream`으로 교체.
 - **`JudgeProcessor` 생성자 Harmony 패치:** 적용 에러는 없지만 한 번도 호출되지 않음. → 인스턴스 메서드에서 지연 초기화.
 - **IMGUI(`OnGUI`)로 판정바/키뷰어 그리기:** `Method unstripping failed`가 매 프레임 발생. → uGUI 캔버스.

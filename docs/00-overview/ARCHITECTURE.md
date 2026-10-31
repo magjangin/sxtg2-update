@@ -4,8 +4,9 @@
 
 ```text
 mod/
-├── Core.cs                   진입점(MelonMod). CUSTOM 탭, 차트/미디어 주입, 곡 끝 시점, 해금, 오프라인 가드
+├── Core.cs                   진입점(MelonMod). CUSTOM 탭, 차트/미디어 주입, 곡 끝 시점, 해금
 ├── Features/
+│   ├── OfflineBypass.cs      완전 오프라인 / 서버 종료 우회 (리뉴얼 BACKND 39개 + sxtg2 saver test 24개)
 │   ├── PlayAssist.cs         판정 파이프라인: AutoPlay, AllPerfect, MaxScore, 점수 반전, 기록 차단
 │   ├── Overlay.cs            uGUI 즉시모드 그리기 (Box/Rgba, 값 캐시)
 │   ├── JudgmentBar.cs        판정바

@@ -48,6 +48,10 @@
       <HintPath>H:\steam\steamapps\common\Sixtar Gate STARTRAIL\MelonLoader\Il2CppAssemblies\Il2CppFMODUnity.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Il2CppBACKND.Database">
+      <HintPath>H:\steam\steamapps\common\Sixtar Gate STARTRAIL\MelonLoader\Il2CppAssemblies\Il2CppBACKND.Database.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Il2Cppmscorlib">
       <HintPath>H:\steam\steamapps\common\Sixtar Gate STARTRAIL\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll</HintPath>
       <Private>false</Private>

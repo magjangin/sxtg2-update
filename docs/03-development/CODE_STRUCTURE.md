@@ -1,10 +1,11 @@
 # 코드 구조
 
-`mod/` 20개 파일, 3,846줄 (2026-10-31). 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+`mod/` 21개 파일, 4,727줄 (2026-10-31). 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
 | 파일 | 줄 | 역할 |
 | --- | ---: | --- |
-| `Core.cs` | 799 | 진입점. CUSTOM 탭, 플레이 진입, 차트 주입, 곡 끝, BGA, 자켓, 프리뷰, 해금, 오프라인 가드 |
+| `Features/OfflineBypass.cs` | 942 | 완전 오프라인·서버 종료 우회 (리뉴얼 BACKND 39개 + `sxtg2 saver test` 레거시 24개) |
+| `Core.cs` | 738 | 진입점. CUSTOM 탭, 플레이 진입, 차트 주입, 곡 끝, BGA, 자켓, 프리뷰, 해금 |
 | `Managers/ModConfig.cs` | 454 | 설정 파일. 절반 이상이 기본 템플릿 문자열 |
 | `Features/PlayAssist.cs` | 270 | 판정 세션, AutoPlay, AllPerfect(+불빛 생략), 점수, 기록 차단 |
 | `Managers/CustomTrackManager.cs` | 250 | hwa 스캔, 차트 텍스트 캐시, TrackData 복제 |
