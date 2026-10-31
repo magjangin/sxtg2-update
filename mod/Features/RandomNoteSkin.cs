@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
@@ -36,6 +37,24 @@ public static class RandomNoteSkin
     private static readonly Dictionary<LaneIndex, string> LaneSuffix = new();
     private static readonly System.Random Rng = new();
     private static bool _warned;
+
+    // Typo-tolerant fallback if GetNoteReferance is renamed to GetNoteReference in a future game update.
+    private static readonly Func<IngameUIRenderer, LaneIndex, NoteObject?> GetNoteRef = BindGetNoteReference();
+
+    private static Func<IngameUIRenderer, LaneIndex, NoteObject?> BindGetNoteReference()
+    {
+        var m = PatchResilience.ResolveMethod(typeof(IngameUIRenderer), new[] { typeof(LaneIndex) }, "GetNoteReferance", "GetNoteReference");
+        if (m != null)
+        {
+            try
+            {
+                return (Func<IngameUIRenderer, LaneIndex, NoteObject?>)Delegate.CreateDelegate(
+                    typeof(Func<IngameUIRenderer, LaneIndex, NoteObject?>), m);
+            }
+            catch { }
+        }
+        return (ui, lane) => ui.GetNoteReferance(lane);
+    }
 
     private static string SuffixOf(string name)
     {
@@ -101,9 +120,13 @@ public static class RandomNoteSkin
     }
 
     // Registered after CustomNoteSkin's postfix (Priority.Low) — when RandomNoteSkin is on, custom PNGs are not used.
-    [HarmonyPatch(typeof(StartrailPatternRenderer), "GetNoteObejct")]
+    // Typo-tolerant: resolves "GetNoteObejct" or "GetNoteObject" if fixed in a future update.
+    [HarmonyPatch]
     public static class StartrailPatternRenderer_GetNoteObejct_Patch
     {
+        public static MethodBase? TargetMethod()
+            => PatchResilience.ResolveMethod(typeof(StartrailPatternRenderer), "GetNoteObejct", "GetNoteObject");
+
         [HarmonyPriority(Priority.Low)]
         public static void Postfix(StartrailPatternRenderer __instance, LaneIndex index, NoteObject __result)
         {
@@ -117,7 +140,7 @@ public static class RandomNoteSkin
                 // The lane prefab is fixed for the whole play; resolve its suffix once per lane.
                 if (!LaneSuffix.TryGetValue(index, out var suffix))
                 {
-                    var reference = ui.GetNoteReferance(index);
+                    var reference = GetNoteRef(ui, index);
                     LaneSuffix[index] = suffix = reference != null ? SuffixOf(reference.name) : "";
                 }
                 if (!SkinsBySuffix.TryGetValue(suffix, out var skins) || skins.Count == 0) return;

@@ -37,6 +37,7 @@
 8. **#8** 자주 묻는 질문(FAQ) 추가
 9. **#9** 비플레이 씬 `OnLateUpdate` 가드 + `Overlay.HideAll()`, BMS 파서/변환기 문자열 할당 제거, 잔여 Unity 구조체 생성자 제거 및 문서 최신화 (2026-10-31)
 10. **#10** `sxtg2 saver test` 레거시 오프라인 패치 이식 및 리뉴얼(`SixtarGate.Web.BackEnd*`) 서버 종료/오프라인 완전 우회(`Features/OfflineBypass.cs`, 63개 훅) 구현 (2026-10-31)
+11. **#11** 업데이트 내성 강화(`Managers/PatchResilience.cs`): 컴파일러 생성 클로저·코루틴(`__c__DisplayClass*`, `_*_d__*`, `_b__*`) 하드코딩 전면 제거 및 시그니처 기반 동적 탐색, 게임 오타 메서드 양방향 해석, 런타임 ICF 자명 스텁(1~3바이트) 가드, `TrackData` 속성 전체 자동 복제 (2026-10-31)
 
 ## 알려진 한계
 

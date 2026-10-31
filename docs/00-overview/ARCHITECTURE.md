@@ -21,7 +21,8 @@ mod/
 │   ├── CustomTrackManager.cs hwa 스캔, 앨범 정보, 차트 텍스트(캐시), TrackData 복제
 │   ├── CustomAudioManager.cs FMOD Core 스트림 재생/일시정지/볼륨
 │   ├── MediaOverrideManager.cs 자켓 비동기 로드, BGA URL 교체
-│   └── ModConfig.cs          SaveCustomKey\config.txt 읽기/마이그레이션
+│   ├── ModConfig.cs          SaveCustomKey\config.txt 읽기/마이그레이션
+│   └── PatchResilience.cs    업데이트 내성 (클로저·코루틴 동적 탐색, 오타 양방향 해석, 런타임 ICF 스텁 가드)
 ├── Loaders/
 │   ├── BmsParser.cs          BPM, 마지막 노트 끝 시각
 │   ├── SxtgBmsConverter.cs   sxtg2 채널 → 게임 채널, 3자리 값 정규화
@@ -35,8 +36,8 @@ mod/
 ```text
 [assembly: HarmonyDontPatchAll]          ← MelonLoader 자동 PatchAll 끔 (켜 두면 모든 훅이 2번 돎)
 Core.OnInitializeMelon
-  └─ 모드 어셈블리의 [HarmonyPatch] 클래스마다
-       HarmonyInstance.CreateClassProcessor(type).Patch()
+  └─ PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance)
+       → 런타임 ICF 자명 스텁(1~3바이트 ret/xor/mov) 검사 후 CreateClassProcessor(type).Patch()
        → 하나가 실패해도 나머지는 적용, 로그 "All patches applied successfully! (N)"
 ```
 
