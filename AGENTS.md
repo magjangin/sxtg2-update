@@ -100,7 +100,11 @@
    - `SixtarGate.Play.BackgroundUIProcessor.Initialize` Postfix + 재적용 코루틴 (콜백 `<Initialize>b__1`은 ICF 공유라 패치 금지)
    - PlayLoading `b__2/_b__4`는 OuterSpace 판(`DisplayClass35_0`, 같은 필드 배치)과 공유 — 레이아웃이 같아 안전.
    - 로딩 영상(`_specifiedLoadingClip`, `b__3`)은 게임 기본 영상 유지.
-15. **Harmony 적용 방식:** `[assembly: HarmonyDontPatchAll]` + 클래스별 `CreateClassProcessor(type).Patch()` (하나 실패해도 나머지 적용, 로그에 `All patches applied successfully! (N)`).
+15. **Harmony 적용 방식 및 업데이트 내성 (`Managers/PatchResilience.cs`):**
+   - `[assembly: HarmonyDontPatchAll]` + `PatchResilience.ApplyAllPatches`에서 패치 전 `Il2CppMethodInfo::methodPointer`의 첫 1~3바이트 기계어를 검사해 MSVC `/OPT:ICF` 공유 자명 스텁(`ret`, `ret 0`, `xor al,al;ret`, `mov al,1;ret`)이면 자동 스킵.
+   - 컴파일러 생성 클로저·코루틴(`__c__DisplayClass*`, `_*_d__*`, `_b__*`)에 대한 컴파일 타임 타입 참조를 전면 제거하고 `FindClosureMethod` / `FindClosureCallback` / `FindCoroutineMoveNext` + `Expression.Lambda` 컴파일 접근자로 동적 바인딩하여 업데이트 시 순번이 밀려도 깨지지 않음.
+   - 원본 오타 메서드(`GetNoteObejct`, `GetSelectableCategoty`, `ReqeustSessionPlayingCount`, `UnlockReqeustAchievement`, `CurrectionVolume`, `GetNoteReferance`)는 오타·정상 철자 양방향 자동 해석.
+   - `CustomTrackManager.CloneTrackData`는 `CreatePropertyCloner<TrackLoader.TrackData>()`로 템플릿의 모든 속성을 먼저 복제해 신규 필드 추가에 대응.
 
 16. **곡 종료 시점 (`FinishProcessor.UpdatePatternTime`, RVA `0x6401A0`):** 종료 조건은 `TrackEndOffset + TrackEndTiming + _finishOffset(3s) <= patternTime`. `Initialize` Postfix로 `TrackEndTiming`을 넣어도 플레이 시작 직후 게임이 `TrackEndTiming = 0.3`으로 다시 덮어씀(실측 로그). `set_TrackEndTiming`은 11개 함수와 접힌(ICF) 코드라 패치 금지 → `UpdatePatternTime` Prefix에서 `offset + timing < 곡 길이`면 `timing = 곡 길이 - offset`.
    - **곡 길이 = max(`album.Duration`, Game 채널 스트림 길이):** `album.Duration`은 BMS 마지막 노트 + 3초라, 음원/BGA가 마지막 노트보다 긴 곡(하얀 그리움: 노트 237.5초, 음원 257.8초)은 노트가 끝나고 3초 뒤 결과로 넘어갔음. `CustomAudioManager.GetStreamLength(Game)`(FMOD `Sound.getLength`)을 함께 씀.

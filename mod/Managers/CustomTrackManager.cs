@@ -211,6 +211,9 @@ public static class CustomTrackManager
         return resultList;
     }
 
+    private static readonly Action<TrackLoader.TrackData, TrackLoader.TrackData> CopyTemplateTrackProperties =
+        PatchResilience.CreatePropertyCloner<TrackLoader.TrackData>();
+
     private static TrackLoader.TrackData CloneTrackData(
         ITrack template, TrackLoader.TrackData? templateData, string trackId, string displayName, string displayNameEN,
         string composer, float bpm, List<int>? difficulties)
@@ -229,22 +232,25 @@ public static class CustomTrackManager
             lunarArr[i] = level;
         }
 
-        return new TrackLoader.TrackData
-        {
-            _TrackID_k__BackingField = trackId,
-            _DisplayName_k__BackingField = displayName,
-            _DisplayNameEN_k__BackingField = displayNameEN,
-            _Composer_k__BackingField = composer,
-            _Category_k__BackingField = Core.CUSTOM_CATEGORY_NAME,
-            _LicenseCopy_k__BackingField = "",
-            _DisplayBPM_k__BackingField = $"{bpm:F0}",
-            _BGAOffset_k__BackingField = template.BGAOffset,
-            _VisibilityID_k__BackingField = template.VisibilityID,
-            _UnlockID_k__BackingField = template.UnlockID,
-            _UpdateData_k__BackingField = template.UpdateData,
-            _ArtistInfos_k__BackingField = template.ArtistInfos,
-            solarLevels = solarArr,
-            lunarLevels = lunarArr,
-        };
+        var cloned = new TrackLoader.TrackData();
+        // Copy all properties from the donor TrackData first so any new fields added in future game updates are preserved.
+        if (templateData != null)
+            CopyTemplateTrackProperties(templateData, cloned);
+
+        cloned._TrackID_k__BackingField = trackId;
+        cloned._DisplayName_k__BackingField = displayName;
+        cloned._DisplayNameEN_k__BackingField = displayNameEN;
+        cloned._Composer_k__BackingField = composer;
+        cloned._Category_k__BackingField = Core.CUSTOM_CATEGORY_NAME;
+        cloned._LicenseCopy_k__BackingField = "";
+        cloned._DisplayBPM_k__BackingField = $"{bpm:F0}";
+        cloned._BGAOffset_k__BackingField = template.BGAOffset;
+        cloned._VisibilityID_k__BackingField = template.VisibilityID;
+        cloned._UnlockID_k__BackingField = template.UnlockID;
+        cloned._UpdateData_k__BackingField = template.UpdateData;
+        cloned._ArtistInfos_k__BackingField = template.ArtistInfos;
+        cloned.solarLevels = solarArr;
+        cloned.lunarLevels = lunarArr;
+        return cloned;
     }
 }

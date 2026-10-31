@@ -15,6 +15,7 @@ using Il2CppSixtarGate.MusicSelect;
 using Il2CppSixtarGate.Play;
 using Il2CppSixtarithm;
 using Il2CppInterop.Runtime;
+using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using SixtarGateMod.Loaders;
 using SixtarGateMod.Managers;
@@ -59,26 +60,7 @@ public class Core : MelonMod
         CustomNoteSkin.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
 
         LoggerInstance.Msg("[Harmony] Explicitly applying all patches...");
-        // Patch class by class: with a single PatchAll, one missing target aborts every patch after it.
-        int applied = 0, failed = 0;
-        foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Core).Assembly))
-        {
-            if (type.GetCustomAttributes(typeof(HarmonyPatch), false).Length == 0) continue;
-            try
-            {
-                HarmonyInstance.CreateClassProcessor(type).Patch();
-                applied++;
-            }
-            catch (Exception ex)
-            {
-                failed++;
-                LoggerInstance.Error($"[Harmony] Patch '{type.Name}' failed: {ex.Message}");
-            }
-        }
-        if (failed == 0)
-            LoggerInstance.Msg($"[Harmony] All patches applied successfully! ({applied})");
-        else
-            LoggerInstance.Warning($"[Harmony] {applied} patches applied, {failed} failed");
+        PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance);
     }
 
     // sxtg2 overlays (judgment bar, key viewer). IMGUI drawing is stripped from this game build
@@ -98,7 +80,8 @@ public class Core : MelonMod
 
     public override void OnLateUpdate()
     {
-        if (!_inRenewalPlay && !CustomMarathon.IsShowingResultBanner) return;
+        // Also check PlayAssist.IsPlaying so overlays keep working if a future update renames the play scene.
+        if (!_inRenewalPlay && !PlayAssist.IsPlaying && !CustomMarathon.IsShowingResultBanner) return;
         try
         {
             NoteEffects.OnFrame();
@@ -142,10 +125,14 @@ public class Core : MelonMod
         }
     }
 
-    // 2. RhythmGameUtils: Also register "CUSTOM" to legacy/utility category dictionary and selectable array
-    [HarmonyPatch(typeof(RhythmGameUtils), nameof(RhythmGameUtils.GetSelectableCategoty))]
+    // 2. RhythmGameUtils: Also register "CUSTOM" to legacy/utility category dictionary and selectable array.
+    // Typo-tolerant: resolves "GetSelectableCategoty" or "GetSelectableCategory" if fixed in a future update.
+    [HarmonyPatch]
     public static class RhythmGameUtils_GetSelectableCategoty_Patch
     {
+        public static MethodBase? TargetMethod()
+            => PatchResilience.ResolveMethod(typeof(RhythmGameUtils), "GetSelectableCategoty", "GetSelectableCategory");
+
         public static void Postfix(ref Il2CppStringArray __result)
         {
             if (__result == null) return;
@@ -251,13 +238,37 @@ public class Core : MelonMod
     // RuntimeManager.LoadBank(ta) and looks up "SXGTBIN_{pattern}" -> b__14 stores the pattern text and moves to Renewal_Play.
     // A custom trackID has no bank TextAsset, so b__13 throws NullReferenceException inside LoadBank and loading stalls.
     // For custom tracks skip both lookups and hand b__14 a TextAsset holding the album BMS directly.
-    [HarmonyPatch(typeof(SixtarGlobal.__c__DisplayClass54_0), nameof(SixtarGlobal.__c__DisplayClass54_0._GotoPlayScene_b__12))]
+    // Resolved structurally via PatchResilience so closure/lambda ordinal changes across game updates never break it.
+    [HarmonyPatch]
     public static class SixtarGlobal_GotoPlayScene_LoadBundle_Patch
     {
-        public static bool Prefix(SixtarGlobal.__c__DisplayClass54_0 __instance)
+        private static Func<Il2CppObjectBase, ITrack?>? _getTrack;
+        private static Func<Il2CppObjectBase, Il2CppObjectBase?>? _getArgs;
+        private static Action<Il2CppObjectBase, string>? _setBankName;
+        private static Action<Il2CppObjectBase, TextAsset>? _invokePatternReady;
+
+        public static MethodBase? TargetMethod()
         {
-            if (!IsCustomTrackActive) return true;
-            var track = __instance.track;
+            var target = PatchResilience.FindClosureMethod(
+                typeof(SixtarGlobal), "_GotoPlayScene_b__", typeof(ISixtarAssetBundle));
+            if (target?.DeclaringType is Type closureType)
+            {
+                _getTrack = PatchResilience.CreateGetter<ITrack>(closureType, "track");
+                _getArgs = PatchResilience.CreateGetter<Il2CppObjectBase>(closureType, "args");
+                var argsProp = PatchResilience.FindProperty(closureType, typeof(Il2CppObjectBase), "args");
+                if (argsProp != null)
+                    _setBankName = PatchResilience.CreateSetter<string>(argsProp.PropertyType, "BankName", "_BankName_k__BackingField");
+                var patternMethod = PatchResilience.FindMethodInType(closureType, "_GotoPlayScene_b__", typeof(TextAsset));
+                if (patternMethod != null)
+                    _invokePatternReady = PatchResilience.CreateAction<TextAsset>(closureType, patternMethod);
+            }
+            return target;
+        }
+
+        public static bool Prefix(Il2CppObjectBase __instance)
+        {
+            if (!IsCustomTrackActive || _getTrack == null || _invokePatternReady == null) return true;
+            var track = _getTrack(__instance);
             if (track == null) return true;
 
             string bmsContent = DefaultBms;
@@ -270,10 +281,11 @@ public class Core : MelonMod
 
             try
             {
-                if (__instance.args != null)
-                    __instance.args._BankName_k__BackingField = track.TrackID;
+                var args = _getArgs?.Invoke(__instance);
+                if (args != null)
+                    _setBankName?.Invoke(args, track.TrackID);
                 Melon<Core>.Logger.Msg($"[CustomChart] Skipping FMOD bank/SXGTBIN lookup for '{track.TrackID}', moving to Renewal_Play with local BMS ({bmsContent.Length} chars)");
-                __instance._GotoPlayScene_b__14(new TextAsset(bmsContent));
+                _invokePatternReady(__instance, new TextAsset(bmsContent));
                 return false;
             }
             catch (Exception ex)
@@ -421,12 +433,17 @@ public class Core : MelonMod
         }
     }
 
-    [HarmonyPatch(typeof(BackgroundUIProcessor.__c__DisplayClass11_0), "_Initialize_b__2")]
+    [HarmonyPatch]
     public static class BackgroundUIProcessor_VideoCallback_Patch
     {
-        public static void Postfix(BackgroundUIProcessor.__c__DisplayClass11_0 __instance)
+        private static Func<Il2CppObjectBase, BackgroundUIProcessor?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(typeof(BackgroundUIProcessor), "_Initialize_b__", typeof(VideoClip), out _getOwner);
+
+        public static void Postfix(Il2CppObjectBase __instance)
         {
-            var p = __instance.__4__this;
+            var p = _getOwner?.Invoke(__instance);
             if (p != null && IsCustomBga(p))
                 MediaOverrideManager.OverrideBGA(p.bgaPlayer, CustomTrackManager.CurrentSelectedAlbum!);
         }
@@ -554,10 +571,22 @@ public class Core : MelonMod
         });
     }
 
-    [HarmonyPatch(typeof(TrackObject.__c__DisplayClass18_0), nameof(TrackObject.__c__DisplayClass18_0._LoadThumbnail_b__1))]
+    [HarmonyPatch]
     public static class TrackObject_LoadThumbnailCallback_Patch
     {
-        public static void Postfix(TrackObject.__c__DisplayClass18_0 __instance) => ApplyListThumbnail(__instance.__4__this, __instance.track);
+        private static Func<Il2CppObjectBase, TrackObject?>? _getOwner;
+        private static Func<Il2CppObjectBase, ITrack?>? _getTrack;
+
+        public static MethodBase? TargetMethod()
+        {
+            var m = PatchResilience.FindClosureCallback(typeof(TrackObject), "_LoadThumbnail_b__", typeof(Sprite), out _getOwner);
+            if (m?.DeclaringType is Type closureType)
+                _getTrack = PatchResilience.CreateGetter<ITrack>(closureType, "track");
+            return m;
+        }
+
+        public static void Postfix(Il2CppObjectBase __instance)
+            => ApplyListThumbnail(_getOwner?.Invoke(__instance), _getTrack?.Invoke(__instance));
     }
 
     [HarmonyPatch(typeof(TrackObject), nameof(TrackObject.SetTrack), new Type[] { typeof(ITrack) })]
@@ -589,23 +618,35 @@ public class Core : MelonMod
     {
         public static void Postfix(Il2CppSixtarGate.PlayLoading.PlayLoadingManager __instance)
         {
-            ApplyCurrentAlbumJacket(__instance.jacketFull, "PlayLoading.jacketFull");
-            ApplyCurrentAlbumJacket(__instance.trackThumbnail, "PlayLoading.trackThumbnail");
+            ApplyCurrentAlbumJacketDeferred(__instance.jacketFull, "PlayLoading.jacketFull");
+            ApplyCurrentAlbumJacketDeferred(__instance.trackThumbnail, "PlayLoading.trackThumbnail");
         }
     }
 
-    [HarmonyPatch(typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager.__c__DisplayClass34_0), "_OnLoadResource_Travel_b__2")]
+    [HarmonyPatch]
     public static class PlayLoading_JacketCallback_Patch
     {
-        public static void Postfix(Il2CppSixtarGate.PlayLoading.PlayLoadingManager.__c__DisplayClass34_0 __instance)
-            => ApplyCurrentAlbumJacket(__instance.__4__this?.jacketFull, "PlayLoading.jacketFull (callback)");
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.PlayLoading.PlayLoadingManager?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner, matchIndex: 0);
+
+        public static void Postfix(Il2CppObjectBase __instance)
+            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.jacketFull, "PlayLoading.jacketFull (callback)");
     }
 
-    [HarmonyPatch(typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager.__c__DisplayClass34_0), "_OnLoadResource_Travel_b__4")]
+    [HarmonyPatch]
     public static class PlayLoading_ThumbnailCallback_Patch
     {
-        public static void Postfix(Il2CppSixtarGate.PlayLoading.PlayLoadingManager.__c__DisplayClass34_0 __instance)
-            => ApplyCurrentAlbumJacket(__instance.__4__this?.trackThumbnail, "PlayLoading.trackThumbnail (callback)");
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.PlayLoading.PlayLoadingManager?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner, matchIndex: 1);
+
+        public static void Postfix(Il2CppObjectBase __instance)
+            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.trackThumbnail, "PlayLoading.trackThumbnail (callback)");
     }
 
     // Identical-code folding: TrackInfoViewerModule._Set_b__3_1 shares its native body with 11 other sprite
@@ -651,23 +692,41 @@ public class Core : MelonMod
         ApplyCurrentAlbumJacket(module?.thumbnail, "Result.thumbnail");
     }
 
-    [HarmonyPatch(typeof(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0), "_Show_b__3")]
+    [HarmonyPatch]
     public static class ResultTrackInfo_Callback3_Patch
     {
-        public static void Postfix(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0 __instance) => ApplyResultJackets(__instance.__4__this);
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TrackInfoModule?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner, matchIndex: 0);
+
+        public static void Postfix(Il2CppObjectBase __instance) => ApplyResultJackets(_getOwner?.Invoke(__instance));
     }
 
-    [HarmonyPatch(typeof(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0), "_Show_b__4")]
+    [HarmonyPatch]
     public static class ResultTrackInfo_Callback4_Patch
     {
-        public static void Postfix(Il2CppSixtarGate.Result.TrackInfoModule.__c__DisplayClass13_0 __instance) => ApplyResultJackets(__instance.__4__this);
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TrackInfoModule?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner, matchIndex: 1);
+
+        public static void Postfix(Il2CppObjectBase __instance) => ApplyResultJackets(_getOwner?.Invoke(__instance));
     }
 
-    [HarmonyPatch(typeof(Il2CppSixtarGate.Result.TravelBackgroundModule.__c__DisplayClass5_0), "_InitializeModule_b__1")]
+    [HarmonyPatch]
     public static class ResultBackground_JacketCallback_Patch
     {
-        public static void Postfix(Il2CppSixtarGate.Result.TravelBackgroundModule.__c__DisplayClass5_0 __instance)
-            => ApplyCurrentAlbumJacket(__instance.__4__this?.jacket, "Result.background jacket");
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TravelBackgroundModule?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.Result.TravelBackgroundModule), "_InitializeModule_b__", typeof(Sprite), out _getOwner, matchIndex: 0);
+
+        public static void Postfix(Il2CppObjectBase __instance)
+            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.jacket, "Result.background jacket");
     }
 
     // 9. Preview & In-Game BGM: route custom track audio names to the album's local audio file.

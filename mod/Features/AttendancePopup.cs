@@ -1,6 +1,9 @@
+using System;
+using System.Reflection;
 using HarmonyLib;
-using MelonLoader;
+using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppSixtarGate.ModeSelect;
+using MelonLoader;
 using SixtarGateMod.Managers;
 
 namespace SixtarGateMod.Features;
@@ -12,23 +15,37 @@ namespace SixtarGateMod.Features;
 /// table and today's reward into _attendanceTableData / _attendanceReward, state 3 clears _loadingAttendanceData and,
 /// when the reward is receivable, logs "receivable attendance reward!!!" and opens AttendanceRewardPopup. Only state 3
 /// is skipped, so the data stays loaded and the game's own OpenAttendancePopup still works. Nothing is sent to the
-/// server: the reward is simply not claimed. MoveNext has its own native body (no identical-code folding).
+/// server: the reward is simply not claimed.
+/// Resolved structurally via PatchResilience so state-machine ordinal changes (_d__6 -> _d__7) never break it.
 /// </summary>
 public static class AttendancePopup
 {
     private static bool _logged;
 
-    [HarmonyPatch(typeof(AttendanceController._WaitUpdateCheck_d__6), "MoveNext")]
+    [HarmonyPatch]
     public static class AttendanceController_WaitUpdateCheck_Patch
     {
-        public static bool Prefix(AttendanceController._WaitUpdateCheck_d__6 __instance, ref bool __result)
+        private static Func<Il2CppObjectBase, int>? _getState;
+        private static Action<Il2CppObjectBase, int>? _setState;
+        private static Func<Il2CppObjectBase, AttendanceController?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
         {
-            if (__instance.__1__state != 3) return true;
+            var moveNext = PatchResilience.FindCoroutineMoveNext(
+                typeof(AttendanceController), "_WaitUpdateCheck_d__", out _getState, out _setState);
+            if (moveNext?.DeclaringType is Type smType)
+                _getOwner = PatchResilience.CreateGetter<AttendanceController>(smType, "__4__this", "<>4__this");
+            return moveNext;
+        }
+
+        public static bool Prefix(Il2CppObjectBase __instance, ref bool __result)
+        {
+            if (_getState == null || _getState(__instance) != 3) return true;
             ModConfig.ReloadIfChanged();
             if (!ModConfig.SkipAttendancePopup) return true;
 
-            __instance.__1__state = -1;
-            var controller = __instance.__4__this;
+            _setState?.Invoke(__instance, -1);
+            var controller = _getOwner?.Invoke(__instance);
             if (controller != null) controller._loadingAttendanceData = null;
             __result = false;
             if (!_logged)

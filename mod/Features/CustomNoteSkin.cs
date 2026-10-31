@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
@@ -58,9 +59,13 @@ public static class CustomNoteSkin
     private static Sprite? HeadSprite(string color) => Get(color) ?? (color == "Gate" ? Get("Blue") : null);
     private static Sprite? PartSprite(string color, string part) => Get(color + part) ?? Get(part + color) ?? Get(part);
 
-    [HarmonyPatch(typeof(StartrailPatternRenderer), "GetNoteObejct")]
+    // Typo-tolerant: resolves "GetNoteObejct" or "GetNoteObject" if fixed in a future update.
+    [HarmonyPatch]
     public static class StartrailPatternRenderer_GetNoteObejct_Patch
     {
+        public static MethodBase? TargetMethod()
+            => PatchResilience.ResolveMethod(typeof(StartrailPatternRenderer), "GetNoteObejct", "GetNoteObject");
+
         public static void Postfix(LaneIndex index, NoteObject __result)
         {
             if (!ModConfig.CustomNotes || ModConfig.RandomNoteSkin || !HasSprites || __result == null) return;

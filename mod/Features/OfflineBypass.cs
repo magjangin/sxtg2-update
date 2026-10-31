@@ -1,5 +1,6 @@
 #nullable disable
 using System;
+using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using Il2Cpp;
@@ -13,6 +14,7 @@ using Il2CppSixtarGate.ModeSelect;
 using Il2CppSixtarGate.Play;
 using Il2CppSixtarGate.Session;
 using Il2CppSixtarGate.Web;
+using SixtarGateMod.Managers;
 
 namespace SixtarGateMod.Features;
 
@@ -554,10 +556,13 @@ public static class OfflineBypass
         }
     }
 
-    // RVA 0x57A510, ICF=1
-    [HarmonyPatch(typeof(UnitySessionLegacyConnector), nameof(UnitySessionLegacyConnector.ReqeustSessionPlayingCount))]
+    // RVA 0x57A510, ICF=1 (typo-tolerant: ReqeustSessionPlayingCount / RequestSessionPlayingCount)
+    [HarmonyPatch]
     public static class UnitySessionLegacyConnector_ReqeustSessionPlayingCount_Patch
     {
+        public static MethodBase TargetMethod()
+            => PatchResilience.ResolveMethod(typeof(UnitySessionLegacyConnector), "ReqeustSessionPlayingCount", "RequestSessionPlayingCount");
+
         public static bool Prefix(Il2CppSystem.Action<int> callback)
         {
             if (!Core.BlockServerUpload) return true;
@@ -617,10 +622,13 @@ public static class OfflineBypass
         }
     }
 
-    // RVA 0x799870, ICF=1
-    [HarmonyPatch(typeof(AchievementModule), nameof(AchievementModule.UnlockReqeustAchievement))]
+    // RVA 0x799870, ICF=1 (typo-tolerant: UnlockReqeustAchievement / UnlockRequestAchievement)
+    [HarmonyPatch]
     public static class AchievementModule_UnlockReqeustAchievement_Patch
     {
+        public static MethodBase TargetMethod()
+            => PatchResilience.ResolveMethod(typeof(AchievementModule), "UnlockReqeustAchievement", "UnlockRequestAchievement");
+
         public static Exception Finalizer(Exception __exception) => null;
     }
 

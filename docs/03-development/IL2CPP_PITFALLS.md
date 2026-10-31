@@ -69,3 +69,10 @@ print(c[0x6772E0])   # 1이면 안전
 ## 10. 상대 경로
 
 `AppDomain.BaseDirectory` 기준 상대 경로는 VideoPlayer가 `*_Data\` 아래에서 찾습니다. 미디어 경로는 `Path.GetFullPath`로 절대경로화.
+
+## 11. 업데이트 내성 (`Managers/PatchResilience.cs`)
+
+게임이 업데이트되면 아래 세 가지가 가장 먼저 깨집니다:
+1. **컴파일러 생성 클로저·코루틴 순번 변경:** 메서드나 람다가 하나만 추가·삭제돼도 `__c__DisplayClass54_0`, `_WaitUpdateCheck_d__6`, `_GotoPlayScene_b__12`의 번호가 밀립니다. 컴파일 시점에 이 타입들을 직접 참조하면 업데이트 후 `TypeLoadException`이 나거나 엉뚱한 클로저가 패치됩니다. → `PatchResilience.FindClosureMethod` / `FindClosureCallback` / `FindCoroutineMoveNext`로 `(외부 타입, 부모 메서드 접두사, 파라미터 시그니처)` 기준 동적 탐색하고, 필드 접근은 패치 시점에 `Expression.Lambda`로 1회 컴파일된 델리게이트(`CreateGetter`/`CreateSetter`)를 씁니다.
+2. **게임 코드 오타 수정:** `GetNoteObejct`, `GetSelectableCategoty`, `ReqeustSessionPlayingCount`, `UnlockReqeustAchievement`, `CurrectionVolume`, `GetNoteReferance` 등 원본 오타가 업데이트에서 수정될 수 있습니다. → `PatchResilience.ResolveMethod` / `ResolvePropertySetter`에 오타·정상 철자를 함께 등록해 양쪽 모두 자동 대응합니다.
+3. **업데이트 후 빈 스텁화로 인한 ICF 폴딩:** 패치 대상 함수가 추후 업데이트에서 빈 함수(`ret` / `ret 0`)나 상수 반환(`xor al,al; ret` / `mov al,1; ret`)으로 바뀌면 수천 개 함수와 주소를 공유하게 됩니다. → `PatchResilience.ApplyAllPatches`가 패치 직전 `Il2CppMethodInfo::methodPointer`의 첫 1~3바이트 기계어를 검사해 공유 자명 스텁이면 자동으로 패치를 건너뛰고 경고를 남깁니다.

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using Il2CppFMOD;
@@ -155,9 +156,13 @@ public static class CustomAudioManager
     // Scene transitions ramp CurrectionVolume (SceneLoader.FadeIn 1 -> 0, FadeOut 0 -> 1) and the volume options call
     // ChangeVolume; both re-apply volume only to the Studio events in _soundChannels. Without this, a preview started
     // during the music-select fade-out stayed at the partial volume it was started with.
-    [HarmonyPatch(typeof(SoundModuleForFMOD), nameof(SoundModuleForFMOD.CurrectionVolume), MethodType.Setter)]
+    // Typo-tolerant: resolves "CurrectionVolume" or "CorrectionVolume" if fixed in a future update.
+    [HarmonyPatch]
     public static class SoundModuleForFMOD_SetCurrectionVolume_Patch
     {
+        public static MethodBase? TargetMethod()
+            => PatchResilience.ResolvePropertySetter(typeof(SoundModuleForFMOD), "CurrectionVolume", "CorrectionVolume");
+
         public static void Postfix(SoundModuleForFMOD __instance) => ApplyVolumes(__instance);
     }
 
