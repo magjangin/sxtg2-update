@@ -1,25 +1,25 @@
 # 코드 구조
 
-`mod/` 20개 파일, 3,820줄 (2026-10-30). 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+`mod/` 20개 파일, 3,846줄 (2026-10-31). 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
 | 파일 | 줄 | 역할 |
 | --- | ---: | --- |
-| `Core.cs` | 794 | 진입점. CUSTOM 탭, 플레이 진입, 차트 주입, 곡 끝, BGA, 자켓, 프리뷰, 해금, 오프라인 가드 |
+| `Core.cs` | 799 | 진입점. CUSTOM 탭, 플레이 진입, 차트 주입, 곡 끝, BGA, 자켓, 프리뷰, 해금, 오프라인 가드 |
 | `Managers/ModConfig.cs` | 454 | 설정 파일. 절반 이상이 기본 템플릿 문자열 |
-| `Features/PlayAssist.cs` | 269 | 판정 세션, AutoPlay, AllPerfect(+불빛 생략), 점수, 기록 차단 |
+| `Features/PlayAssist.cs` | 270 | 판정 세션, AutoPlay, AllPerfect(+불빛 생략), 점수, 기록 차단 |
 | `Managers/CustomTrackManager.cs` | 250 | hwa 스캔, 차트 텍스트 캐시, TrackData 복제 |
-| `Features/Overlay.cs` | 217 | uGUI 즉시모드 그리기, `Box`, `Rgba` |
+| `Features/Overlay.cs` | 226 | uGUI 즉시모드 그리기, `Box`, `Rgba` |
 | `Managers/MediaOverrideManager.cs` | 211 | 자켓 비동기/캐시, RGBA 업로드, BGA URL |
-| `Features/NoteEffects.cs` | 184 | 속도 카오스, 히든/페이드, 동적 패치 |
+| `Features/NoteEffects.cs` | 185 | 속도 카오스, 히든/페이드, 동적 패치 |
 | `Managers/CustomAudioManager.cs` | 179 | FMOD Core 스트림 |
-| `Loaders/SxtgBmsConverter.cs` | 164 | sxtg2 → 게임 BMS |
+| `Loaders/SxtgBmsConverter.cs` | 167 | sxtg2 → 게임 BMS |
 | `Loaders/PngDecoder.cs` | 158 | 관리 코드 PNG 디코더 |
 | `Features/JudgmentBar.cs` | 154 | 판정바 |
 | `Features/KeyViewer.cs` | 142 | 키뷰어 |
 | `Features/RandomNoteSkin.cs` | 142 | 랜덤 노트 스킨 |
-| `Features/CustomMarathon.cs` | 138 | 마라톤 |
+| `Features/CustomMarathon.cs` | 141 | 마라톤 |
 | `Features/CustomNoteSkin.cs` | 93 | PNG 노트 스킨 |
-| `Loaders/BmsParser.cs` | 88 | BPM, 곡 길이 |
+| `Loaders/BmsParser.cs` | 92 | BPM, 곡 길이 |
 | `Loaders/TrackInfoParser.cs` | 62 | info.txt |
 | `Features/CustomMusicSelect.cs` | 51 | 목록 복귀 위치 |
 | `Features/AttendancePopup.cs` | 42 | 출석 창 생략 |

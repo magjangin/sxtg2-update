@@ -27,6 +27,7 @@ public static class CustomMarathon
     private static bool _autoAdvanced;
 
     public static bool IsActive { get; private set; }
+    public static bool IsShowingResultBanner => IsActive && _resultShownAt >= 0f;
 
     /// <summary>Set while TryContinue starts the next song, so GotoMusicSelect's postfixes keep the custom-track state.</summary>
     public static bool DivertingMusicSelect { get; set; }
@@ -100,7 +101,9 @@ public static class CustomMarathon
             if (kb != null && kb.escapeKey.wasPressedThisFrame)
             {
                 IsActive = false;
+                _resultShownAt = -1f;
                 Queue.Clear();
+                Overlay.HideAll();
                 Melon<Core>.Logger.Msg("[Marathon] Stopped by Esc on the result screen");
                 return;
             }

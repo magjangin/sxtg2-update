@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyTitle>SixtarGateMod</AssemblyTitle>
     <Description>Sixtar Gate STARTRAIL MelonLoader IL2CPP Mod</Description>
-    <Version>1.0.0</Version>
+    <Version>2.2.0</Version>
     <Authors>화영왕 (Hwa-young-wang)</Authors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>

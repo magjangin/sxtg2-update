@@ -3,7 +3,7 @@
 Sixtar Gate: STARTRAIL(Unity IL2CPP)용 MelonLoader 모드 **SixtarGateMod** 문서 모음입니다.
 Mono 시절 모드 `sxtg2`의 문서 구성(`sxtg2 커스텀 리드미`)을 따라 나눴습니다.
 
-기준 시점: 2026-10-30, Steam Build `26218612`, 모드 소스 `mod/`.
+기준 시점: 2026-10-31, Steam Build `26218612`, 모드 소스 `mod/`.
 
 ## 먼저 볼 문서
 

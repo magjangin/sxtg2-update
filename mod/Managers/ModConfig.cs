@@ -37,9 +37,9 @@ public static class ModConfig
 
     // [키뷰어]
     public static bool EnableKeyViewer { get; private set; } = true;
-    public static Color KeyViewerPressedColor { get; private set; } = new(0.15f, 0.75f, 0.85f, 0.85f);
-    public static Color KeyViewerNormalColor { get; private set; } = new(0.08f, 0.08f, 0.08f, 0.65f);
-    public static Color KeyViewerGatePressedColor { get; private set; } = new(1f, 0.25f, 0.5f, 0.9f);
+    public static Color KeyViewerPressedColor { get; private set; } = new() { r = 0.15f, g = 0.75f, b = 0.85f, a = 0.85f };
+    public static Color KeyViewerNormalColor { get; private set; } = new() { r = 0.08f, g = 0.08f, b = 0.08f, a = 0.65f };
+    public static Color KeyViewerGatePressedColor { get; private set; } = new() { r = 1f, g = 0.25f, b = 0.5f, a = 0.9f };
     // [커스텀 노트 스킨]
     public static bool CustomNotes { get; private set; } = true;
     public static bool RandomNoteSkin { get; private set; }
@@ -181,9 +181,9 @@ public static class ModConfig
         JudgmentBarSide = m.TryGetValue("JudgmentBarSide", out var side) && side.Length > 0 ? side : "Center";
 
         EnableKeyViewer = Bool(m, "EnableKeyViewer", true);
-        KeyViewerPressedColor = ColorValue(m, "KeyViewerPressedColor", new Color(0.15f, 0.75f, 0.85f, 0.85f));
-        KeyViewerNormalColor = ColorValue(m, "KeyViewerNormalColor", new Color(0.08f, 0.08f, 0.08f, 0.65f));
-        KeyViewerGatePressedColor = ColorValue(m, "KeyViewerGatePressedColor", new Color(1f, 0.25f, 0.5f, 0.9f));
+        KeyViewerPressedColor = ColorValue(m, "KeyViewerPressedColor", new Color { r = 0.15f, g = 0.75f, b = 0.85f, a = 0.85f });
+        KeyViewerNormalColor = ColorValue(m, "KeyViewerNormalColor", new Color { r = 0.08f, g = 0.08f, b = 0.08f, a = 0.65f });
+        KeyViewerGatePressedColor = ColorValue(m, "KeyViewerGatePressedColor", new Color { r = 1f, g = 0.25f, b = 0.5f, a = 0.9f });
         CustomNotes = Bool(m, "CustomNotes", true);
         RandomNoteSkin = Bool(m, "RandomNoteSkin", false);
 
@@ -269,24 +269,24 @@ public static class ModConfig
         string v = raw.Trim().ToLowerInvariant();
         switch (v)
         {
-            case "cyan": case "시안": case "청록": case "청록색": case "민트": case "민트색": return new Color(0.15f, 0.75f, 0.85f, 0.85f);
-            case "magenta": case "pink": case "마젠타": case "분홍": case "분홍색": case "핫핑크": return new Color(1f, 0.25f, 0.5f, 0.9f);
-            case "yellow": case "노랑": case "노란색": case "황색": return new Color(1f, 0.85f, 0.2f, 0.9f);
-            case "red": case "빨강": case "빨간색": case "적색": return new Color(0.95f, 0.25f, 0.25f, 0.9f);
-            case "blue": case "파랑": case "파란색": case "청색": return new Color(0.2f, 0.5f, 0.85f, 0.9f);
-            case "green": case "초록": case "초록색": case "녹색": return new Color(0.25f, 0.85f, 0.35f, 0.9f);
-            case "white": case "흰색": case "하양": case "백색": return new Color(0.95f, 0.95f, 0.95f, 0.9f);
-            case "black": case "검정": case "검은색": case "흑색": return new Color(0.08f, 0.08f, 0.08f, 0.85f);
-            case "orange": case "주황": case "주황색": return new Color(1f, 0.55f, 0.15f, 0.9f);
-            case "purple": case "violet": case "보라": case "보라색": case "자색": return new Color(0.65f, 0.35f, 0.85f, 0.9f);
-            case "sky": case "skyblue": case "하늘": case "하늘색": return new Color(0.4f, 0.75f, 1f, 0.9f);
+            case "cyan": case "시안": case "청록": case "청록색": case "민트": case "민트색": return new Color { r = 0.15f, g = 0.75f, b = 0.85f, a = 0.85f };
+            case "magenta": case "pink": case "마젠타": case "분홍": case "분홍색": case "핫핑크": return new Color { r = 1f, g = 0.25f, b = 0.5f, a = 0.9f };
+            case "yellow": case "노랑": case "노란색": case "황색": return new Color { r = 1f, g = 0.85f, b = 0.2f, a = 0.9f };
+            case "red": case "빨강": case "빨간색": case "적색": return new Color { r = 0.95f, g = 0.25f, b = 0.25f, a = 0.9f };
+            case "blue": case "파랑": case "파란색": case "청색": return new Color { r = 0.2f, g = 0.5f, b = 0.85f, a = 0.9f };
+            case "green": case "초록": case "초록색": case "녹색": return new Color { r = 0.25f, g = 0.85f, b = 0.35f, a = 0.9f };
+            case "white": case "흰색": case "하양": case "백색": return new Color { r = 0.95f, g = 0.95f, b = 0.95f, a = 0.9f };
+            case "black": case "검정": case "검은색": case "흑색": return new Color { r = 0.08f, g = 0.08f, b = 0.08f, a = 0.85f };
+            case "orange": case "주황": case "주황색": return new Color { r = 1f, g = 0.55f, b = 0.15f, a = 0.9f };
+            case "purple": case "violet": case "보라": case "보라색": case "자색": return new Color { r = 0.65f, g = 0.35f, b = 0.85f, a = 0.9f };
+            case "sky": case "skyblue": case "하늘": case "하늘색": return new Color { r = 0.4f, g = 0.75f, b = 1f, a = 0.9f };
         }
 
         string hex = v.TrimStart('#');
         if ((hex.Length == 6 || hex.Length == 8) && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint rgba))
         {
             if (hex.Length == 6) rgba = (rgba << 8) | 0xFF;
-            return new Color(((rgba >> 24) & 0xFF) / 255f, ((rgba >> 16) & 0xFF) / 255f, ((rgba >> 8) & 0xFF) / 255f, (rgba & 0xFF) / 255f);
+            return new Color { r = ((rgba >> 24) & 0xFF) / 255f, g = ((rgba >> 16) & 0xFF) / 255f, b = ((rgba >> 8) & 0xFF) / 255f, a = (rgba & 0xFF) / 255f };
         }
 
         var parts = v.Split(',');
@@ -300,10 +300,10 @@ public static class ModConfig
             {
                 if (f[0] > 1f || f[1] > 1f || f[2] > 1f || f[3] > 1f)
                 {
-                    for (int i = 0; i < 3; i++) f[i] = Mathf.Clamp01(f[i] / 255f);
-                    if (f[3] > 1f) f[3] = Mathf.Clamp01(f[3] / 255f);
+                    for (int i = 0; i < 3; i++) f[i] = Math.Clamp(f[i] / 255f, 0f, 1f);
+                    if (f[3] > 1f) f[3] = Math.Clamp(f[3] / 255f, 0f, 1f);
                 }
-                return new Color(f[0], f[1], f[2], f[3]);
+                return new Color { r = f[0], g = f[1], b = f[2], a = f[3] };
             }
         }
 

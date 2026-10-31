@@ -84,18 +84,21 @@ public class Core : MelonMod
     // sxtg2 overlays (judgment bar, key viewer). IMGUI drawing is stripped from this game build
     // ("Method unstripping failed"), so they draw on a pooled uGUI canvas once per frame instead of OnGUI.
     private bool _overlayErrorLogged;
+    private bool _inRenewalPlay;
 
     // The overlays belong to the play scene only; leaving it (result screen, music select) ends the session.
     public override void OnSceneWasLoaded(int buildIndex, string sceneName)
     {
         LoggerInstance.Msg($"[Scene] Loaded '{sceneName}'");
-        if (!string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase))
+        _inRenewalPlay = string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase);
+        if (!_inRenewalPlay)
             PlayAssist.EndPlay();
         CustomMarathon.OnSceneLoaded(sceneName);
     }
 
     public override void OnLateUpdate()
     {
+        if (!_inRenewalPlay && !CustomMarathon.IsShowingResultBanner) return;
         try
         {
             NoteEffects.OnFrame();
@@ -616,9 +619,11 @@ public class Core : MelonMod
         MelonCoroutines.Start(ReapplyJacket(img, where));
     }
 
+    private static readonly float[] ReapplyDelays = { 0.1f, 0.4f, 1.0f };
+
     private static System.Collections.IEnumerator ReapplyJacket(Image img, string where)
     {
-        foreach (float delay in new[] { 0.1f, 0.4f, 1.0f })
+        foreach (float delay in ReapplyDelays)
         {
             yield return new WaitForSecondsRealtime(delay);
             if (img == null || !IsCustomTrackActive) yield break;

@@ -68,12 +68,14 @@ public static class SxtgBmsConverter
             }
 
             string data = note.Groups[3].Value;
-            var pairs = new StringBuilder();
+            var pairs = new StringBuilder(data.Length * 2 / 3);
             for (int i = 0; i + 3 <= data.Length; i += 3)
             {
-                string v = data.Substring(i, 3);
                 // sxtg2 drops the leading '0'; a value without one matches no note type there, so skip it here too.
-                pairs.Append(v[0] == '0' ? v.Substring(1) : "00");
+                if (data[i] == '0')
+                    pairs.Append(data[i + 1]).Append(data[i + 2]);
+                else
+                    pairs.Append("00");
             }
             output.Append('#').Append(note.Groups[1].Value).Append(note.Groups[2].Value).Append(':').Append(pairs).Append('\n');
         }
@@ -97,8 +99,8 @@ public static class SxtgBmsConverter
                 string data = m.Groups[3].Value;
                 for (int i = 0; i + 1 < data.Length; i += 2)
                 {
-                    string v = data.Substring(i, 2);
-                    if (v == "02" || v == "03" || v == "05") usesSxtgOnly = true;
+                    if (data[i] == '0' && (data[i + 1] == '2' || data[i + 1] == '3' || data[i + 1] == '5'))
+                        usesSxtgOnly = true;
                 }
             }
         }
@@ -126,13 +128,14 @@ public static class SxtgBmsConverter
             int length = data.Length / 2;
             for (int i = 0; i < length; i++)
             {
-                int target = data.Substring(i * 2, 2) switch
+                int o = i * 2;
+                int target = data[o] == '0' ? data[o + 1] switch
                 {
-                    "01" => shortCh,
-                    "02" or "03" => shortCh + 40,
-                    "04" or "05" => OPEN_CHANNEL,
+                    '1' => shortCh,
+                    '2' or '3' => shortCh + 40,
+                    '4' or '5' => OPEN_CHANNEL,
                     _ => -1,
-                };
+                } : -1;
                 if (target < 0) continue;
 
                 if (!groups.TryGetValue((measure, target), out var list))
