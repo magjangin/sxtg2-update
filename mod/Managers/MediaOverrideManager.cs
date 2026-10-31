@@ -127,10 +127,7 @@ public static class MediaOverrideManager
             var (_, w, h, rgba) = decode.Result;
             var tex = TextureFromRgba(w, h, rgba);
             if (tex != null)
-            {
-                sprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2 { x = 0.5f, y = 0.5f });
-                sprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
-            }
+                sprite = Features.Overlay.MakeSprite(tex);
         }
 
         // JPG, 16-bit / interlaced PNG or a failed upload: synchronous decoder.
@@ -160,7 +157,10 @@ public static class MediaOverrideManager
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             // markNonReadable frees the CPU-side copy once the texture is uploaded.
             if (ImageConversion.LoadImage(texture, fileData, true))
-                return Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
+            {
+                texture.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                return Features.Overlay.MakeSprite(texture);
+            }
         }
         catch (Exception ex)
         {

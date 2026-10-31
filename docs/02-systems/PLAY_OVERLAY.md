@@ -48,4 +48,4 @@ Overlay.End()             이번에 안 쓴 풀 객체 숨기기, 그리기 순�
 
 ## 숨기기
 
-`OnSceneWasLoaded`에서 씬이 `Renewal_Play`가 아니면 플레이 세션을 끝내고, 그 프레임부터 아무것도 그리지 않습니다.
+`OnSceneWasLoaded`에서 씬이 `Renewal_Play`가 아니면 `PlayAssist.EndPlay()` → `Overlay.HideAll()`로 풀 객체를 즉시 비활성화하고, 마라톤 결과 배너도 없을 때는 `OnLateUpdate` 초입에서 바로 반환해 비플레이 씬에서 IL2CPP 호출이 일어나지 않습니다. 마라톤 결과 화면에서 Esc로 중단할 때도 `Overlay.HideAll()`을 불러 배너를 즉시 내립니다.

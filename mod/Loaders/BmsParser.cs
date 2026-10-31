@@ -52,10 +52,14 @@ public static class BmsParser
             int count = data.Length / width;
             for (int i = 0; i < count; i++)
             {
-                string v = data.Substring(i * width, width);
-                if (width == 3) v = v[0] == '0' ? v.Substring(1) : "";
-                int type = v switch { "01" => 1, "02" => 2, "03" => 3, "04" => 4, "05" => 5, _ => 0 };
-                if (type == 0) continue;
+                int o = i * width;
+                if (width == 3)
+                {
+                    if (data[o] != '0') continue;
+                    o++;
+                }
+                int type = data[o] == '0' ? (data[o + 1] - '0') : 0;
+                if (type < 1 || type > 5) continue;
                 string lane = type >= 4 ? "OPEN" : ch;
                 if (type < 4 && !LaneChannels.Contains(lane)) continue;
                 if (type >= 4 && ch != "04" && ch != "05" && !LaneChannels.Contains(ch)) continue;

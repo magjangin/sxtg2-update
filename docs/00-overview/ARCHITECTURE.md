@@ -45,10 +45,10 @@ Core.OnInitializeMelon
 
 ## 매 프레임 코드
 
-`Core.OnLateUpdate` 한 곳에서만 돕니다.
+`Core.OnLateUpdate` 한 곳에서만 돌며, 플레이 씬(`Renewal_Play`)이거나 마라톤 결과 배너가 켜져 있을 때만 실행됩니다(그 외 씬에서는 초입에서 바로 반환).
 
 ```text
-OnLateUpdate
+OnLateUpdate (Renewal_Play 또는 마라톤 결과 배너 표시 중일 때만)
   ├─ NoteEffects.OnFrame()        렌더러 스크롤 배율 1번 읽기 (히든/페이드용)
   ├─ Overlay.Begin()              화면 크기·배율 1번 읽기
   ├─ CustomMarathon.Update(now)   결과 화면 Esc / 자동 진행

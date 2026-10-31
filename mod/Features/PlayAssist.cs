@@ -32,6 +32,7 @@ public static class PlayAssist
         // session by mistake) EnsureSession re-arms it without subscribing OnNoteJudged a second time.
         CurrentJudge = null;
         Array.Clear(LanePressed, 0, LanePressed.Length);
+        Overlay.HideAll();
     }
 
     // A new JudgeProcessor is built for every play (and restart). A Harmony patch on its constructor never fires in

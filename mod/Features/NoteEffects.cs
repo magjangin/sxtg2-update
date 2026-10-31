@@ -45,7 +45,6 @@ public static class NoteEffects
             if (_renderer == null || _renderer.Pointer != __instance.Pointer)
                 _baseRenderRange = __instance.renderRange;
             _renderer = __instance;
-            _laneScale = __instance._scrollSpeed * __instance._noteDistanceInterval;
 
             float range = _baseRenderRange;
             if (ModConfig.NoteSpeedChaos && ModConfig.NoteSpeedChaosMin < 1f)
@@ -53,6 +52,8 @@ public static class NoteEffects
             __instance.renderRange = range;
 
             bool needed = ModConfig.NoteSpeedChaos || ModConfig.AnyLaneCover;
+            if (needed)
+                _laneScale = __instance._scrollSpeed * __instance._noteDistanceInterval;
             try { SetNotePatches(needed); }
             catch (Exception ex) { Melon<Core>.Logger.Error($"[NoteEffects] Could not (un)patch NoteObject setters: {ex.Message}"); }
             if (needed)

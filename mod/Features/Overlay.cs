@@ -49,6 +49,7 @@ public static class Overlay
             Image = image;
             Text = text;
             Outline = outline;
+            Active = true; // GameObject starts active when created by NewChild; keep managed state in sync so Hide() can deactivate unused items.
         }
     }
 
@@ -146,9 +147,17 @@ public static class Overlay
     }
 
     /// <summary>White sprite whose alpha follows a texture mask (capsule / diamond shapes).</summary>
+    public static void HideAll()
+    {
+        if (_root == null) return;
+        Hide(Images, 0);
+        Hide(Texts, 0);
+        Drawn.Clear();
+    }
+
     public static Sprite MakeSprite(Texture2D tex)
     {
-        var s = Sprite.Create(tex, new UnityEngine.Rect(0, 0, tex.width, tex.height), new Vector2 { x = 0.5f, y = 0.5f });
+        var s = Sprite.Create(tex, new UnityEngine.Rect { m_XMin = 0f, m_YMin = 0f, m_Width = tex.width, m_Height = tex.height }, new Vector2 { x = 0.5f, y = 0.5f });
         s.hideFlags = HideFlags.DontUnloadUnusedAsset;
         return s;
     }
