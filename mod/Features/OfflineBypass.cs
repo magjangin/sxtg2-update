@@ -136,12 +136,7 @@ public static class OfflineBypass
     [HarmonyPatch(typeof(BackEndMaintenance), nameof(BackEndMaintenance.Observe))]
     public static class BackEndMaintenance_Observe_Patch
     {
-        public static bool Prefix(ref bool __result)
-        {
-            if (!Core.SuppressMaintenancePopup) return true;
-            __result = false;
-            return false;
-        }
+        public static bool Prefix() => !Core.SuppressMaintenancePopup;
     }
 
     // RVA 0x5808A0, ICF=1
