@@ -118,7 +118,7 @@ public static class CustomTrackManager
         if (info.Difficulties != null && info.Difficulties.Count > 0)
             album.Difficulties = new List<int>(info.Difficulties);
 
-        // 2. Parse BMS headers for BPM & Duration
+        // 2. Parse BMS headers for BPM & Duration (and fallback Title/Artist)
         var bmsResult = BmsParser.ParseBmsFile(bmsFile);
         if (bmsResult != null)
         {
@@ -126,6 +126,10 @@ public static class CustomTrackManager
                 album.Bpm = bmsResult.BaseBpm;
             if (bmsResult.MaxTime > 0)
                 album.Duration = bmsResult.MaxTime + 3.0f; // buffer 3s
+            if (album.Title == albumName && !string.IsNullOrEmpty(bmsResult.Title))
+                album.Title = bmsResult.Title;
+            if (album.Artist == "Custom Artist" && !string.IsNullOrEmpty(bmsResult.Artist))
+                album.Artist = bmsResult.Artist;
         }
 
         // 3. Resolve Media files

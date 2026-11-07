@@ -22,7 +22,9 @@ mod/
 │   ├── CustomAudioManager.cs FMOD Core 스트림 재생/일시정지/볼륨
 │   ├── MediaOverrideManager.cs 자켓 비동기 로드, BGA URL 교체
 │   ├── ModConfig.cs          SaveCustomKey\config.txt 읽기/마이그레이션
-│   └── PatchResilience.cs    업데이트 내성 (클로저·코루틴 동적 탐색, 오타 양방향 해석, 런타임 ICF 스텁 가드)
+│   ├── PatchResilience.cs    업데이트 내성 (클로저·코루틴 동적 탐색, 오타 양방향 해석, 런타임 ICF 스텁 가드)
+│   ├── LambdaTranslator.cs   이중래퍼 람다 번역가 (Fast-Path 캐시 + x64 네이티브 오프셋 스마트 번역)
+│   └── UpdateGuard.cs        Steam 빌드 ID 검증 및 Unity 내부 예외 포워딩
 ├── Loaders/
 │   ├── BmsParser.cs          BPM, 마지막 노트 끝 시각
 │   ├── SxtgBmsConverter.cs   sxtg2 채널 → 게임 채널, 3자리 값 정규화

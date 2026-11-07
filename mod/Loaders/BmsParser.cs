@@ -15,7 +15,7 @@ namespace SixtarGateMod.Loaders;
 /// </summary>
 public static class BmsParser
 {
-    public sealed record ParseResult(float BaseBpm, float MaxTime);
+    public sealed record ParseResult(float BaseBpm, float MaxTime, string Title = "", string Artist = "");
 
     private const float DefaultBpm = 150f;
     private static readonly HashSet<string> LaneChannels = new() { "16", "11", "12", "13", "14", "15", "18" };
@@ -38,6 +38,22 @@ public static class BmsParser
         var lines = rawLines.Select(l => l.Trim()).Where(l => l.Length > 1 && l[0] == '#').ToArray();
         float bpm = lines.Select(BpmOf).FirstOrDefault(b => b > 0f, DefaultBpm);
         int width = lines.Any(l => l.StartsWith("#WAV", StringComparison.OrdinalIgnoreCase) && l.Split(' ', '\t')[0].Length == 7) ? 3 : 2;
+
+        string title = "";
+        string artist = "";
+        foreach (var l in lines)
+        {
+            if (l.StartsWith("#TITLE", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = l.Substring(6).Trim();
+                if (val.Length > 0 && string.IsNullOrEmpty(title)) title = val;
+            }
+            else if (l.StartsWith("#ARTIST", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = l.Substring(7).Trim();
+                if (val.Length > 0 && string.IsNullOrEmpty(artist)) artist = val;
+            }
+        }
 
         // (lane key, time, type): type 1 normal, 2/4 hold start, 3/5 hold end.
         var notes = new List<(string Lane, float Time, int Type)>();
@@ -80,7 +96,7 @@ public static class BmsParser
                 maxTime = Math.Max(maxTime, n.Time);
             }
         }
-        return new ParseResult(bpm, maxTime);
+        return new ParseResult(bpm, maxTime, title, artist);
     }
 
     private static float BpmOf(string line)

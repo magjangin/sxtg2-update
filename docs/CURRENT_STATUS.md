@@ -21,7 +21,7 @@
 | 노트 속도 카오스, 히든, 페이드 | 실기 미확인 | |
 | 커스텀 노트 스킨 / 랜덤 노트 스킨 | 실기 미확인 | |
 | 마라톤 | 실기 미확인 | |
-| 오프라인 가드·서버 종료 우회 (`OfflineBypass.cs`) | 구현 및 시그니처 검증 완료 | 리뉴얼 BACKND 39개 + `sxtg2 saver test` 24개 (총 63개 훅, 전부 `ICF=1`) |
+| 오프라인 가드·서버 종료 우회 (`OfflineBypass.cs`) | 실기 확인 (2026-11-07) | 리뉴얼 BACKND 42개(UnitySession 3개 포함) + `sxtg2 saver test` 24개 (총 66개 훅, 전부 `ICF=1`) |
 | 전곡·DLC 해금 | 실기 확인 | |
 | 출석 보상 창 자동 표시 끄기 | 실기 확인 | 로그 `[Attendance] Skipped ...` |
 
@@ -38,6 +38,9 @@
 9. **#9** 비플레이 씬 `OnLateUpdate` 가드 + `Overlay.HideAll()`, BMS 파서/변환기 문자열 할당 제거, 잔여 Unity 구조체 생성자 제거 및 문서 최신화 (2026-10-31)
 10. **#10** `sxtg2 saver test` 레거시 오프라인 패치 이식 및 리뉴얼(`SixtarGate.Web.BackEnd*`) 서버 종료/오프라인 완전 우회(`Features/OfflineBypass.cs`, 63개 훅) 구현 (2026-10-31)
 11. **#11** 업데이트 내성 강화(`Managers/PatchResilience.cs`): 컴파일러 생성 클로저·코루틴(`__c__DisplayClass*`, `_*_d__*`, `_b__*`) 하드코딩 전면 제거 및 시그니처 기반 동적 탐색, 게임 오타 메서드 양방향 해석, 런타임 ICF 자명 스텁(1~3바이트) 가드, `TrackData` 속성 전체 자동 복제 (2026-10-31)
+12. **#12** 오프라인 커스텀 곡 플레이 및 결과 화면 복구 (`OfflineBypass.cs` UnitySession 커넥터 등록 3개 훅), 모드 로그 한국어화(102개 문장), 실행 시 Steam 빌드 확인 및 Unity 예외 전달(`Managers/UpdateGuard.cs`), 업데이트 비교 도구(`tools/version_diff`) 추가 (2026-11-07)
+13. **#13** 이중래퍼 람다 번역가(`Managers/LambdaTranslator.cs`): O(1) Fast-Path 캐시(`UserData/SixtarGateMod.LambdaMap.json`) + x64 기계어 대상 필드 변위 기반 스마트 구조 번역 (2026-11-07)
+14. **#14** 중국어 메타데이터 지원 강화: `TrackInfoParser` 간체·번체 키(曲名, 歌名, 标题, 標題, 曲目, 艺术家, 藝術家, 曲师, 曲師, 作曲, 作者, 难度, 難度, 等级, 等級) 지원 및 `BmsParser` BMS 헤더 `#TITLE`, `#ARTIST` 자동 추출 폴백 (2026-11-07)
 
 ## 알려진 한계
 

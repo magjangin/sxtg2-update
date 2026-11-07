@@ -16,3 +16,6 @@ input/
 
 tools/version_diff/bin/
 tools/version_diff/obj/
+__pycache__/
+*.pyc
+*.pickle
