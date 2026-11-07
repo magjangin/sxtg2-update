@@ -59,14 +59,14 @@ public static class PatchResilience
             catch (Exception ex)
             {
                 failed++;
-                logger.Error($"[Harmony] Patch '{type.Name}' failed: {ex.Message}");
+                logger.Error($"[Harmony] 패치 '{type.Name}' 실패: {ex.Message}");
             }
         }
 
         if (failed == 0 && skippedIcf == 0)
-            logger.Msg($"[Harmony] All patches applied successfully! ({applied})");
+            logger.Msg($"[Harmony] 패치 {applied}개 모두 적용 완료");
         else
-            logger.Warning($"[Harmony] {applied} patches applied, {skippedIcf} skipped by ICF guard, {failed} failed");
+            logger.Warning($"[Harmony] 패치 {applied}개 적용, ICF 보호로 {skippedIcf}개 건너뜀, {failed}개 실패");
     }
 
     private static bool ShouldSkipForIcfStub(
@@ -84,15 +84,15 @@ public static class PatchResilience
             if (IsTrivialNativeStub(nativeCode, out string stubDesc))
             {
                 logger.Warning(
-                    $"[Harmony/ICFGuard] Skipped '{patchType.Name}' ({target.DeclaringType?.Name}.{target.Name}) " +
-                    $"because native address 0x{nativeCode.ToInt64():X} is a folded trivial stub ({stubDesc}).");
+                    $"[Harmony/ICFGuard] '{patchType.Name}' ({target.DeclaringType?.Name}.{target.Name}) 건너뜀: " +
+                    $"네이티브 주소 0x{nativeCode.ToInt64():X}가 여러 함수가 공유하는 빈 스텁({stubDesc})임");
                 return true;
             }
 
             string targetLabel = $"{patchType.Name} -> {target.DeclaringType?.Name}.{target.Name}";
             if (patchedNativeAddresses.TryGetValue(nativeCode, out string? existing))
             {
-                Core.DebugLog($"[Harmony/ICFGuard] Note: '{targetLabel}' shares native address 0x{nativeCode.ToInt64():X} with '{existing}'.");
+                Core.DebugLog($"[Harmony/ICFGuard] 참고: '{targetLabel}'가 '{existing}'와 네이티브 주소 0x{nativeCode.ToInt64():X}를 공유함");
             }
             else
             {

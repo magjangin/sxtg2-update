@@ -28,7 +28,7 @@ public static class BmsParser
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"[BmsParser] Failed to parse BMS file '{filePath}': {ex.Message}");
+            Melon<Core>.Logger.Error($"[BmsParser] BMS 파일 해석 실패 '{filePath}': {ex.Message}");
             return null;
         }
     }

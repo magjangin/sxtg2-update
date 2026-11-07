@@ -7,18 +7,18 @@
 | MelonLoader | `{게임}\MelonLoader\Latest.log` | 모드 메시지(`[SixtarGateMod]`), 패치 적용 수 |
 | Unity | `%USERPROFILE%\AppData\LocalLow\Lyrebird Studio\Sixtar Gate STARTRAIL\Player.log` | 게임 내부 예외(NRE), FMOD 오류, 서버 통신 (`Player-prev.log` = 이전 실행) |
 
-시작할 때 `[Harmony] All patches applied successfully! (58)`이 보이면 모드는 정상 로드된 것입니다.
+시작할 때 `[Harmony] 패치 N개 모두 적용 완료`가 보이면 모드는 정상 로드된 것입니다.
 
 ## 증상별
 
 ### CUSTOM 탭이 없다
-- `Latest.log`에 `[CustomCategory] Successfully added 'CUSTOM'`이 있는지 확인.
+- `Latest.log`에 `[CustomCategory] 카테고리 목록에 'CUSTOM' 탭 추가 완료`가 있는지 확인.
 - 패치 실패 줄(`Patch '...' failed`)이 있으면 게임이 업데이트되어 함수가 바뀐 것입니다.
 
 ### 곡이 목록에 안 나온다
 - 폴더 안에 `.bms`/`.bme`/`.bml`이 있는지. 차트가 없는 폴더는 건너뜁니다.
 - 게임 켠 뒤에 넣은 곡은 다시 켜야 보입니다.
-- 로그 `[CustomTrackManager] Scan complete: Total N custom album(s)`의 숫자를 확인하세요.
+- 로그 `[CustomTrackManager] 검색 완료: 커스텀 곡 N곡 발견`의 숫자를 확인하세요.
 
 ### 플레이가 로딩 화면에서 멈춘다
 - `Player.log`에서 `NullReferenceException`과 `LoadBank`를 찾으세요. 커스텀 곡인데 뱅크 조회를 건너뛰지 못한 경우입니다.

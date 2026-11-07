@@ -41,11 +41,11 @@ public static class CustomNoteSkin
                 sprite.texture.hideFlags = HideFlags.DontUnloadUnusedAsset;
                 Sprites[Path.GetFileNameWithoutExtension(file)] = sprite;
             }
-            Melon<Core>.Logger.Msg($"{LOG_PREFIX} Loaded {Sprites.Count} sprite(s) from {FolderPath}: {string.Join(", ", Sprites.Keys)}");
+            Melon<Core>.Logger.Msg($"{LOG_PREFIX} {FolderPath}에서 스프라이트 {Sprites.Count}개 로드: {string.Join(", ", Sprites.Keys)}");
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} Failed loading CustomNotes: {ex.Message}");
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} CustomNotes 로드 실패: {ex.Message}");
         }
     }
 
@@ -80,11 +80,11 @@ public static class CustomNoteSkin
                 Apply(__result.bodyImage, hold);
                 Apply(__result.holdImage, hold);
                 if (Skinned.Count == 1)
-                    Melon<Core>.Logger.Msg($"{LOG_PREFIX} Applying custom sprites to notes (first: lane {index}, '{__result.gameObject.name}')");
+                    Melon<Core>.Logger.Msg($"{LOG_PREFIX} 노트에 커스텀 스프라이트 적용 시작 (첫 노트: 레인 {index}, '{__result.gameObject.name}')");
             }
             catch (Exception ex)
             {
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} Apply failed: {ex.Message}");
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 적용 실패: {ex.Message}");
             }
         }
 

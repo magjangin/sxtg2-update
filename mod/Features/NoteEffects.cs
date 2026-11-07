@@ -55,10 +55,10 @@ public static class NoteEffects
             if (needed)
                 _laneScale = __instance._scrollSpeed * __instance._noteDistanceInterval;
             try { SetNotePatches(needed); }
-            catch (Exception ex) { Melon<Core>.Logger.Error($"[NoteEffects] Could not (un)patch NoteObject setters: {ex.Message}"); }
+            catch (Exception ex) { Melon<Core>.Logger.Error($"[NoteEffects] NoteObject 위치 훅 부착/해제 실패: {ex.Message}"); }
             if (needed)
                 Melon<Core>.Logger.Msg($"[NoteEffects] SpeedChaos={ModConfig.NoteSpeedChaos} ({ModConfig.NoteSpeedChaosMin}-{ModConfig.NoteSpeedChaosMax}, perLane={ModConfig.NoteSpeedChaosPerLane}), " +
-                    $"Hidden={ModConfig.Hidden}%, FadeIn={ModConfig.FadeIn}, FadeOut={ModConfig.FadeOut}, renderRange {_baseRenderRange:F2} -> {range:F2}");
+                    $"Hidden={ModConfig.Hidden}%, FadeIn={ModConfig.FadeIn}, FadeOut={ModConfig.FadeOut}, 표시 범위 {_baseRenderRange:F2} -> {range:F2}");
         }
     }
 
@@ -118,7 +118,7 @@ public static class NoteEffects
             harmony.Unpatch(length, HarmonyPatchType.Prefix, harmony.Id);
         }
         _notePatchesActive = active;
-        Core.DebugLog($"[NoteEffects] NoteObject position hooks {(active ? "attached" : "detached")}");
+        Core.DebugLog($"[NoteEffects] NoteObject 위치 훅 {(active ? "부착" : "해제")}");
     }
 
     public static class NoteObject_SetHeadPosition_Patch

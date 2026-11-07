@@ -109,4 +109,4 @@ AttendanceController.Initialize (RVA 0x527920) → <WaitUpdateCheck>d__6 코루�
 - 데이터는 남아 있어 게임의 `OpenAttendancePopup`(RVA `0x5279C0`)은 그대로 동작합니다.
 - 서버로 아무것도 보내지 않습니다. 보상은 받지 않은 상태로 남습니다.
 - `<WaitUpdateCheck>b__7`은 다른 함수와 주소를 공유하므로 패치하지 않습니다.
-- 실기 확인: 로그 `[Attendance] Skipped the automatic attendance reward popup (SkipAttendancePopup=1)`.
+- 실기 확인: 로그 `[Attendance] 출석 보상 팝업 자동 표시를 건너뜀 (SkipAttendancePopup=1)`.

@@ -1,6 +1,6 @@
-# 현재 상태 (2026-10-31)
+# 현재 상태 (2026-11-07)
 
-게임 Steam Build `26218612`(현재 Steam 공개 빌드와 같음), MelonLoader 0.7.3, 패치 클래스 117개(`All patches applied successfully! (117)`).
+게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 120개(`[Harmony] 패치 120개 모두 적용 완료`). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
 ## 기능별 상태
 

@@ -31,7 +31,7 @@ public static class MediaOverrideManager
 
         var sprite = LoadSpriteFromFile(album.JacketPath!);
         if (sprite != null) SpriteCache[album.TrackId] = sprite;
-        else Melon<Core>.Logger.Error($"{LOG_PREFIX} Failed creating Sprite from '{album.JacketPath}'");
+        else Melon<Core>.Logger.Error($"{LOG_PREFIX} 스프라이트 생성 실패: '{album.JacketPath}'");
         return sprite;
     }
 
@@ -77,7 +77,7 @@ public static class MediaOverrideManager
             while (!done && Pending.ContainsKey(album.TrackId) && Time.realtimeSinceStartup < waitUntil) yield return null;
             loaded++;
         }
-        Core.DebugLog($"{LOG_PREFIX} Preloaded {loaded} jacket(s) in {(DateTime.Now - started).TotalSeconds:F1}s");
+        Core.DebugLog($"{LOG_PREFIX} 자켓 {loaded}장 미리 로드 ({(DateTime.Now - started).TotalSeconds:F1}초)");
     }
 
     private static bool _rawUploadBroken;
@@ -102,7 +102,7 @@ public static class MediaOverrideManager
         catch (Exception ex)
         {
             _rawUploadBroken = true;
-            Melon<Core>.Logger.Warning($"{LOG_PREFIX} Raw texture upload unavailable, using LoadImage from now on: {ex.Message}");
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 원시 텍스처 업로드를 쓸 수 없어 이후 LoadImage 사용: {ex.Message}");
             return null;
         }
     }
@@ -138,7 +138,7 @@ public static class MediaOverrideManager
             foreach (var cb in callbacks)
             {
                 try { cb(sprite); }
-                catch (Exception ex) { Melon<Core>.Logger.Warning($"{LOG_PREFIX} Jacket callback failed: {ex.Message}"); }
+                catch (Exception ex) { Melon<Core>.Logger.Warning($"{LOG_PREFIX} 자켓 콜백 실패: {ex.Message}"); }
             }
         }
     }
@@ -147,7 +147,7 @@ public static class MediaOverrideManager
     {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
         {
-            Melon<Core>.Logger.Warning($"{LOG_PREFIX} File does not exist: {filePath}");
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 파일 없음: {filePath}");
             return null;
         }
 
@@ -164,7 +164,7 @@ public static class MediaOverrideManager
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} Failed loading sprite '{filePath}': {ex}");
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} 스프라이트 로드 실패 '{filePath}': {ex}");
         }
 
         return null;
@@ -199,12 +199,12 @@ public static class MediaOverrideManager
             }
             catch { }
 
-            Core.DebugLog($"{LOG_PREFIX} Overrode In-Game BGA with '{Path.GetFileName(album.BgaPath)}'");
+            Core.DebugLog($"{LOG_PREFIX} 인게임 BGA를 '{Path.GetFileName(album.BgaPath)}'로 교체");
             return true;
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} Failed overriding BGA: {ex.Message}");
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} BGA 교체 실패: {ex.Message}");
             return false;
         }
     }

@@ -39,14 +39,14 @@ public static class CustomTrackManager
             if (!Directory.Exists(HwaFolderPath))
             {
                 Directory.CreateDirectory(HwaFolderPath);
-                Melon<Core>.Logger.Msg($"{LOG_PREFIX} Created 'hwa' folder at: {HwaFolderPath}");
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더 생성: {HwaFolderPath}");
             }
 
             ScanHwaFolder();
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} Initialization error: {ex}");
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} 초기화 오류: {ex}");
         }
     }
 
@@ -58,7 +58,7 @@ public static class CustomTrackManager
         if (!Directory.Exists(HwaFolderPath))
             return;
 
-        Melon<Core>.Logger.Msg($"{LOG_PREFIX} Scanning 'hwa' folder for custom albums...");
+        Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더에서 커스텀 곡 검색 중...");
 
         var albumFolders = new List<string>();
         // Check if root hwa folder itself has bms
@@ -84,15 +84,15 @@ public static class CustomTrackManager
                 LoadedAlbums.Add(album);
                 AlbumsByTrackId[album.TrackId] = album;
                 scanCount++;
-                Core.DebugLog($"{LOG_PREFIX} Loaded Custom Track: '{album.Title}' by '{album.Artist}' (BPM: {album.Bpm}, Notes: {album.Duration:F1}s, Jacket: {album.JacketPath}, BGA: {album.BgaPath}, BGM: {album.BgmPath}, Preview: {album.PreviewPath})");
+                Core.DebugLog($"{LOG_PREFIX} 커스텀 곡 로드: '{album.Title}' - '{album.Artist}' (BPM: {album.Bpm}, 노트 길이: {album.Duration:F1}초, 자켓: {album.JacketPath}, BGA: {album.BgaPath}, 음원: {album.BgmPath}, 프리뷰: {album.PreviewPath})");
             }
             catch (Exception ex)
             {
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} Failed to load album '{Path.GetFileName(folder)}': {ex.Message}");
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 곡 폴더 로드 실패 '{Path.GetFileName(folder)}': {ex.Message}");
             }
         }
 
-        Melon<Core>.Logger.Msg($"{LOG_PREFIX} Scan complete: Total {scanCount} custom album(s) discovered.");
+        Melon<Core>.Logger.Msg($"{LOG_PREFIX} 검색 완료: 커스텀 곡 {scanCount}곡 발견");
     }
 
     private static CustomAlbumInfo BuildAlbumInfo(string folder, string bmsFile)
@@ -153,11 +153,11 @@ public static class CustomTrackManager
 
         string content = SxtgBmsConverter.NormalizeValueWidth(File.ReadAllText(path), out bool widened);
         if (widened)
-            Core.DebugLog($"{LOG_PREFIX} '{Path.GetFileName(path)}' uses 3-character values (#WAV001); read as 2-character values");
+            Core.DebugLog($"{LOG_PREFIX} '{Path.GetFileName(path)}'는 3자리 값(#WAV001) 차트라 2자리 값으로 변환해 읽음");
         if (SxtgBmsConverter.IsSxtgFormat(content))
         {
             content = SxtgBmsConverter.Convert(content, out int notes);
-            Core.DebugLog($"{LOG_PREFIX} Converted sxtg2 chart '{Path.GetFileName(path)}' to game BMS layout ({notes} markers)");
+            Core.DebugLog($"{LOG_PREFIX} sxtg2 차트 '{Path.GetFileName(path)}'를 게임 BMS 형식으로 변환 (마커 {notes}개)");
         }
         (_chartPath, _chartWrite, _chart) = (path, write, content);
         return content;

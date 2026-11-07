@@ -84,7 +84,7 @@ public static class ModConfig
             {
                 Directory.CreateDirectory(dir);
                 File.WriteAllText(ConfigPath, DefaultTemplate);
-                Melon<Core>.Logger.Msg($"{LOG_PREFIX} Created default config: {ConfigPath}");
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 기본 설정 파일 생성: {ConfigPath}");
             }
             else
             {
@@ -93,7 +93,7 @@ public static class ModConfig
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} Could not create config: {ex.Message}");
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} 설정 파일 생성 실패: {ex.Message}");
         }
         ResetChallengeTogglesOnLaunch();
         ReloadIfChanged(force: true);
@@ -128,7 +128,7 @@ public static class ModConfig
 
         File.Copy(ConfigPath, ConfigPath + ".bak", overwrite: true);
         File.WriteAllText(ConfigPath, string.Join("\n", lines));
-        Melon<Core>.Logger.Msg($"{LOG_PREFIX} Updated config.txt to template v{TEMPLATE_VERSION} ({kept} values kept, old file saved as config.txt.bak)");
+        Melon<Core>.Logger.Msg($"{LOG_PREFIX} config.txt를 템플릿 v{TEMPLATE_VERSION}으로 갱신 (기존 값 {kept}개 유지, 이전 파일은 config.txt.bak으로 보존)");
     }
 
     public static void ReloadIfChanged(bool force = false)
@@ -140,14 +140,14 @@ public static class ModConfig
             if (!force && write == _lastWrite) return;
             _lastWrite = write;
             Apply(Parse(File.ReadAllLines(ConfigPath)));
-            Melon<Core>.Logger.Msg($"{LOG_PREFIX} Loaded: AutoPlay={AutoPlay}, AllPerfect={AllPerfect}, BlockSave={BlockSave}, MaxScore={MaxScore:0}, " +
+            Melon<Core>.Logger.Msg($"{LOG_PREFIX} 설정 로드: AutoPlay={AutoPlay}, AllPerfect={AllPerfect}, BlockSave={BlockSave}, MaxScore={MaxScore:0}, " +
                 $"JudgmentBar={EnableJudgmentBar}(vertical={JudgmentBarVertical}, shape={JudgmentBarShape}, side={JudgmentBarSide}), KeyViewer={EnableKeyViewer}, CustomNotes={CustomNotes}, RandomNoteSkin={RandomNoteSkin}, " +
                 $"SpeedChaos={NoteSpeedChaos}({NoteSpeedChaosMin}-{NoteSpeedChaosMax}, perLane={NoteSpeedChaosPerLane}), Hidden={Hidden}, FadeIn={FadeIn}, FadeOut={FadeOut}, " +
                 $"Marathon={CustomMarathon}(autoNext={CustomMarathonAutoNext}s)");
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} Failed reading config: {ex.Message}");
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} 설정 파일 읽기 실패: {ex.Message}");
         }
     }
 
@@ -232,12 +232,12 @@ public static class ModConfig
             if (changed)
             {
                 File.WriteAllLines(ConfigPath, lines);
-                Melon<Core>.Logger.Msg($"{LOG_PREFIX} Reset Sudden/Hidden/FadeIn/FadeOut to 0 for this launch");
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 이번 실행을 위해 Sudden/Hidden/FadeIn/FadeOut을 0으로 초기화");
             }
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Warning($"{LOG_PREFIX} Could not reset challenge toggles: {ex.Message}");
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 도전 옵션 초기화 실패: {ex.Message}");
         }
     }
 
@@ -253,7 +253,7 @@ public static class ModConfig
             case "꺼짐": case "끄기": case "미사용": case "비활성화": case "거짓": case "폴스":
                 return false;
         }
-        Melon<Core>.Logger.Warning($"{LOG_PREFIX} {key}: could not read \"{v}\", keeping default {def}");
+        Melon<Core>.Logger.Warning($"{LOG_PREFIX} {key}: \"{v}\" 값을 읽을 수 없어 기본값 {def} 유지");
         return def;
     }
 
@@ -307,7 +307,7 @@ public static class ModConfig
             }
         }
 
-        Melon<Core>.Logger.Warning($"{LOG_PREFIX} {key}: could not read color \"{raw}\", keeping default");
+        Melon<Core>.Logger.Warning($"{LOG_PREFIX} {key}: 색 \"{raw}\"을 읽을 수 없어 기본값 유지");
         return def;
     }
 

@@ -51,7 +51,7 @@ public static class AttendancePopup
             if (!_logged)
             {
                 _logged = true;
-                Melon<Core>.Logger.Msg("[Attendance] Skipped the automatic attendance reward popup (SkipAttendancePopup=1)");
+                Melon<Core>.Logger.Msg("[Attendance] 출석 보상 팝업 자동 표시를 건너뜀 (SkipAttendancePopup=1)");
             }
             return false;
         }
