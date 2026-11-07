@@ -55,10 +55,12 @@ public class Core : MelonMod
         LoggerInstance.Msg(" 제작: 화영왕 (Hwa-young-wang)");
         LoggerInstance.Msg("==========================================================");
 
-        UpdateGuard.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
+        string gameRoot = MelonLoader.Utils.MelonEnvironment.GameRootDirectory;
+        UpdateGuard.Initialize(gameRoot);
+        LambdaTranslator.Initialize(gameRoot);
         CustomTrackManager.Initialize();
-        ModConfig.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
-        CustomNoteSkin.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
+        ModConfig.Initialize(gameRoot);
+        CustomNoteSkin.Initialize(gameRoot);
 
         LoggerInstance.Msg("[Harmony] 패치 적용 중...");
         PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance);
@@ -440,7 +442,9 @@ public class Core : MelonMod
         private static Func<Il2CppObjectBase, BackgroundUIProcessor?>? _getOwner;
 
         public static MethodBase? TargetMethod()
-            => PatchResilience.FindClosureCallback(typeof(BackgroundUIProcessor), "_Initialize_b__", typeof(VideoClip), out _getOwner);
+            => PatchResilience.FindClosureCallback(
+                typeof(BackgroundUIProcessor), "_Initialize_b__", typeof(VideoClip), out _getOwner,
+                accessedOwnerFieldName: "bgaPlayer");
 
         public static void Postfix(Il2CppObjectBase __instance)
         {
@@ -631,7 +635,8 @@ public class Core : MelonMod
 
         public static MethodBase? TargetMethod()
             => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner, matchIndex: 0);
+                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 0, accessedOwnerFieldName: "jacketFull");
 
         public static void Postfix(Il2CppObjectBase __instance)
             => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.jacketFull, "PlayLoading.jacketFull (callback)");
@@ -644,7 +649,8 @@ public class Core : MelonMod
 
         public static MethodBase? TargetMethod()
             => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner, matchIndex: 1);
+                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 1, accessedOwnerFieldName: "trackThumbnail");
 
         public static void Postfix(Il2CppObjectBase __instance)
             => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.trackThumbnail, "PlayLoading.trackThumbnail (callback)");
@@ -700,7 +706,8 @@ public class Core : MelonMod
 
         public static MethodBase? TargetMethod()
             => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner, matchIndex: 0);
+                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 0, accessedOwnerFieldName: "jacket");
 
         public static void Postfix(Il2CppObjectBase __instance) => ApplyResultJackets(_getOwner?.Invoke(__instance));
     }
@@ -712,7 +719,8 @@ public class Core : MelonMod
 
         public static MethodBase? TargetMethod()
             => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner, matchIndex: 1);
+                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 1, accessedOwnerFieldName: "thumbnail");
 
         public static void Postfix(Il2CppObjectBase __instance) => ApplyResultJackets(_getOwner?.Invoke(__instance));
     }
@@ -724,7 +732,8 @@ public class Core : MelonMod
 
         public static MethodBase? TargetMethod()
             => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.Result.TravelBackgroundModule), "_InitializeModule_b__", typeof(Sprite), out _getOwner, matchIndex: 0);
+                typeof(Il2CppSixtarGate.Result.TravelBackgroundModule), "_InitializeModule_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 0, accessedOwnerFieldName: "jacket");
 
         public static void Postfix(Il2CppObjectBase __instance)
             => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.jacket, "Result.background jacket");

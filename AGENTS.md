@@ -105,9 +105,12 @@
    - `SixtarGate.Play.BackgroundUIProcessor.Initialize` Postfix + 재적용 코루틴 (콜백 `<Initialize>b__1`은 ICF 공유라 패치 금지)
    - PlayLoading `b__2/_b__4`는 OuterSpace 판(`DisplayClass35_0`, 같은 필드 배치)과 공유 — 레이아웃이 같아 안전.
    - 로딩 영상(`_specifiedLoadingClip`, `b__3`)은 게임 기본 영상 유지.
-15. **Harmony 적용 방식 및 업데이트 내성 (`Managers/PatchResilience.cs`):**
+15. **Harmony 적용 방식 및 업데이트 내성 (`Managers/PatchResilience.cs`, `Managers/LambdaTranslator.cs`):**
    - `[assembly: HarmonyDontPatchAll]` + `PatchResilience.ApplyAllPatches`에서 패치 전 `Il2CppMethodInfo::methodPointer`의 첫 1~3바이트 기계어를 검사해 MSVC `/OPT:ICF` 공유 자명 스텁(`ret`, `ret 0`, `xor al,al;ret`, `mov al,1;ret`)이면 자동 스킵.
    - 컴파일러 생성 클로저·코루틴(`__c__DisplayClass*`, `_*_d__*`, `_b__*`)에 대한 컴파일 타임 타입 참조를 전면 제거하고 `FindClosureMethod` / `FindClosureCallback` / `FindCoroutineMoveNext` + `Expression.Lambda` 컴파일 접근자로 동적 바인딩하여 업데이트 시 순번이 밀려도 깨지지 않음.
+   - **이중래퍼 람다 번역가 (`Managers/LambdaTranslator.cs`, 2026-11-07):**
+     - **1단계 래퍼(Fast-Path 캐시):** `GameAssembly.dll` 크기·수정 시각과 빌드 ID를 지문으로 삼아 `{게임}/UserData/SixtarGateMod.LambdaMap.json`에 논리적 람다 키 → 실제 클로저 타입명/메서드명/소유자 필드명/RVA를 저장. 같은 빌드 재실행 시 `GetNestedTypes()` 전체 스캔 없이 O(1) 직행 + 프로세스 내 `MethodInfo` 메모리 캐시(`_resolvedMethods`)로 ICF 검사·Harmony 패치 이중 호출 제거.
+     - **2단계 래퍼(Smart Translator):** 게임 업데이트로 지문이 바뀌거나 1단계 직행 실패 시 자동 가동. 외부 클래스별 클로저·상태머신을 1회 인덱싱하고, 동일 시그니처 콜백이 여러 개일 때(`PlayLoadingManager`의 `jacketFull` vs `trackThumbnail`, `Result.TrackInfoModule`의 `jacket` vs `thumbnail`)는 `IL2CPP.il2cpp_field_get_offset`으로 조회한 대상 필드 오프셋과 람다 x64 네이티브 본문의 변위(`mov reg, [reg + disp8]`)를 대조해 람다 선언 순서가 바뀌어도 정확히 번역.
    - 원본 오타 메서드(`GetNoteObejct`, `GetSelectableCategoty`, `ReqeustSessionPlayingCount`, `UnlockReqeustAchievement`, `CurrectionVolume`, `GetNoteReferance`)는 오타·정상 철자 양방향 자동 해석.
    - `CustomTrackManager.CloneTrackData`는 `CreatePropertyCloner<TrackLoader.TrackData>()`로 템플릿의 모든 속성을 먼저 복제해 신규 필드 추가에 대응.
    - **실행 시 업데이트 감시 (`Managers/UpdateGuard.cs`, 2026-11-07):** 시작할 때 `{steamapps}/appmanifest_1802720.acf`의 `buildid`를 읽어 `VerifiedBuilds`(실기로 곡 플레이~결과 화면 확인한 빌드: `26218612`, `26455233`)에 없으면 노란 경고. `Application.add_logMessageReceived`로 Unity `Exception`/`Assert` 로그를 `[UpdateGuard] 게임 내부 예외: … 위치: …`로 MelonLoader 로그에 전달(같은 예외 1회, 최대 30종). 원래 게임 내부 NRE는 `Player.log`에만 찍혀서 오프라인 우회가 깨뜨린 BackndChat NRE를 1주일간 못 봤음. 시험 빌드로 `Debug.LogException`을 일부러 내 전달 확인 완료.

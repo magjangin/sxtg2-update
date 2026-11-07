@@ -67,6 +67,8 @@ public static class PatchResilience
             logger.Msg($"[Harmony] 패치 {applied}개 모두 적용 완료");
         else
             logger.Warning($"[Harmony] 패치 {applied}개 적용, ICF 보호로 {skippedIcf}개 건너뜀, {failed}개 실패");
+
+        LambdaTranslator.FlushSummary();
     }
 
     private static bool ShouldSkipForIcfStub(
@@ -281,54 +283,46 @@ public static class PatchResilience
 
     /// <summary>
     /// Finds a lambda method inside any compiler-generated closure nested in <paramref name="outerType"/>
-    /// by the parent method name prefix (e.g. "_GotoPlayScene_b__") and exact parameter types.
+    /// via the Double-Wrapper <see cref="LambdaTranslator"/> (O(1) cached dictionary lookup on matching builds,
+    /// structural + native field-offset translation when the game updates).
     /// </summary>
-    public static MethodInfo? FindClosureMethod(Type outerType, string methodPrefix, int matchIndex, params Type[] paramTypes)
+    public static MethodInfo? FindClosureMethod(
+        Type outerType,
+        string methodPrefix,
+        int matchIndex,
+        string? accessedOwnerFieldName,
+        params Type[] paramTypes)
     {
-        string altPrefix = methodPrefix.StartsWith("_", StringComparison.Ordinal)
-            ? "<" + methodPrefix.Substring(1).Replace("_b__", ">b__")
-            : methodPrefix;
-
-        int current = 0;
-        foreach (var nested in outerType.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
-        {
-            if (!nested.Name.StartsWith("__c", StringComparison.Ordinal) &&
-                !nested.Name.StartsWith("<>c", StringComparison.Ordinal))
-                continue;
-
-            foreach (var m in nested.GetMethods(AllFlags))
-            {
-                if (!m.Name.StartsWith(methodPrefix, StringComparison.Ordinal) &&
-                    !m.Name.StartsWith(altPrefix, StringComparison.Ordinal))
-                    continue;
-
-                if (!ParametersMatch(m.GetParameters(), paramTypes)) continue;
-                if (current == matchIndex) return m;
-                current++;
-            }
-        }
-        return null;
+        string paramSig = string.Join(",", Array.ConvertAll(paramTypes, p => p.Name));
+        string key = $"{outerType.FullName ?? outerType.Name}:{methodPrefix}({paramSig})#{matchIndex}:{accessedOwnerFieldName ?? "*"}";
+        return LambdaTranslator.TranslateClosureMethod(
+            key, outerType, methodPrefix, paramTypes, matchIndex, accessedOwnerFieldName);
     }
 
+    public static MethodInfo? FindClosureMethod(Type outerType, string methodPrefix, int matchIndex, params Type[] paramTypes)
+        => FindClosureMethod(outerType, methodPrefix, matchIndex, null, paramTypes);
+
     public static MethodInfo? FindClosureMethod(Type outerType, string methodPrefix, params Type[] paramTypes)
-        => FindClosureMethod(outerType, methodPrefix, 0, paramTypes);
+        => FindClosureMethod(outerType, methodPrefix, 0, null, paramTypes);
 
     /// <summary>
     /// Finds a closure callback method and compiles a fast getter for its outer class reference (__4__this).
+    /// When <paramref name="accessedOwnerFieldName"/> is supplied, the translator inspects the x64 native body of
+    /// candidate lambdas against the IL2CPP field offset on <typeparamref name="TOwner"/> so lambda order changes
+    /// across game updates never confuse same-signature callbacks (e.g. jacketFull vs trackThumbnail).
     /// </summary>
     public static MethodInfo? FindClosureCallback<TOwner>(
         Type outerType,
         string methodPrefix,
         Type paramType,
         out Func<Il2CppObjectBase, TOwner?>? getOwner,
-        int matchIndex = 0)
+        int matchIndex = 0,
+        string? accessedOwnerFieldName = null)
         where TOwner : class
     {
-        getOwner = null;
-        var method = FindClosureMethod(outerType, methodPrefix, matchIndex, paramType);
-        if (method?.DeclaringType is Type closureType)
-            getOwner = CreateGetter<TOwner>(closureType, "__4__this", "<>4__this");
-        return method;
+        string key = $"{outerType.FullName ?? outerType.Name}:{methodPrefix}({paramType.Name})#{matchIndex}:{accessedOwnerFieldName ?? "*"}";
+        return LambdaTranslator.TranslateClosureCallback(
+            key, outerType, methodPrefix, paramType, out getOwner, matchIndex, accessedOwnerFieldName);
     }
 
     /// <summary>
@@ -353,7 +347,7 @@ public static class PatchResilience
 
     /// <summary>
     /// Finds the MoveNext() method of a compiler-generated coroutine state machine nested in <paramref name="outerType"/>
-    /// (e.g. "_WaitUpdateCheck_d__") without hardcoding the state machine's ordinal number.
+    /// (e.g. "_WaitUpdateCheck_d__") via <see cref="LambdaTranslator"/> without hardcoding the state machine's ordinal number.
     /// </summary>
     public static MethodInfo? FindCoroutineMoveNext(
         Type outerType,
@@ -361,27 +355,8 @@ public static class PatchResilience
         out Func<Il2CppObjectBase, int>? getState,
         out Action<Il2CppObjectBase, int>? setState)
     {
-        getState = null;
-        setState = null;
-        string altPrefix = coroutinePrefix.StartsWith("_", StringComparison.Ordinal)
-            ? "<" + coroutinePrefix.Substring(1).Replace("_d__", ">d__")
-            : coroutinePrefix;
-
-        foreach (var nested in outerType.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
-        {
-            if (!nested.Name.StartsWith(coroutinePrefix, StringComparison.Ordinal) &&
-                !nested.Name.StartsWith(altPrefix, StringComparison.Ordinal))
-                continue;
-
-            var moveNext = AccessTools.Method(nested, "MoveNext");
-            if (moveNext != null)
-            {
-                getState = CreateValueGetter<int>(nested, "__1__state", "<>1__state");
-                setState = CreateSetter<int>(nested, "__1__state", "<>1__state");
-                return moveNext;
-            }
-        }
-        return null;
+        string key = $"{outerType.FullName ?? outerType.Name}:{coroutinePrefix}.MoveNext";
+        return LambdaTranslator.TranslateCoroutineMoveNext(key, outerType, coroutinePrefix, out getState, out setState);
     }
 
     private static bool ParametersMatch(ParameterInfo[] actual, Type[] expected)
