@@ -566,6 +566,74 @@ public static class OfflineBypass
         }
     }
 
+    // ── UnitySession (멀티 세션) 커넥터 없음 대응 ─────────────────────────────
+    // 오프라인 부팅은 BACKND 초기화를 건너뛰므로 Backend 내부 정적 상태가 null이고,
+    // UnitySessionModule.<WaitInitialize>에서 BackEndChatServer.Initialize →
+    // Backend.GetBackndChatSettings가 NRE로 죽는다. 그 뒤의 UnitySessionModule.Initialize
+    // (IConnector 등 제공자 등록)가 실행되지 않아 GetProvider<IConnector>()가 null.
+
+    /// <summary>
+    /// BackEndChatServer.Initialize (RVA 0x55C9D0, ICF=1): BACKND ChatClient를 만드는 함수.
+    /// 오프라인에서는 건너뛰어 UnitySessionModule.<WaitInitialize>가 다음 단계인
+    /// UnitySessionModule.Initialize까지 가게 한다. 거기서 chatServer 자신이 IConnector로,
+    /// BackEnd.* 제공자/송신자(생성자는 chatServer 참조만 저장)가 등록됨.
+    /// _client/_lobbySession/_playSession이 null로 남아도 안전함(디스어셈블 확인):
+    /// get_IsConnect = _lobbySession != null &amp;&amp; _useUnitySession → false, Update는 _client null 검사,
+    /// ExitSessionSender.Exit는 _playSession null이면 아무것도 안 함.
+    /// 이게 없으면 곡 종료 콜백 SixtarGlobal.&lt;&gt;c.&lt;GotoPlayScene&gt;b__54_2가
+    /// UnitySessionModule.Instance.ExitSender(null)에서 NRE → 결과 화면으로 안 넘어감.
+    /// </summary>
+    [HarmonyPatch(typeof(BackEndChatServer), nameof(BackEndChatServer.Initialize))]
+    public static class BackEndChatServer_Initialize_Patch
+    {
+        public static bool Prefix()
+        {
+            if (!Core.BlockServerUpload) return true;
+            Core.DebugLog("[OfflineBypass] BACKND 채팅 서버 초기화 건너뜀 (세션 모듈은 미연결 상태로 등록)");
+            return false;
+        }
+    }
+
+    // 아래 두 훅은 위 훅이 있으면 커넥터가 항상 있어 원본을 그대로 실행한다(안전망).
+
+    /// <summary>
+    /// UnitySessionModule.get_IsConnect (RVA 0x601820, ICF=1): 원본은
+    /// <c>(_sessionConnector ??= GetProvider&lt;IConnector&gt;()).IsConnect</c>라 커넥터가 없으면 NRE.
+    /// SixtarGlobal.GotoPlayScene과 TravelPatternPlayer.RegisterPlayModeProcessor(PlayManager.Start 안)가
+    /// 이걸 불러서, 플레이 씬 초기화가 중간에 끊겨 곡이 시작되지 않았음. 커넥터가 없으면 false
+    /// (= 원래 게임의 미연결 솔로 플레이 경로).
+    /// </summary>
+    [HarmonyPatch(typeof(Il2CppSixtarGate.UnitySession.UnitySessionModule), nameof(Il2CppSixtarGate.UnitySession.UnitySessionModule.IsConnect), MethodType.Getter)]
+    public static class UnitySessionModule_IsConnect_Patch
+    {
+        public static bool Prefix(Il2CppSixtarGate.UnitySession.UnitySessionModule __instance, ref bool __result)
+        {
+            if (__instance != null && __instance.Connector != null) return true;
+            __result = false;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Ingame.UnitySessionProcessor.InitailizeViewItem (RVA 0x622780, ICF=1): 원본은
+    /// <c>if (module.Connector.IsConnect) { 세션 UI 구성 } else Destroy(gameObject)</c>.
+    /// Renewal_Play 씬 로드 콜백에서 커넥터 null로 NRE → 커넥터가 없으면 미연결 분기와 같게 Destroy.
+    /// </summary>
+    [HarmonyPatch]
+    public static class UnitySessionProcessor_InitailizeViewItem_Patch
+    {
+        public static MethodBase TargetMethod()
+            => PatchResilience.ResolveMethod(typeof(Il2CppSixtarGate.UnitySession.Ingame.UnitySessionProcessor), "InitailizeViewItem", "InitializeViewItem");
+
+        public static bool Prefix(Il2CppSixtarGate.UnitySession.Ingame.UnitySessionProcessor __instance, Il2CppSixtarGate.UnitySession.UnitySessionModule module)
+        {
+            if (module != null && module.Connector != null) return true;
+            if (__instance != null) UnityEngine.Object.Destroy(__instance.gameObject);
+            Core.DebugLog("[OfflineBypass] 세션 커넥터가 없어 인게임 세션 UI 제거 (솔로 플레이)");
+            return false;
+        }
+    }
+
     /// <summary>
     /// ClientDataProvider.InitializeModule (RVA 0x79B930, ICF=1):
     /// If Steam is not running, SteamClient.Init(1802720, true) throws an exception before
