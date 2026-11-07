@@ -100,7 +100,7 @@ public static class RandomNoteSkin
             list.Add(PartsOf(prefab));
             names.Add(name);
         }
-        Melon<Core>.Logger.Msg($"{LOG_PREFIX} {names.Count} note prefabs: {string.Join(", ", names)}");
+        Melon<Core>.Logger.Msg($"{LOG_PREFIX} 노트 프리팹 {names.Count}개: {string.Join(", ", names)}");
     }
 
     private static void Copy(Image[] from, Image[] to)
@@ -158,7 +158,7 @@ public static class RandomNoteSkin
             {
                 if (_warned) return;
                 _warned = true;
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} Apply failed (further errors suppressed): {ex.Message}");
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 적용 실패 (이후 같은 오류는 생략): {ex.Message}");
             }
         }
     }

@@ -59,12 +59,12 @@ public static class PlayAssist
             Action<IJudgeProcessor.ISixtarJudgeData> onJudged = OnNoteJudged;
             jp.add_OnNoteJudged(onJudged);
 
-            Melon<Core>.Logger.Msg($"[PlayAssist] Play started: AutoPlay={ModConfig.AutoPlay}, AllPerfect={ModConfig.AllPerfect}, " +
-                $"MaxScore={ModConfig.MaxScore:0}, ranges(ms)={string.Join("/", RangeMs)}");
+            Melon<Core>.Logger.Msg($"[PlayAssist] 플레이 시작: AutoPlay={ModConfig.AutoPlay}, AllPerfect={ModConfig.AllPerfect}, " +
+                $"MaxScore={ModConfig.MaxScore:0}, 판정 범위(ms)={string.Join("/", RangeMs)}");
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"[PlayAssist] JudgeProcessor setup failed: {ex}");
+            Melon<Core>.Logger.Error($"[PlayAssist] 판정 처리기 초기화 실패: {ex}");
         }
     }
 
@@ -244,7 +244,7 @@ public static class PlayAssist
         public static bool Prefix(ref bool __result)
         {
             if (!ModConfig.ShouldBlockRecord) return true;
-            Melon<Core>.Logger.Msg("[PlayAssist] Blocked local play record save (BlockSave/AutoPlay/AllPerfect/MaxScore)");
+            Melon<Core>.Logger.Msg("[PlayAssist] 플레이 기록 저장 차단 (BlockSave/AutoPlay/AllPerfect/MaxScore)");
             __result = false;
             return false;
         }

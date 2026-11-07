@@ -62,7 +62,7 @@ public static class CustomMarathon
         _total = Queue.Count + 1;
         IsActive = Queue.Count > 0;
         if (IsActive)
-            Melon<Core>.Logger.Msg($"[Marathon] Started with '{track.DisplayName}': {_total} custom songs");
+            Melon<Core>.Logger.Msg($"[Marathon] '{track.DisplayName}'부터 시작: 커스텀 곡 {_total}곡");
     }
 
     public static void OnSceneLoaded(string sceneName)
@@ -77,7 +77,7 @@ public static class CustomMarathon
         if (!IsActive) return false;
         if (Queue.Count == 0)
         {
-            Melon<Core>.Logger.Msg("[Marathon] All custom songs played, back to the song list");
+            Melon<Core>.Logger.Msg("[Marathon] 커스텀 곡을 모두 플레이함, 곡 목록으로 돌아감");
             IsActive = false;
             return false;
         }
@@ -85,7 +85,7 @@ public static class CustomMarathon
         var next = Queue[0];
         Queue.RemoveAt(0);
         _played++;
-        Melon<Core>.Logger.Msg($"[Marathon] Next ({_played}/{_total}): '{next.DisplayName}'");
+        Melon<Core>.Logger.Msg($"[Marathon] 다음 곡 ({_played}/{_total}): '{next.DisplayName}'");
         _startingNext = true;
         DivertingMusicSelect = true;
         SixtarGlobal.GotoPlayScene(next, _level, _style);
@@ -104,7 +104,7 @@ public static class CustomMarathon
                 _resultShownAt = -1f;
                 Queue.Clear();
                 Overlay.HideAll();
-                Melon<Core>.Logger.Msg("[Marathon] Stopped by Esc on the result screen");
+                Melon<Core>.Logger.Msg("[Marathon] 결과 화면에서 Esc로 중단");
                 return;
             }
         }

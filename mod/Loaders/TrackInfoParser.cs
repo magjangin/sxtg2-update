@@ -48,7 +48,7 @@ public static class TrackInfoParser
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"[TrackInfoParser] Error parsing track info in '{albumFolder}': {ex.Message}");
+            Melon<Core>.Logger.Error($"[TrackInfoParser] '{albumFolder}'의 곡 정보 해석 오류: {ex.Message}");
         }
         return info;
     }

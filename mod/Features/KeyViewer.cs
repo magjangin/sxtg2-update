@@ -72,7 +72,7 @@ public static class KeyViewer
                 Labels[5] = Label(renewal.m_PlayAction_LaneLT);
                 Labels[6] = Label(renewal.m_PlayAction_LaneRT);
                 _bound = true;
-                Melon<Core>.Logger.Msg($"[KeyViewer] Key labels: {string.Join(" ", Labels)} (SixtarInputAction)");
+                Melon<Core>.Logger.Msg($"[KeyViewer] 키 이름: {string.Join(" ", Labels)} (SixtarInputAction)");
                 return;
             }
 
@@ -85,7 +85,7 @@ public static class KeyViewer
                 if (++_bindAttempts < 12) return; // ~2 s, then fall back to lane names
                 Array.Copy(LaneNames, Labels, Labels.Length);
                 _bound = true;
-                Melon<Core>.Logger.Warning("[KeyViewer] No input bindings found (SixtarInputAction / InputListener); showing lane names");
+                Melon<Core>.Logger.Warning("[KeyViewer] 키 바인딩을 찾지 못함 (SixtarInputAction / InputListener), 레인 이름으로 표시");
                 return;
             }
             bool lunar = Core.CurrentPlayStyleIsLunar;
@@ -97,11 +97,11 @@ public static class KeyViewer
             Labels[5] = Label(map.m_Solar_LaneLT);
             Labels[6] = Label(map.m_Solar_LaneRT);
             _bound = true;
-            Melon<Core>.Logger.Msg($"[KeyViewer] Key labels: {string.Join(" ", Labels)} ({(lunar ? "Lunar" : "Solar")})");
+            Melon<Core>.Logger.Msg($"[KeyViewer] 키 이름: {string.Join(" ", Labels)} ({(lunar ? "Lunar" : "Solar")})");
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Warning($"[KeyViewer] Could not read key bindings: {ex.Message}");
+            Melon<Core>.Logger.Warning($"[KeyViewer] 키 바인딩 읽기 실패: {ex.Message}");
             for (int i = 0; i < Labels.Length; i++) Labels[i] ??= "-";
             _bound = true;
         }

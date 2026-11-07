@@ -51,15 +51,15 @@ public class Core : MelonMod
     public override void OnInitializeMelon()
     {
         LoggerInstance.Msg("==========================================================");
-        LoggerInstance.Msg(" Sixtar Gate: STARTRAIL Custom Chart & Media Loader v2.2.0");
-        LoggerInstance.Msg(" Author: 화영왕 (Hwa-young-wang)                            ");
+        LoggerInstance.Msg(" Sixtar Gate: STARTRAIL 커스텀 차트 & 미디어 로더 v2.2.0");
+        LoggerInstance.Msg(" 제작: 화영왕 (Hwa-young-wang)");
         LoggerInstance.Msg("==========================================================");
 
         CustomTrackManager.Initialize();
         ModConfig.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
         CustomNoteSkin.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
 
-        LoggerInstance.Msg("[Harmony] Explicitly applying all patches...");
+        LoggerInstance.Msg("[Harmony] 패치 적용 중...");
         PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance);
     }
 
@@ -71,7 +71,7 @@ public class Core : MelonMod
     // The overlays belong to the play scene only; leaving it (result screen, music select) ends the session.
     public override void OnSceneWasLoaded(int buildIndex, string sceneName)
     {
-        LoggerInstance.Msg($"[Scene] Loaded '{sceneName}'");
+        LoggerInstance.Msg($"[Scene] 씬 로드: '{sceneName}'");
         _inRenewalPlay = string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase);
         if (!_inRenewalPlay)
             PlayAssist.EndPlay();
@@ -97,7 +97,7 @@ public class Core : MelonMod
         {
             if (_overlayErrorLogged) return;
             _overlayErrorLogged = true;
-            LoggerInstance.Warning($"[Overlay] Draw error (further errors suppressed): {ex}");
+            LoggerInstance.Warning($"[Overlay] 그리기 오류 (이후 같은 오류는 생략): {ex}");
         }
     }
 
@@ -115,12 +115,12 @@ public class Core : MelonMod
                 if (categories != null && !categories.Contains(CUSTOM_CATEGORY_NAME))
                 {
                     categories.Add(CUSTOM_CATEGORY_NAME);
-                    Melon<Core>.Logger.Msg($"[CustomCategory] Successfully added '{CUSTOM_CATEGORY_NAME}' to CategorySelectController.Categories!");
+                    Melon<Core>.Logger.Msg($"[CustomCategory] 카테고리 목록에 '{CUSTOM_CATEGORY_NAME}' 탭 추가 완료");
                 }
             }
             catch (Exception ex)
             {
-                Melon<Core>.Logger.Error($"[CustomCategory] Error adding category to CategorySelectController: {ex}");
+                Melon<Core>.Logger.Error($"[CustomCategory] 카테고리 추가 중 오류: {ex}");
             }
         }
     }
@@ -186,7 +186,7 @@ public class Core : MelonMod
                     if (template != null)
                     {
                         cachedCustomTracks = CustomTrackManager.CreateCustomTrackList(template);
-                        Melon<Core>.Logger.Msg($"[CustomCategory] Populated {cachedCustomTracks.Count} custom track(s) in CUSTOM tab!");
+                        Melon<Core>.Logger.Msg($"[CustomCategory] CUSTOM 탭에 커스텀 곡 {cachedCustomTracks.Count}곡 등록");
                         MediaOverrideManager.PreloadAll(CustomTrackManager.LoadedAlbums);
                     }
                 }
@@ -216,19 +216,19 @@ public class Core : MelonMod
                 {
                     CustomTrackManager.CurrentSelectedAlbum = album;
                     CustomMusicSelect.LastCustomTrackId = track.TrackID;
-                    Melon<Core>.Logger.Msg($"[CustomChart] GotoPlayScene: Selected Custom Album '{album.Title}' by '{album.Artist}' (BMS: {album.BmsPath})");
+                    Melon<Core>.Logger.Msg($"[CustomChart] 커스텀 곡 선택: '{album.Title}' - '{album.Artist}' (BMS: {album.BmsPath})");
                 }
                 else
                 {
                     CustomTrackManager.CurrentSelectedAlbum = null;
-                    Melon<Core>.Logger.Msg($"[CustomChart] GotoPlayScene: Selected Default 1-Note Custom Track ({track.DisplayName})");
+                    Melon<Core>.Logger.Msg($"[CustomChart] 기본 1노트 커스텀 곡 선택 ({track.DisplayName})");
                 }
             }
             else
             {
                 IsCustomTrackActive = false;
                 CustomTrackManager.CurrentSelectedAlbum = null;
-                Melon<Core>.Logger.Msg($"[CustomChart] GotoPlayScene: Normal Track selected ({track?.DisplayName}). Custom mode inactive.");
+                Melon<Core>.Logger.Msg($"[CustomChart] 일반 곡 선택 ({track?.DisplayName}), 커스텀 모드 꺼짐");
             }
             if (track != null) CustomMarathon.OnPlayStarting(track, level, playStyle, IsCustomTrackActive);
         }
@@ -276,7 +276,7 @@ public class Core : MelonMod
             if (album != null && album.HasCustomBms)
             {
                 try { bmsContent = CustomTrackManager.LoadChartText(album); }
-                catch (Exception ex) { Melon<Core>.Logger.Error($"[CustomChart] Failed reading BMS for play scene: {ex.Message}"); }
+                catch (Exception ex) { Melon<Core>.Logger.Error($"[CustomChart] 플레이 씬용 BMS 읽기 실패: {ex.Message}"); }
             }
 
             try
@@ -284,13 +284,13 @@ public class Core : MelonMod
                 var args = _getArgs?.Invoke(__instance);
                 if (args != null)
                     _setBankName?.Invoke(args, track.TrackID);
-                Melon<Core>.Logger.Msg($"[CustomChart] Skipping FMOD bank/SXGTBIN lookup for '{track.TrackID}', moving to Renewal_Play with local BMS ({bmsContent.Length} chars)");
+                Melon<Core>.Logger.Msg($"[CustomChart] '{track.TrackID}'의 FMOD 뱅크/SXGTBIN 조회를 건너뛰고 로컬 BMS({bmsContent.Length}자)로 Renewal_Play 진입");
                 _invokePatternReady(__instance, new TextAsset(bmsContent));
                 return false;
             }
             catch (Exception ex)
             {
-                Melon<Core>.Logger.Error($"[CustomChart] Custom play-scene bootstrap failed: {ex}");
+                Melon<Core>.Logger.Error($"[CustomChart] 커스텀 곡 플레이 씬 진입 실패: {ex}");
                 return true;
             }
         }
@@ -327,22 +327,22 @@ public class Core : MelonMod
                     try
                     {
                         bmsContent = CustomTrackManager.LoadChartText(album);
-                        Melon<Core>.Logger.Msg($"[CustomChart] Injected real BMS file '{album.BmsPath}' ({bmsContent.Length} chars)");
+                        Melon<Core>.Logger.Msg($"[CustomChart] BMS 파일 주입: '{album.BmsPath}' ({bmsContent.Length}자)");
                     }
                     catch (Exception ex)
                     {
-                        Melon<Core>.Logger.Error($"[CustomChart] Failed reading BMS file: {ex.Message}. Falling back to 1-Note BMS.");
+                        Melon<Core>.Logger.Error($"[CustomChart] BMS 파일 읽기 실패: {ex.Message}. 1노트 BMS로 대체");
                     }
                 }
 
                 if (string.IsNullOrEmpty(bmsContent))
                 {
                     bmsContent = DefaultBms;
-                    Melon<Core>.Logger.Msg("[CustomChart] Using default 1-Note BMS.");
+                    Melon<Core>.Logger.Msg("[CustomChart] 기본 1노트 BMS 사용");
                 }
 
                 __result = bms.Parse(bmsContent);
-                Melon<Core>.Logger.Msg($"[CustomChart] Parsed BMS Pattern: Markers={__result?.Markers?.Count}, Blocks={__result?.Blocks?.Count}");
+                Melon<Core>.Logger.Msg($"[CustomChart] BMS 패턴 해석 완료: 마커 {__result?.Markers?.Count}개, 블록 {__result?.Blocks?.Count}개");
                 return false;
             }
             return true;
@@ -363,7 +363,7 @@ public class Core : MelonMod
                 __instance.TrackEndTiming = customDuration;
                 __instance.LatestNoteTiming = customDuration - 3.0f;
 
-                Melon<Core>.Logger.Msg($"[FinishProcessor] Custom track initialized: TrackEndTiming = {__instance.TrackEndTiming:F1}s");
+                Melon<Core>.Logger.Msg($"[FinishProcessor] 커스텀 곡 종료 시점 설정: TrackEndTiming = {__instance.TrackEndTiming:F1}초");
             }
         }
     }
@@ -406,7 +406,7 @@ public class Core : MelonMod
             if (!_logged)
             {
                 _logged = true;
-                Melon<Core>.Logger.Msg($"[FinishProcessor] End timing was offset {offset:F1}s + timing {__instance.TrackEndTiming:F1}s; extending to song length {length:F1}s");
+                Melon<Core>.Logger.Msg($"[FinishProcessor] 종료 시점이 오프셋 {offset:F1}초 + {__instance.TrackEndTiming:F1}초라서 곡 길이 {length:F1}초로 연장");
             }
             __instance.TrackEndTiming = Math.Max(0f, length - offset);
         }
@@ -488,7 +488,7 @@ public class Core : MelonMod
             {
                 player.Play();
             }
-            DebugLog($"[MediaOverride] PlayBGA (custom) prepared={player.isPrepared}, delay={delay:F2}s");
+            DebugLog($"[MediaOverride] 커스텀 BGA 재생: 준비됨={player.isPrepared}, 지연={delay:F2}초");
             return false;
         }
 
@@ -536,7 +536,7 @@ public class Core : MelonMod
             var img = __instance.jacket;
             if (img == null)
             {
-                Melon<Core>.Logger.Warning("[MusicSelect] Could not find jacket Image component in TrackInfoViewer");
+                Melon<Core>.Logger.Warning("[MusicSelect] TrackInfoViewer에서 자켓 Image 컴포넌트를 찾지 못함");
                 return;
             }
 
@@ -548,7 +548,7 @@ public class Core : MelonMod
                 img.sprite = sprite;
                 img.color = White;
                 img.enabled = true;
-                DebugLog($"[MusicSelect] Center jacket '{album.Title}'");
+                DebugLog($"[MusicSelect] 가운데 자켓 표시: '{album.Title}'");
             });
         }
     }
@@ -610,7 +610,7 @@ public class Core : MelonMod
         img.sprite = sprite;
         img.color = White;
         img.enabled = true;
-        DebugLog($"[Jacket] Applied custom jacket to {where}");
+        DebugLog($"[Jacket] 커스텀 자켓 적용: {where}");
     }
 
     [HarmonyPatch(typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "OnLoadResource_Travel")]
@@ -674,7 +674,7 @@ public class Core : MelonMod
                 img.sprite = sprite;
                 img.color = White;
                 img.enabled = true;
-                DebugLog($"[Jacket] Re-applied custom jacket to {where} after async load");
+                DebugLog($"[Jacket] 비동기 로드 후 커스텀 자켓 다시 적용: {where}");
             }
         }
     }
@@ -740,12 +740,12 @@ public class Core : MelonMod
             if (!CustomAudioManager.TryResolve(audioName, out var album, out var filePath, out var isPreview))
                 return true;
 
-            DebugLog($"[CustomAudio] Play('{audioName}', {channel}, {position:F2}) -> {(isPreview ? "preview" : "bgm")} of '{album!.Title}'");
+            DebugLog($"[CustomAudio] Play('{audioName}', {channel}, {position:F2}) -> '{album!.Title}'의 {(isPreview ? "프리뷰" : "본곡")}");
             try
             {
                 if (filePath == null)
                 {
-                    Melon<Core>.Logger.Warning($"[CustomAudio] No audio file in '{album.AlbumFolder}'. Stopping channel {channel}.");
+                    Melon<Core>.Logger.Warning($"[CustomAudio] '{album.AlbumFolder}'에 음원 파일이 없음. {channel} 채널 정지");
                     __instance.Stop(channel);
                     return false;
                 }
@@ -755,7 +755,7 @@ public class Core : MelonMod
             }
             catch (Exception ex)
             {
-                Melon<Core>.Logger.Error($"[CustomAudio] Local playback failed, falling back to original Play: {ex}");
+                Melon<Core>.Logger.Error($"[CustomAudio] 로컬 음원 재생 실패, 원래 재생 함수로 대체: {ex}");
                 return true;
             }
         }

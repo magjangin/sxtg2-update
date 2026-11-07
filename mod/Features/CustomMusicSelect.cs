@@ -43,7 +43,7 @@ public static class CustomMusicSelect
                 var t = tracks[i];
                 if (t == null || t.TrackID != id) continue;
                 __instance.SelectedTrack = t;
-                Core.DebugLog($"[MusicSelect] Restored last custom track '{t.DisplayName}'");
+                Core.DebugLog($"[MusicSelect] 마지막 커스텀 곡 위치 복원: '{t.DisplayName}'");
                 return;
             }
         }

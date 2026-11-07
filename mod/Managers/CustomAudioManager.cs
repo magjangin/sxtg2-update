@@ -79,7 +79,7 @@ public static class CustomAudioManager
         var result = core.createStream(filePath, MODE.CREATESTREAM | MODE.LOOP_OFF, out Sound sound);
         if (result != RESULT.OK)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} createStream failed ({result}) for '{filePath}'");
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} createStream 실패 ({result}): '{filePath}'");
             return;
         }
 
@@ -87,7 +87,7 @@ public static class CustomAudioManager
         result = core.playSound(sound, master, true, out Channel ch);
         if (result != RESULT.OK)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} playSound failed ({result})");
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} playSound 실패 ({result})");
             sound.release();
             return;
         }
@@ -101,7 +101,7 @@ public static class CustomAudioManager
         ch.setPaused(false);
 
         Streams[channel] = new LocalStream { Sound = sound, Channel = ch, LengthSeconds = lengthMs / 1000f };
-        Core.DebugLog($"{LOG_PREFIX} Streaming '{Path.GetFileName(filePath)}' on channel {channel} (volume {volume:F2})");
+        Core.DebugLog($"{LOG_PREFIX} 스트리밍 재생: '{Path.GetFileName(filePath)}', 채널 {channel}, 볼륨 {volume:F2}");
     }
 
     private static void ApplyVolumes(SoundModuleForFMOD module)

@@ -86,7 +86,7 @@ public static class Overlay
         catch (Exception ex)
         {
             _failed = true;
-            Melon<Core>.Logger.Error($"[Overlay] Could not create overlay canvas: {ex}");
+            Melon<Core>.Logger.Error($"[Overlay] 오버레이 캔버스 생성 실패: {ex}");
             return false;
         }
     }
@@ -210,7 +210,7 @@ public static class Overlay
             var fonts = Resources.FindObjectsOfTypeAll<Font>();
             if (fonts != null && fonts.Length > 0) _font = fonts[0];
         }
-        Melon<Core>.Logger.Msg($"[Overlay] Created overlay canvas (font: {(_font != null ? _font.name : "none")})");
+        Melon<Core>.Logger.Msg($"[Overlay] 오버레이 캔버스 생성 (폰트: {(_font != null ? _font.name : "없음")})");
     }
 
     private static GameObject NewChild(string name)
