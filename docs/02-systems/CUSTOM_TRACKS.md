@@ -55,6 +55,12 @@ category == "CUSTOM" ?
   - 아티스트: `아티스트`, `작곡가`, `artist`, `composer`, `艺术家`, `藝術家`, `曲师`, `曲師`, `作曲`, `作者`
   - 난이도: `난이도`, `difficulty`, `level`, `难度`, `難度`, `等级`, `等級`
 - **BMS 헤더 폴백**: 별도 텍스트 파일이 없더라도 BMS 본문의 `#TITLE` 및 `#ARTIST` 태그를 자동 파싱하여 인게임 UI에 반영합니다.
+- **영문 축약형 비정상 공백 및 특수문자 자동 교정 (`NormalizeMetadataText`)**:
+  - 외부 BMS나 사용자가 작성한 `info.txt`, 폴더명에서 자주 발생하는 IME/OCR/복사 오류인 영문 축약형의 비정상적 공백 분리 현상을 자동으로 정규화합니다.
+  - 전각 CJK 공백(`\u3000`) 및 굽은 따옴표/전각 아포스트로피(`’`, `‘`, `＇`, `` ` ``, `′`)를 표준 `'`로 치환.
+  - 축약형 자동 교정: `you'  re` / `you ' re` → `you're`, `don ' t` → `don't`, `can ' t` → `can't`, `it ' s` → `it's`, `I ’ m` → `I'm`, `they '  ve` → `they've`, `we '  ll` → `we'll` 등.
+  - 관용구 및 외래어 접두사 교정: `rock '  n '  roll` → `rock 'n' roll`, `3 o '  clock` → `3 o'clock`, `L '  amour` → `L'amour`, `D '  Arc` → `D'Arc`, `C '  est` → `C'est`.
+  - 연속된 공백 축소(`   ` → ` `) 및 앞뒤 공백 제거(한글/한자/일본어 고유 문자열은 100% 보존).
 
 ## 커스텀 곡 판별
 

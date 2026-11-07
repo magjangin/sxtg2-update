@@ -46,12 +46,12 @@ public static class BmsParser
             if (l.StartsWith("#TITLE", StringComparison.OrdinalIgnoreCase))
             {
                 var val = l.Substring(6).Trim();
-                if (val.Length > 0 && string.IsNullOrEmpty(title)) title = val;
+                if (val.Length > 0 && string.IsNullOrEmpty(title)) title = TrackInfoParser.NormalizeMetadataText(val);
             }
             else if (l.StartsWith("#ARTIST", StringComparison.OrdinalIgnoreCase))
             {
                 var val = l.Substring(7).Trim();
-                if (val.Length > 0 && string.IsNullOrEmpty(artist)) artist = val;
+                if (val.Length > 0 && string.IsNullOrEmpty(artist)) artist = TrackInfoParser.NormalizeMetadataText(val);
             }
         }
 

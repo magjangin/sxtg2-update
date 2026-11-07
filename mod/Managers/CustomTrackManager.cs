@@ -105,7 +105,7 @@ public static class CustomTrackManager
             TrackId = trackId,
             AlbumFolder = folder,
             BmsPath = bmsFile,
-            Title = albumName,
+            Title = TrackInfoParser.NormalizeMetadataText(albumName),
             Artist = "Custom Artist"
         };
 

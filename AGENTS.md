@@ -75,7 +75,7 @@
 8. **`sxtg2` 핵심 로직 이식 & 미디어 에셋 오버라이드 (v2.0.0):**
    - **타깃:** `Il2CppSixtarGate.Play.BackgroundUIProcessor::Initialize(string trackID)` (RVA `0x63CD80`), `Il2CppSixtarGate.MusicSelect.TrackInfoViewer::Set(ITrack track, TrackSelectArgs args)` (RVA `0x634CB0`), `CustomTrackManager`, `BmsParser`, `TrackInfoParser`, `MediaOverrideManager`
    - **역할:**
-     - `{게임폴더}\hwa\` 하위 앨범 폴더를 자동 스캔하여 `trackinfo.txt`/`info.txt`, `chart.bms`(`hwa2.bms` 등), `music.ogg`/`.mp3`/`.wav`, `video.mp4`/`bg.mp4`, `thumbnail.png`/`thumb.png`/`jacket.png`를 자동 매핑. 메타데이터 파서는 한국어/영어뿐 아니라 중국어 간체·번체 키(曲名, 歌名, 标题, 標題, 曲目, 艺术家, 藝術家, 曲师, 曲師, 作曲, 作者, 难度, 難度, 等级, 等級) 및 BMS 헤더 `#TITLE`, `#ARTIST` 자동 추출을 지원.
+     - `{게임폴더}\hwa\` 하위 앨범 폴더를 자동 스캔하여 `trackinfo.txt`/`info.txt`, `chart.bms`(`hwa2.bms` 등), `music.ogg`/`.mp3`/`.wav`, `video.mp4`/`bg.mp4`, `thumbnail.png`/`thumb.png`/`jacket.png`를 자동 매핑. 메타데이터 파서는 한국어/영어뿐 아니라 중국어 간체·번체 키(曲名, 歌名, 标题, 標題, 曲目, 艺术家, 藝術家, 曲师, 曲師, 作曲, 作者, 难度, 難度, 等级, 等級) 및 BMS 헤더 `#TITLE`, `#ARTIST` 자동 추출을 지원하며, 외부 BMS나 사용자 입력에서 발생하는 영문 축약형의 비정상적 공백 분리(`you'  re` → `you're`, `don ' t` → `don't`, `it ' s` → `it's`, `rock '  n '  roll` → `rock 'n' roll`, 전각 공백·굽은 따옴표)를 `NormalizeMetadataText`로 자동 교정.
      - "CUSTOM" 카테고리 진입 시 스캔된 모든 앨범을 `TrackData` 리스트로 변환하여 GUI에 등록 (제목, 작곡가, BPM, 난이도 반영).
      - 곡 선택 화면(Music Select)에서 가운데 메인 정보창 큰 자켓(`TrackInfoViewer.Set`)을 로컬 PNG 스프라이트로 렌더링. (우측 목록 행 자켓은 아래 12번)
      - 곡 진입 시 실제 BMS 텍스트를 `MikazukiConverter.Parse`로 주입하고, `BackgroundUIProcessor.Initialize` Postfix에서 `VideoPlayer` URL을 로컬 MP4 경로로 교체하여 인게임 BGA 오버라이드 및 자켓 썸네일 교체 수행.

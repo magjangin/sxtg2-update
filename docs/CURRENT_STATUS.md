@@ -42,6 +42,7 @@
 13. **#13** 이중래퍼 람다 번역가(`Managers/LambdaTranslator.cs`): O(1) Fast-Path 캐시(`UserData/SixtarGateMod.LambdaMap.json`) + x64 기계어 대상 필드 변위 기반 스마트 구조 번역 (2026-11-07)
 14. **#14** 중국어 메타데이터 지원 강화: `TrackInfoParser` 간체·번체 키(曲名, 歌名, 标题, 標題, 曲目, 艺术家, 藝術家, 曲师, 曲師, 作曲, 作者, 难度, 難度, 等级, 等級) 지원 및 `BmsParser` BMS 헤더 `#TITLE`, `#ARTIST` 자동 추출 폴백 (2026-11-07)
 15. **#15** 메모리 누수 방지 및 서브시스템 수명주기 정리: `CustomAudioManager` 공식 곡 전환 시 기존 커스텀 오디오 스트림 즉시 정지·해제, `MediaOverrideManager` 디코딩/업로드 실패 시 텍스처 즉시 파괴, `NoteEffects` 씬 전환 시 동적 패치 해제 및 렌더러/노트 딕셔너리 정리, `JudgmentBar` 및 `KeyViewer` 종료 시 리셋 (2026-11-07)
+16. **#16** 외부 BMS / `info.txt` 영문 축약형 비정상 공백 분리 및 특수문자 자동 교정 (`TrackInfoParser.NormalizeMetadataText`): `you'  re` → `you're`, `don ' t` → `don't`, `it ' s` → `it's`, `rock '  n '  roll` → `rock 'n' roll`, 전각 공백(`\u3000`) 및 굽은 따옴표 정규화 (2026-11-07)
 
 ## 알려진 한계
 
