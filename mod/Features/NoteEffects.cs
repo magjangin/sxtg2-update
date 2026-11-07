@@ -69,6 +69,16 @@ public static class NoteEffects
             _laneScale = _renderer._scrollSpeed * _renderer._noteDistanceInterval;
     }
 
+    public static void EndPlay()
+    {
+        try { SetNotePatches(false); } catch { }
+        NoteFactor.Clear();
+        LaneFactor.Clear();
+        NoteLane.Clear();
+        Covers.Clear();
+        _renderer = null;
+    }
+
     private static float Lerp(float min, float max) => min + (max - min) * (float)_random.NextDouble();
 
     private static float Factor(NoteObject note)

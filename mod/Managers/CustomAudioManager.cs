@@ -110,11 +110,18 @@ public static class CustomAudioManager
             pair.Value.Channel.setVolume(module.GetVolume(pair.Key) * module.CurrectionVolume);
     }
 
-    private static void StopLocal(ISoundModule.SoundChannel channel)
+    public static void StopLocal(ISoundModule.SoundChannel channel)
     {
         if (!Streams.Remove(channel, out var s)) return;
         s.Channel.stop();
         s.Sound.release();
+    }
+
+    public static void StopAll()
+    {
+        var channels = new List<ISoundModule.SoundChannel>(Streams.Keys);
+        foreach (var ch in channels)
+            StopLocal(ch);
     }
 
     [HarmonyPatch(typeof(SoundModuleForFMOD), nameof(SoundModuleForFMOD.Stop))]

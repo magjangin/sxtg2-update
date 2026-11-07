@@ -46,6 +46,13 @@ public static class JudgmentBar
         HitHistory.Add(new HitTick(offsetMs, now, color));
     }
 
+    public static void Reset()
+    {
+        HitHistory.Clear();
+        _lastHitTime = -999f;
+        _lastHitText = "";
+    }
+
     public static void Draw(float now)
     {
         if (!ModConfig.EnableJudgmentBar || !PlayAssist.IsPlaying) return;

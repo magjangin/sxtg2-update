@@ -89,9 +89,10 @@ public static class MediaOverrideManager
     public static Texture2D? TextureFromRgba(int w, int h, byte[] rgba)
     {
         if (_rawUploadBroken) return null;
+        Texture2D? tex = null;
         try
         {
-            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
             var pin = System.Runtime.InteropServices.GCHandle.Alloc(rgba, System.Runtime.InteropServices.GCHandleType.Pinned);
             try { tex.LoadRawTextureData(pin.AddrOfPinnedObject(), rgba.Length); }
             finally { pin.Free(); }
@@ -101,6 +102,7 @@ public static class MediaOverrideManager
         }
         catch (Exception ex)
         {
+            if (tex != null) UnityEngine.Object.Destroy(tex);
             _rawUploadBroken = true;
             Melon<Core>.Logger.Warning($"{LOG_PREFIX} 원시 텍스처 업로드를 쓸 수 없어 이후 LoadImage 사용: {ex.Message}");
             return null;
@@ -161,6 +163,7 @@ public static class MediaOverrideManager
                 texture.hideFlags = HideFlags.DontUnloadUnusedAsset;
                 return Features.Overlay.MakeSprite(texture);
             }
+            UnityEngine.Object.Destroy(texture);
         }
         catch (Exception ex)
         {

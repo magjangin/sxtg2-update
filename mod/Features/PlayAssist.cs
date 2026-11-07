@@ -33,6 +33,9 @@ public static class PlayAssist
         CurrentJudge = null;
         Array.Clear(LanePressed, 0, LanePressed.Length);
         Overlay.HideAll();
+        NoteEffects.EndPlay();
+        JudgmentBar.Reset();
+        KeyViewer.ResetBindings();
     }
 
     // A new JudgeProcessor is built for every play (and restart). A Harmony patch on its constructor never fires in

@@ -34,6 +34,7 @@ return false
 | 원본 | 모드 |
 | --- | --- |
 | `Stop(channel)` | Prefix: 스트림 정지·해제 |
+| `Play` (공식 곡) | Prefix: 기존 커스텀 스트림이 돌고 있으면 누수/혼선 방지를 위해 즉시 `StopLocal(channel)` 호출 |
 | `Pause(channel)` | Prefix: `setPaused(true)` |
 | `Resume(channel)` | Prefix: `setPaused(false)` |
 | `Resume(time, channel)` | Prefix: `setPosition(time*1000)` 후 재개 |

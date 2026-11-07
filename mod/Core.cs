@@ -748,7 +748,10 @@ public class Core : MelonMod
         public static bool Prefix(SoundModuleForFMOD __instance, string audioName, ISoundModule.SoundChannel channel, float position)
         {
             if (!CustomAudioManager.TryResolve(audioName, out var album, out var filePath, out var isPreview))
+            {
+                CustomAudioManager.StopLocal(channel);
                 return true;
+            }
 
             DebugLog($"[CustomAudio] Play('{audioName}', {channel}, {position:F2}) -> '{album!.Title}'의 {(isPreview ? "프리뷰" : "본곡")}");
             try

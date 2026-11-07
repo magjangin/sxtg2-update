@@ -47,6 +47,15 @@ category == "CUSTOM" ?
 
 게임을 다시 켜면 기억이 없어 원래대로 첫 곡에서 시작합니다.
 
+## 다국어 곡 정보 및 메타데이터 지원
+
+`Loaders/TrackInfoParser.cs` 및 `Loaders/BmsParser.cs`는 글로벌 및 CJK 커스텀 차트를 완벽히 지원합니다:
+- **`trackinfo.txt` / `info.txt` 키 다국어 지원**:
+  - 곡 제목: `곡 제목`, `제목`, `title`, `曲名`, `歌名`, `标题`, `標題`, `曲目`
+  - 아티스트: `아티스트`, `작곡가`, `artist`, `composer`, `艺术家`, `藝術家`, `曲师`, `曲師`, `作曲`, `作者`
+  - 난이도: `난이도`, `difficulty`, `level`, `难度`, `難度`, `等级`, `等級`
+- **BMS 헤더 폴백**: 별도 텍스트 파일이 없더라도 BMS 본문의 `#TITLE` 및 `#ARTIST` 태그를 자동 파싱하여 인게임 UI에 반영합니다.
+
 ## 커스텀 곡 판별
 
 `SixtarGlobal.GotoPlayScene` Prefix에서 아래 중 하나면 커스텀 곡입니다.
