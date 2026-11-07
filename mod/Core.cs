@@ -55,6 +55,7 @@ public class Core : MelonMod
         LoggerInstance.Msg(" 제작: 화영왕 (Hwa-young-wang)");
         LoggerInstance.Msg("==========================================================");
 
+        UpdateGuard.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
         CustomTrackManager.Initialize();
         ModConfig.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
         CustomNoteSkin.Initialize(MelonLoader.Utils.MelonEnvironment.GameRootDirectory);
