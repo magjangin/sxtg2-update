@@ -13,3 +13,6 @@ input/
 
 # Local tool workspace
 .reatool/
+
+tools/version_diff/bin/
+tools/version_diff/obj/

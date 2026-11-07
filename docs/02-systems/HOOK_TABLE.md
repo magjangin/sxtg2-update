@@ -1,6 +1,6 @@
 # 훅 전체 표
 
-`mod/` 소스의 `[HarmonyPatch]`를 읽어 만든 표입니다(2026-10-31, 정적 패치 클래스 117개 + `NoteEffects.cs` 동적 훅 2개). RVA는 `il2cpp_dump/script.json` 기준입니다.
+`mod/` 소스의 `[HarmonyPatch]`를 읽어 만든 표입니다(2026-10-31, 2026-11-07 갱신: 정적 패치 클래스 120개 + `NoteEffects.cs` 동적 훅 2개). 빌드 `26455233`에서도 RVA 동일 확인. RVA는 `il2cpp_dump/script.json` 기준입니다.
 `ICF×n`은 그 주소를 n개 함수가 공유한다는 뜻입니다([IL2CPP_PITFALLS.md](../03-development/IL2CPP_PITFALLS.md)).
 
 ## 1. 코어·커스텀 곡·오디오·플레이 보조·오버레이 (54개 + 동적 2개)
@@ -63,7 +63,7 @@
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `Stop` | Prefix | `0x7E2190` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `set_CurrectionVolume` | Postfix | `0x7E27B0` |
 
-## 2. 오프라인·서버 종료 우회 (`Features/OfflineBypass.cs`, 63개 — 전부 `ICF=1`)
+## 2. 오프라인·서버 종료 우회 (`Features/OfflineBypass.cs`, 66개 — 전부 `ICF=1`)
 
 | 파일 | 대상 형식 | 메서드 | 종류 | RVA |
 | --- | --- | --- | --- | --- |
@@ -102,6 +102,9 @@
 | `Features/OfflineBypass.cs` | `ServerMaintenanceNotice` | `Show` | Prefix | `0x491C10` |
 | `Features/OfflineBypass.cs` | `Session.UnitySessionLegacyConnector` | `Connect` | Prefix | `0x579BA0` |
 | `Features/OfflineBypass.cs` | `Session.UnitySessionLegacyConnector` | `ReqeustSessionPlayingCount` | Prefix | `0x57A510` |
+| `Features/OfflineBypass.cs` | `Web.BackEndChatServer` | `Initialize` | Prefix | `0x55C9D0` |
+| `Features/OfflineBypass.cs` | `UnitySession.UnitySessionModule` | `get_IsConnect` | Prefix | `0x601820` |
+| `Features/OfflineBypass.cs` | `UnitySession.Ingame.UnitySessionProcessor` | `InitailizeViewItem` | Prefix | `0x622780` |
 | `Features/OfflineBypass.cs` | `ClientDataProvider` | `InitializeModule` | Finalizer | `0x79B930` |
 | `Features/OfflineBypass.cs` | `AchievementModule` | `InitializeModule` | Finalizer | `0x7995A0` |
 | `Features/OfflineBypass.cs` | `AchievementModule` | `ContainsAchievement` | Finalizer | `0x798930` |
@@ -148,6 +151,7 @@
 | `BackgroundUIProcessor.<Initialize>b__1` | 인벤토리 썸네일 콜백과 ICF | 재적용 코루틴 |
 | `GearObject.NoteJudgedObserver.Notify` | `InputEventArgs.Invoke`와 ICF | `PlayNoteEffect` Prefix |
 | `AttendanceController.<>c__DisplayClass6_0.<WaitUpdateCheck>b__7` | 2개와 ICF | `MoveNext` Prefix |
+| `ViewItemBase.InitailizeViewItem` | `0x450BA0` (5192개와 ICF) | 커넥터가 등록되게 `BackEndChatServer.Initialize` Prefix |
 | `ScoreObserver` / `ReverseScoreObserver` 생성자 | 같은 주소 공유 | `SubscribeObserver` Postfix |
 | `JudgeProcessor` 생성자 | 패치해도 한 번도 안 불림 | 인스턴스 메서드에서 지연 초기화 |
 | `TrackObject.LoadThumbnail` | `SetTrack`에 인라인됨 | `SetTrack` + 콜백 Postfix |

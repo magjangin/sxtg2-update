@@ -38,7 +38,7 @@ mod/
 Core.OnInitializeMelon
   └─ PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance)
        → 런타임 ICF 자명 스텁(1~3바이트 ret/xor/mov) 검사 후 CreateClassProcessor(type).Patch()
-       → 하나가 실패해도 나머지는 적용, 로그 "All patches applied successfully! (N)"
+       → 하나가 실패해도 나머지는 적용, 로그 "[Harmony] 패치 N개 모두 적용 완료"
 ```
 
 예외 두 가지:

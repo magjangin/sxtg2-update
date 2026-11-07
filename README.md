@@ -29,7 +29,7 @@ Mono 시절 모드 **sxtg2**의 기능을 현재 IL2CPP 빌드로 옮겼습니�
 
 | 항목 | 버전 |
 | --- | --- |
-| 게임 | Sixtar Gate: STARTRAIL (Steam AppID `1802720`, Build ID `26218612`에서 확인) |
+| 게임 | Sixtar Gate: STARTRAIL (Steam AppID `1802720`, Build ID `26218612`, `26455233`에서 확인) |
 | 모드 로더 | MelonLoader **0.7.3** (.NET 6) |
 | 빌드할 때 | .NET SDK 6.0 이상 |
 
@@ -114,7 +114,7 @@ dotnet build mod\SixtarGateMod.csproj
 Copy-Item mod\bin\Debug\net6.0\SixtarGateMod.dll "{게임 폴더}\Mods\" -Force
 ```
 
-로그는 `{게임 폴더}\MelonLoader\Latest.log`에 남습니다. 시작할 때 `[Harmony] All patches applied successfully!`가 보이면 정상입니다.
+로그는 `{게임 폴더}\MelonLoader\Latest.log`에 남습니다. 시작할 때 `[Harmony] 패치 N개 모두 적용 완료`가 보이면 정상입니다.
 
 ## 프로젝트 구조
 

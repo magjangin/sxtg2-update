@@ -3,7 +3,9 @@
 ## 1. 대상 게임 정보 & 버전 고정
 - **게임명:** Sixtar Gate: STARTRAIL
 - **Steam AppID:** `1802720`
-- **Steam Build ID:** `26218612` (고정)
+- **Steam Build ID:** `26455233` (게임 내 표기 `ver 1.1.007 / Release 1 (1027)`, 2026-11-06 업데이트. `.acf` `AutoUpdateBehavior=0`이라 자동 업데이트 차단 안 됨). 이전 문서 기준 빌드는 `26218612`.
+  - **26455233 호환성 점검 (2026-11-07):** `global-metadata.dat`는 2026-10-28 그대로이고 `GameAssembly.dll`과 에셋(새 곡 번들 `infinitia_assets_all_*`, banner/icon/select/session/thumbnail 번들, `Previews.bank`, `catalog.json`)만 바뀜. 업데이트 전 Cpp2IL 출력(`cpp2il_out`)과 새 출력(`cpp2il_out_26455233`)의 형식·필드(오프셋 포함)·메서드 시그니처·RVA 183,159항목 차이 0. `slices/`에 남은 업데이트 전 함수 425개도 새 `GameAssembly.dll` 같은 RVA와 바이트 단위로 동일. 새 interop로 모드 빌드 오류 0, 실기 로그 117개 패치 전부 적용(ICF 스킵 0), CUSTOM 탭 15곡 등록까지 확인. 문서의 RVA는 이 빌드에도 그대로 유효. 같은 날 실기에서 커스텀 곡이 시작되지 않는 문제가 확인됐는데(수정 후 플레이~결과 화면 실기 검증 완료), 원인은 게임 업데이트가 아니라 2026-10-31 추가한 `OfflineBypass`였음(아래 4-6 "UnitySession 커넥터 없음" 참조, 10-29 플레이 로그는 패치 61개로 우회 도입 전).
+  - **업데이트 점검 도구 `tools/version_diff/`:** `dumpdiff`(C#, `dotnet build` 후 `dumpdiff.exe <cpp2il_out 폴더> <출력.txt>` → 형식·필드 오프셋·메서드 시그니처·RVA 목록, 두 버전 출력을 `Compare-Object`로 비교), `slicecmp.py`(`python -I slicecmp.py <slices 폴더> <새 GameAssembly.dll>` → 업데이트 전 함수 바이트와 비교).
 - **Unity 버전:** `2022.3.50f1`
 - **IL2CPP 메타데이터 버전:** `v31` (31.1)
 - **모드 로더:** MelonLoader 0.7.3 (.NET 6 런타임)
@@ -15,6 +17,8 @@
 - **메타데이터 덤프:** `H:\source\repos\Sixtar Gate STARTRAIL-unity-il2cpp\il2cpp_dump`
   - `dump.cs` (32MB), `script.json` (99MB), `il2cpp.h` (56MB), `DummyDll/`
 - **Cpp2IL DummyDll:** `H:\source\repos\Sixtar Gate STARTRAIL-unity-il2cpp\cpp2il_out` (93개 DLL, `--skip-analysis`. 원래 형제 폴더 `Sixtar Gate STARTRAIL test\`에 잘못 출력돼 있던 것을 옮김)
+- **빌드 26455233:** 위 `cpp2il_out`(26218612에서 생성)과 MelonLoader의 새 Cpp2IL 출력이 형식·필드·시그니처·RVA까지 완전히 같아 `cpp2il_out`을 두 빌드 공용 기준으로 씀(중복본은 삭제). 다음 업데이트 비교 기준도 이것(`check_update.ps1`).
+- **Il2CppDumper 위치:** `H:\source\repos\rea tool mods\tools\il2cppdumper\Il2CppDumper.exe`
 - **ilspycmd 스켈레톤 소스:** `H:\source\repos\Sixtar Gate STARTRAIL-unity-il2cpp\src_dummy` (총 2,039개 `.cs` 파일)
 - **Interop 어셈블리:** `H:\steam\steamapps\common\Sixtar Gate STARTRAIL\MelonLoader\Il2CppAssemblies`
   - `Assembly-CSharp.dll`, `Il2Cppmscorlib.dll`, `UnityEngine.CoreModule.dll` 등
@@ -58,9 +62,10 @@
 5. **전곡 & 모든 DLC 해금:**
    - **타깃:** `ItemUnlockChecker::IsUnlocked`, `ItemUnlockChecker::IsDLCUnlocked`, `TrackLoader.TrackData::get_IsOwned`, `ItemProvideModule::IsOwned`
    - **역할:** 항상 `true` 반환으로 모든 DLC 및 해금곡 즉시 플레이 가능.
-6. **완전 오프라인 / 서버 종료 우회 (`Features/OfflineBypass.cs`, 63개 훅):**
+6. **완전 오프라인 / 서버 종료 우회 (`Features/OfflineBypass.cs`, 66개 훅):**
    - **리뉴얼(`SixtarGate.Web.BackEnd*` & `SixtarGate`, 39개 훅):** `BackEndWebRequest`(`InitializeModule`, `ShowMaintenance`, `CheckMaintenanceStatus`, `Exit`, `LoadUserData`, `UpdateUserData`×2, `SaveUserProfile`), `BackEndMaintenance`(`Enter`, `Observe`), `BackEndRequestService`(`GetTableVersions`, `FetchServer`, `GetAttendanceEventTable`, `Login`), `BackEndUserDataService`(`GetUnlockData`, `GetUserArkk`, `RefreshUserData`, `RequestItemUnlock`, `GetAttendanceReward`, `RequestTravelModeArkkRewards`, `RequestStartLicenseTest`), `BackEndShopService`(`RequestItemPurchase`), `BackEndRankingService`(`GetHighScoreList`, `GetRankingList`, `TravelRankingReadRequest.Start`, `PostHighScoreData`, `SubmitTravelHighScore`, `TravelHighScoreRequest.Start`, `GetUserLicenseLevel`, `PostClearLicense`), `UpdateCheckController.Initialize`, `UpdateCheckPopup.OpenPopup`, `ServerMaintenanceNotice.Show`, `UnitySessionLegacyConnector`(`Connect`, `ReqeustSessionPlayingCount`), `ClientDataProvider.InitializeModule`(Finalizer), `AchievementModule`(`InitializeModule`, `ContainsAchievement`, `UnlockReqeustAchievement` Finalizer).
    - **레거시(`sxtg2 saver test` 이식, 24개 훅):** `ManagerWebRequest`(16개 메서드), `RhythmGame.ModeSelect.UpdateChecker.Check`, `UserAccountModule`(`CheckTutorial`, `LoadFavorites`), `ItemHelper`(`LoadUnlockCache`, `CheckItemsUnlock`, `CheckOwnedState`×2). 상세는 `docs/02-systems/OFFLINE_AND_UNLOCK.md` 참조.
+   - **UnitySession 커넥터 없음 (2026-11-07, 3개 훅):** 오프라인 부팅은 BACKND 초기화를 건너뛰어 `Backend` 내부 정적 상태(필드 `0x30`)가 null → `UnitySessionModule.<WaitInitialize>d__6`에서 `BackEndChatServer.Initialize` → `Backend.GetBackndChatSettings` NRE(Player.log) → 뒤이은 `UnitySessionModule.Initialize`(IConnector 등 제공자 등록)가 안 돌아 `GetProvider<IConnector>()` null. 결과: `get_IsConnect`(RVA `0x601820`, `(_sessionConnector ??= GetProvider<IConnector>()).IsConnect`)가 `SixtarGlobal.GotoPlayScene`과 `TravelPatternPlayer.RegisterPlayModeProcessor`(`PlayManager.<Start>` → `StartrailPatternPlayer.Initialize`)에서 NRE → 플레이 초기화 중단, 곡이 시작 안 됨. 또 `Renewal_Play` 씬 로드 콜백 `Ingame.UnitySessionProcessor.InitailizeViewItem`(RVA `0x622780`, 원본 `if (module.Connector.IsConnect) {UI 구성} else Destroy(gameObject)`)도 NRE. 곡이 끝날 때도 종료 콜백 `SixtarGlobal.<>c.<GotoPlayScene>b__54_2`(입력 해제 → `UnitySessionModule.Instance.ExitSender.Exit()` → `MoveScene<ResultManager>`)가 ExitSender null로 NRE → 결과 화면으로 안 넘어감. **근본 대응:** `BackEndChatServer.Initialize`(RVA `0x55C9D0`) Prefix로 오프라인(`BlockServerUpload`)이면 건너뜀 → `<WaitInitialize>`가 `UnitySessionModule.Initialize`까지 진행해 chatServer 자신(IConnector)과 `BackEnd.*` 제공자·송신자(생성자는 chatServer 참조만 저장)가 등록됨. 남는 null 필드는 안전: `BackEndChatServer.get_IsConnect` = `_lobbySession != null && _useUnitySession` → false, `Update`는 `_client` null 검사, `ExitSessionSender.Exit`는 `_playSession` null이면 무동작. **안전망:** `UnitySessionModule.get_IsConnect` Prefix(커넥터 null이면 false), `Ingame.UnitySessionProcessor.InitailizeViewItem` Prefix(커넥터 null이면 원본의 미연결 분기처럼 `Destroy(gameObject)`). 세 곳 모두 ICF=1. 같은 구조의 `ActivePlayerViewItem`/`IngameLayerViewItem`/`UnitySessionOtherPlayerGroup.InitailizeViewItem`(GetProvider 결과를 바로 구독)은 근본 대응으로 제공자가 등록되므로 별도 패치 없음. 1차 수정(안전망 2개만) 실기: 곡 플레이는 끝까지 됐으나 종료 시 b__54_2 NRE. 근본 대응 후 **실기 검증 완료(2026-11-07 10:22, 빌드 26455233)**: 패치 120개 적용, 커스텀 곡 `どりーむもーど` 플레이 → `Result` 씬 진입 → 기록 저장 차단까지 정상, `Latest.log` ERROR 0, `Player.log` 예외 0(부팅 때 찍히던 `GetBackndChatSettings` NRE도 사라짐).
 
 7. **인게임 조기 클리어 방지 & 곡 전체 완주 보장 (FinishProcessor Hook):**
    - **타깃:** `Il2CppSixtarGate.Play.FinishProcessor::Initialize(IPatternPlayer player)` (RVA `0x63FE10`)
@@ -105,6 +110,8 @@
    - 컴파일러 생성 클로저·코루틴(`__c__DisplayClass*`, `_*_d__*`, `_b__*`)에 대한 컴파일 타임 타입 참조를 전면 제거하고 `FindClosureMethod` / `FindClosureCallback` / `FindCoroutineMoveNext` + `Expression.Lambda` 컴파일 접근자로 동적 바인딩하여 업데이트 시 순번이 밀려도 깨지지 않음.
    - 원본 오타 메서드(`GetNoteObejct`, `GetSelectableCategoty`, `ReqeustSessionPlayingCount`, `UnlockReqeustAchievement`, `CurrectionVolume`, `GetNoteReferance`)는 오타·정상 철자 양방향 자동 해석.
    - `CustomTrackManager.CloneTrackData`는 `CreatePropertyCloner<TrackLoader.TrackData>()`로 템플릿의 모든 속성을 먼저 복제해 신규 필드 추가에 대응.
+   - **실행 시 업데이트 감시 (`Managers/UpdateGuard.cs`, 2026-11-07):** 시작할 때 `{steamapps}/appmanifest_1802720.acf`의 `buildid`를 읽어 `VerifiedBuilds`(실기로 곡 플레이~결과 화면 확인한 빌드: `26218612`, `26455233`)에 없으면 노란 경고. `Application.add_logMessageReceived`로 Unity `Exception`/`Assert` 로그를 `[UpdateGuard] 게임 내부 예외: … 위치: …`로 MelonLoader 로그에 전달(같은 예외 1회, 최대 30종). 원래 게임 내부 NRE는 `Player.log`에만 찍혀서 오프라인 우회가 깨뜨린 BackndChat NRE를 1주일간 못 봤음. 시험 빌드로 `Debug.LogException`을 일부러 내 전달 확인 완료.
+   - **업데이트 점검 스크립트 `tools/version_diff/check_update.ps1`:** 기준 `cpp2il_out` ↔ MelonLoader 새 Cpp2IL 출력 비교(형식·필드 오프셋·시그니처·RVA), 그중 mod 소스 `typeof(...)` 형식(70종)에 걸린 줄만 따로, `slices/` 바이트 비교까지 한 번에. `-UpdateBaseline`으로 기준 교체. `dis.py`는 함수 디스어셈블 + call 대상 이름(script.json) 표시. 절차는 `docs/03-development/BUILD_AND_DEPLOY.md` "업데이트 후 점검 순서".
 
 16. **곡 종료 시점 (`FinishProcessor.UpdatePatternTime`, RVA `0x6401A0`):** 종료 조건은 `TrackEndOffset + TrackEndTiming + _finishOffset(3s) <= patternTime`. `Initialize` Postfix로 `TrackEndTiming`을 넣어도 플레이 시작 직후 게임이 `TrackEndTiming = 0.3`으로 다시 덮어씀(실측 로그). `set_TrackEndTiming`은 11개 함수와 접힌(ICF) 코드라 패치 금지 → `UpdatePatternTime` Prefix에서 `offset + timing < 곡 길이`면 `timing = 곡 길이 - offset`.
    - **곡 길이 = max(`album.Duration`, Game 채널 스트림 길이):** `album.Duration`은 BMS 마지막 노트 + 3초라, 음원/BGA가 마지막 노트보다 긴 곡(하얀 그리움: 노트 237.5초, 음원 257.8초)은 노트가 끝나고 3초 뒤 결과로 넘어갔음. `CustomAudioManager.GetStreamLength(Game)`(FMOD `Sound.getLength`)을 함께 씀.
@@ -154,6 +161,7 @@
 27. **모드 선택 (`ModeItemController`, 2026-10-30):** `level5~12`의 항목 = TravelMode(→MusicSelect, Solar/Lunar 먼저), OuterSpace(코스), LicenseTest(단위 인정), Adventure(→AdventureTitle, 스토리), VoyageReport(→Statistics), Lesson(튜토리얼), UnityQuest. `isDevelop=1`이면 `OnDevelop`(효과음+개발 중 패널)만. UnityQuest는 모든 테마에서 개발 중, Lesson은 Default 테마에서만 들어감. 상세 `docs/04-game-reference/MODE_SELECT.md`.
 
 ## 5. 시도했다가 실패한 것들 (Dead Ends / Failed Attempts)
+- **오프라인 우회를 부팅·곡 선택까지만 확인하고 플레이를 안 해 봄 (2026-10-31 ~ 11-07):** `OfflineBypass`(BACKND 초기화 생략)가 UnitySession 커넥터 등록을 막아 곡 시작이 깨졌는데, 부팅 로그(패치 수·씬 이동)만 보고 넘어가 1주일 뒤에야 발견. 게임 업데이트 직후라 업데이트 탓으로 오인하기 쉬웠음. 서버 관련 훅을 바꾸면 반드시 커스텀 곡 1곡 플레이까지 확인하고 `Player.log`의 NRE도 볼 것.
 - **IL2CPP 동일 코드 접기(ICF) 주의 — 패치 전 반드시 확인:** 내용이 같은 메서드들이 하나의 네이티브 주소를 공유함. 공유 주소를 패치하면 Postfix가 엉뚱한 클래스의 `this`로 실행됨(필드 오프셋 오독 → 크래시/오작동). 실제 사례: `NeedClientUpdatePopup.OpenPopup`/`ServerDisconnectedPopup.OpenPopup`(5192개 공유 `0x450BA0`), `TrackInfoViewerModule._Set_b__3_1`(11개 공유: 프로필 아이콘·언락 리스트 등), `BackgroundUIProcessor.<Initialize>b__1`(인벤토리 썸네일 2개와 공유), `NoteObject.SetTickData`(102개), `JudgeProcessor.set_IsAutoJudge`(44개), `FinishProcessor.set_TrackEndTiming`(11개), `GearObject.NoteJudgedObserver.Notify`(`InputEventArgs.Invoke`와 공유). 확인법: `il2cpp_dump/script.json`의 `ScriptMethod[].Address` 중복 개수 세기.
 - **로컬 음원을 `SoundModuleForFMOD.PlayLocalSound`(programmer sound 이벤트)로 재생:** 그 이벤트 타임라인이 약 3분 고정이라 긴 곡은 중간부터 무음, 그 길이가 `GetGamePlayAudioLength`로 새어 186초에 결과 화면 강제 전환. → FMOD Core `createStream`으로 교체.
 - **`JudgeProcessor` 생성자 Harmony 패치:** 적용 에러는 없지만 한 번도 호출되지 않음. → 인스턴스 메서드에서 지연 초기화.
@@ -166,7 +174,7 @@
 - **uGUI 풀 재사용 시 그리기 순서:** 풀링된 Image/Text를 호출 순서대로 재사용하면 렌더 순서(형제 순서=생성 순서)와 어긋나, 나중에 생성된 반투명 키 박스가 키 글자를 덮어 글자가 회색↔흰색으로 깜빡임. → 그리기 순서가 바뀐 프레임에만 그린 순서대로 `SetAsLastSibling()`(23번).
 - **곡 선택 MAX COMBO(`---`) 직접 채우기:** `TrackInfoViewer.CalcTotalCombo`(RVA `0x6344E0`)는 `"---"`를 쓰고 `MaxComboLoader`가 곡 번들 패턴을 읽어 `RefreshMaxCombo`로 채우는데, 커스텀은 번들이 없어 `---`. Prefix에서 BMS → `StartrailPattern` → `SixtarTickFactory.Interprete(p, null)` → `TickCount` 합으로 채워 봤으나 실기에서 표시되지 않아 제거(원인 미확인).
 - **`InputListener.Instance.playActionMap`만으로 키 이름 읽기:** 리뉴얼 플레이 씬엔 구버전 `InputListener`가 없음. 리뉴얼 입력 모듈 `InputListenerForUnityNewInputSystem._sixtarInputAction`을 먼저 읽어야 함(19번).
-- **BGA를 `BackgroundUIProcessor.Initialize` Postfix에서 URL로만 교체:** 비동기 `b__2`가 나중에 `clip = null`을 대입해 URL을 덮어쓰고, `PlayBGA`가 clip null이라 재생 자체를 안 함 → 영상 안 나옴(로그상 "Overrode BGA"는 찍혀서 착각하기 쉬움).
+- **BGA를 `BackgroundUIProcessor.Initialize` Postfix에서 URL로만 교체:** 비동기 `b__2`가 나중에 `clip = null`을 대입해 URL을 덮어쓰고, `PlayBGA`가 clip null이라 재생 자체를 안 함 → 영상 안 나옴(로그상 "인게임 BGA를 …로 교체"(옛 영문 로그 "Overrode BGA")는 찍혀서 착각하기 쉬움).
 - **`TrackObject.LoadThumbnail` 패치:** IL2CPP 빌드에서 `SetTrack`에 인라인되어 있어 패치가 절대 호출되지 않음. 대신 `SetTrack` Postfix와 비동기 콜백 `TrackObject.__c__DisplayClass18_0._LoadThumbnail_b__1` Postfix를 씀(12번).
 - **`HarmonyInstance.PatchAll` 수동 호출 + MelonLoader 자동 패치 중복:** 모든 훅이 2번씩 실행됨(로그가 같은 타임스탬프로 2줄). 반환 false Prefix가 두 번 돌아 `b__14`(씬 이동)가 두 번 호출되며 로딩이 멈춤. → `[assembly: HarmonyDontPatchAll]` 추가.
 - **BGA URL `"file://" + 상대경로`:** `AppDomain.BaseDirectory` 기반 경로가 `hwa\...` 상대경로로 남아 VideoPlayer가 `*_Data/hwa/...`에서 찾음("WindowsMediaFoundation received empty file"). → `HwaFolderPath`와 BGA URL을 `Path.GetFullPath`로 절대경로화.
@@ -192,5 +200,6 @@
   ```
 - **설정/스킨 폴더:** `{게임}\SaveCustomKey\config.txt`, `{게임}\CustomNotes\` (sxtg2 Mono 설치본 `H:\Sixtar Gate STARTRAIL custom mode`에서 복사해 옴)
 - **검증 로그:** `H:\steam\steamapps\common\Sixtar Gate STARTRAIL\MelonLoader\Latest.log`
+  - 모드 로그 문장은 한국어(2026-11-07 전환, 102개). 모듈 태그(`[OfflineBypass]`, `[Harmony]` 등)와 config 키 이름(`AutoPlay=` 등)은 검색·`config.txt` 대조용으로 영어 유지. 정상 기동 표시: `[Harmony] 패치 120개 모두 적용 완료`(2026-11-07 UnitySession 훅 3개 추가 전에는 117). 2026-11-07 이전 로그와 문서 일부는 옛 영문 문장(`All patches applied successfully!` 등).
 - **Unity 예외 로그(게임 내부 NRE/FMOD 오류는 여기에만 찍힘):** `%USERPROFILE%\AppData\LocalLow\Lyrebird Studio\Sixtar Gate STARTRAIL\Player.log` (이전 실행은 `Player-prev.log`)
 - **게임 실행 중에는 Mods DLL이 잠김** → 게임 종료 후 복사.

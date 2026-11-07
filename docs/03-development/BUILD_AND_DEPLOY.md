@@ -31,7 +31,7 @@ Copy-Item -Path "H:\source\repos\Sixtar Gate STARTRAIL-unity-il2cpp\mod\bin\Debu
 ## 확인
 
 1. 게임 실행
-2. `MelonLoader\Latest.log`에서 `[Harmony] All patches applied successfully! (58)`
+2. `MelonLoader\Latest.log`에서 `[Harmony] 패치 N개 모두 적용 완료`
 3. 바꾼 기능을 게임에서 직접 확인
 4. 게임 내부 오류는 `%USERPROFILE%\AppData\LocalLow\Lyrebird Studio\Sixtar Gate STARTRAIL\Player.log`
 
@@ -43,5 +43,13 @@ Copy-Item -Path "H:\source\repos\Sixtar Gate STARTRAIL-unity-il2cpp\mod\bin\Debu
 
 ## 게임 버전 고정
 
-Steam Build `26218612` 기준으로 만들었습니다. 게임이 업데이트되면 함수 주소와 구조가 바뀌어 일부 패치가 실패할 수 있습니다.
-업데이트 후에는 `il2cpp_dump`를 다시 만들고([REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md)), 로그의 `Patch '...' failed` 줄부터 확인하세요.
+Steam Build `26218612`에서 만들고 `26455233`에서 실기 검증했습니다. 게임이 업데이트되면 함수 주소와 구조가 바뀌어 일부 패치가 실패할 수 있습니다.
+
+업데이트 후 점검 순서:
+1. 게임을 한 번 실행합니다(MelonLoader가 interop과 Cpp2IL 출력을 다시 만듦). 시작 로그의 `[UpdateGuard]`가 검증되지 않은 빌드라고 경고합니다.
+2. `powershell -ExecutionPolicy Bypass -File tools\version_diff\check_update.ps1` — 기준 `cpp2il_out`과 새 출력의 형식·필드·시그니처·RVA 차이, 그중 모드가 훅하는 형식에 걸린 줄, `slices/` 함수 바이트 비교를 출력합니다.
+3. 모드를 다시 빌드하고(컴파일 오류 = 시그니처 변경), 로그의 `[Harmony] 패치 '...' 실패` 줄을 확인합니다. 메타데이터가 바뀌었으면 `il2cpp_dump`도 다시 만듭니다([REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md)).
+4. **커스텀 곡 1곡을 결과 화면까지 플레이**하고, `Latest.log`의 `[UpdateGuard] 게임 내부 예외` 경고(원래 `Player.log`에만 찍히던 Unity 예외)를 확인합니다. 부팅·곡 선택만 보고 넘어가면 안 됩니다.
+5. 문제가 없으면 `mod/Managers/UpdateGuard.cs`의 `VerifiedBuilds`에 빌드 ID를 추가하고, `check_update.ps1 -UpdateBaseline`으로 기준을 교체합니다.
+
+함수 본문 확인은 `python -I tools\version_diff\dis.py <GameAssembly.dll> il2cpp_dump\script.json <이름 일부 또는 0xRVA>`(call 대상 이름 표시)로 할 수 있습니다.
