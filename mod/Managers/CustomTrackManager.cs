@@ -126,9 +126,10 @@ public static class CustomTrackManager
                 album.Bpm = bmsResult.BaseBpm;
             if (bmsResult.MaxTime > 0)
                 album.Duration = bmsResult.MaxTime + 3.0f; // buffer 3s
-            if (album.Title == albumName && !string.IsNullOrEmpty(bmsResult.Title))
+            // info.txt wins even when its title equals the folder name; sxtg2 charts usually carry "#TITLE test".
+            if (string.IsNullOrEmpty(info.Title) && !string.IsNullOrEmpty(bmsResult.Title))
                 album.Title = bmsResult.Title;
-            if (album.Artist == "Custom Artist" && !string.IsNullOrEmpty(bmsResult.Artist))
+            if (string.IsNullOrEmpty(info.Artist) && !string.IsNullOrEmpty(bmsResult.Artist))
                 album.Artist = bmsResult.Artist;
         }
 
