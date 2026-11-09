@@ -13,16 +13,24 @@
 
 ### CUSTOM 탭이 없다
 - `Latest.log`에 `[CustomCategory] 카테고리 목록에 'CUSTOM' 탭 추가 완료`가 있는지 확인.
-- 패치 실패 줄(`Patch '...' failed`)이 있으면 게임이 업데이트되어 함수가 바뀐 것입니다.
+- 패치 실패 줄(`[Harmony] 패치 '...' 실패`)이 있으면 게임이 업데이트되어 함수가 바뀐 것입니다. 시작 로그의 `[UpdateGuard] 검증되지 않은 게임 빌드`도 함께 보세요.
 
 ### 곡이 목록에 안 나온다
 - 폴더 안에 `.bms`/`.bme`/`.bml`이 있는지. 차트가 없는 폴더는 건너뜁니다.
 - 게임 켠 뒤에 넣은 곡은 다시 켜야 보입니다.
 - 로그 `[CustomTrackManager] 검색 완료: 커스텀 곡 N곡 발견`의 숫자를 확인하세요.
 
+### 곡 제목·아티스트·난이도가 이상하다 (`test`, 폴더 이름, 깨진 글자)
+- 제목이 `test`: 곡 정보 파일에서 제목을 못 읽어 sxtg2 차트의 `#TITLE test`가 쓰인 것입니다.
+- 키와 값 사이가 전각 `：`이면 그 줄은 무시됩니다. 반각 `:`로 바꾸세요.
+- 글자가 깨지면 파일을 UTF-8로 다시 저장하세요.
+- 난이도가 틀 곡 값으로 나오면 전각 쉼표(`，`, `、`)나 전각 숫자를 썼는지 보세요.
+- `副标题`/`subtitle`, `谱面作者` 같은 키가 제목·아티스트를 덮어씁니다. 상세는 [CUSTOM_TRACKS.md](../02-systems/CUSTOM_TRACKS.md).
+
 ### 플레이가 로딩 화면에서 멈춘다
 - `Player.log`에서 `NullReferenceException`과 `LoadBank`를 찾으세요. 커스텀 곡인데 뱅크 조회를 건너뛰지 못한 경우입니다.
-- `Latest.log`에 `[CustomChart] Skipping FMOD bank/SXGTBIN lookup`이 있어야 합니다.
+- `Latest.log`에 `[CustomChart] '…'의 FMOD 뱅크/SXGTBIN 조회를 건너뛰고 로컬 BMS(…자)로 Renewal_Play 진입`이 있어야 합니다.
+- 오프라인에서 플레이 직후 멈추면 `Player.log`의 `UnitySessionModule`/`get_IsConnect` NRE를 보세요([OFFLINE_AND_UNLOCK.md](../02-systems/OFFLINE_AND_UNLOCK.md)).
 
 ### 노트가 이상하다 / 하나도 없다
 - sxtg2 형식인지 게임 형식인지 자동 판별합니다([BMS_CONVERSION.md](../02-systems/BMS_CONVERSION.md)). 채널 16이나 값 02/03/05가 있고 19, 5x 채널이 없으면 sxtg2로 봅니다.
@@ -30,7 +38,7 @@
 
 ### 음악이 안 나온다 / 중간에 끊긴다
 - 음원 파일 이름 규칙([INSTALL_AND_LAYOUT.md](INSTALL_AND_LAYOUT.md))을 확인.
-- `Latest.log`의 `[CustomAudio] createStream failed (...)`는 FMOD가 파일을 못 연 것입니다. 다른 형식(.ogg 권장)으로 바꿔 보세요.
+- `Latest.log`의 `[CustomAudio] createStream 실패 (...)`는 FMOD가 파일을 못 연 것입니다. 다른 형식(.ogg 권장)으로 바꿔 보세요.
 
 ### 영상이 안 나온다
 - `Player.log`에 `WindowsMediaFoundation received empty file`이 있으면 경로 문제입니다.
@@ -44,7 +52,7 @@
 
 ### 판정바/키뷰어가 안 보인다
 - `EnableJudgmentBar`, `EnableKeyViewer` 확인.
-- `Latest.log`에 `[Overlay] Draw error`가 있는지 확인. 처음 한 번만 찍힙니다.
+- `Latest.log`에 `[Overlay] 그리기 오류`나 `[Overlay] 오버레이 캔버스 생성 실패`가 있는지 확인. 그리기 오류는 처음 한 번만 찍힙니다.
 
 ### 콘솔에 노란 줄이 있다
 - `[Il2CppInterop] Class::Init signatures have been exhausted`는 MelonLoader 자체 메시지라 무시해도 됩니다.

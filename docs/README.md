@@ -63,6 +63,7 @@ docs/
 - [IL2CPP_PITFALLS.md](03-development/IL2CPP_PITFALLS.md)
 - [REVERSE_ENGINEERING.md](03-development/REVERSE_ENGINEERING.md)
 - [DEBUGGING_GUIDE.md](03-development/DEBUGGING_GUIDE.md)
+- [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md): 감사 기록 — 중국어 메타데이터 제약, 업데이트 내성의 남은 구멍, 문서 정정 목록
 
 **04-game-reference**
 - [MODE_SELECT.md](04-game-reference/MODE_SELECT.md): 모드 7종과 테마 8종
