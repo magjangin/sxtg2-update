@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-07)
+# 현재 상태 (2026-11-09)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 120개(`[Harmony] 패치 120개 모두 적용 완료`). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -25,7 +25,7 @@
 | 전곡·DLC 해금 | 실기 확인 | |
 | 출석 보상 창 자동 표시 끄기 | 실기 확인 | 로그 `[Attendance] Skipped ...` |
 
-## 최근 변경 (2026-10-30 ~ 2026-10-31, PR 순서)
+## 최근 변경 (2026-10-30 ~ 2026-11-09, `#n` = PR 번호)
 
 1. **#1** AllPerfect가 안 누른 롱노트 틱에 레인 불빛을 켜던 문제 수정
 2. **#2** README, 성능 정리(오버레이 IL2CPP 호출 제거, 디스크 접근 제거, 차트 캐시), 죽은 훅 제거 (4,217 → 3,746줄)
@@ -40,9 +40,11 @@
 11. **#11** 업데이트 내성 강화(`Managers/PatchResilience.cs`): 컴파일러 생성 클로저·코루틴(`__c__DisplayClass*`, `_*_d__*`, `_b__*`) 하드코딩 전면 제거 및 시그니처 기반 동적 탐색, 게임 오타 메서드 양방향 해석, 런타임 ICF 자명 스텁(1~3바이트) 가드, `TrackData` 속성 전체 자동 복제 (2026-10-31)
 12. **#12** 오프라인 커스텀 곡 플레이 및 결과 화면 복구 (`OfflineBypass.cs` UnitySession 커넥터 등록 3개 훅), 모드 로그 한국어화(102개 문장), 실행 시 Steam 빌드 확인 및 Unity 예외 전달(`Managers/UpdateGuard.cs`), 업데이트 비교 도구(`tools/version_diff`) 추가 (2026-11-07)
 13. **#13** 이중래퍼 람다 번역가(`Managers/LambdaTranslator.cs`): O(1) Fast-Path 캐시(`UserData/SixtarGateMod.LambdaMap.json`) + x64 기계어 대상 필드 변위 기반 스마트 구조 번역 (2026-11-07)
-14. **#14** 중국어 메타데이터 지원 강화: `TrackInfoParser` 간체·번체 키(曲名, 歌名, 标题, 標題, 曲目, 艺术家, 藝術家, 曲师, 曲師, 作曲, 作者, 难度, 難度, 等级, 等級) 지원 및 `BmsParser` BMS 헤더 `#TITLE`, `#ARTIST` 자동 추출 폴백 (2026-11-07)
-15. **#15** 메모리 누수 방지 및 서브시스템 수명주기 정리: `CustomAudioManager` 공식 곡 전환 시 기존 커스텀 오디오 스트림 즉시 정지·해제, `MediaOverrideManager` 디코딩/업로드 실패 시 텍스처 즉시 파괴, `NoteEffects` 씬 전환 시 동적 패치 해제 및 렌더러/노트 딕셔너리 정리, `JudgmentBar` 및 `KeyViewer` 종료 시 리셋 (2026-11-07)
-16. **#16** 외부 BMS / `info.txt` 영문 축약형 비정상 공백 분리 및 특수문자 자동 교정 (`TrackInfoParser.NormalizeMetadataText`): `you'  re` → `you're`, `don ' t` → `don't`, `it ' s` → `it's`, `rock '  n '  roll` → `rock 'n' roll`, 전각 공백(`\u3000`) 및 굽은 따옴표 정규화 (2026-11-07)
+14. `04c94da` (main 직접 커밋) 중국어 간체·번체 메타데이터 키와 BMS `#TITLE`/`#ARTIST` 폴백 (2026-11-07). 실제로 읽히는 조건(반각 콜론·UTF-8)은 아래 알려진 한계 참고
+15. `35bde96` (main 직접 커밋) 메모리 누수 방지: 공식 곡 전환 시 커스텀 오디오 스트림 해제, 디코딩/업로드 실패 텍스처 파괴, `NoteEffects` 동적 패치 해제, `JudgmentBar`·`KeyViewer` 리셋 (2026-11-07)
+16. `1e3e64f` (main 직접 커밋) `TrackInfoParser.NormalizeMetadataText`: 영문 축약형 사이 공백·전각 공백 교정 (2026-11-07)
+17. **#14** 제목/아티스트 우선순위 수정: `info.txt` → BMS `#TITLE` → 폴더 이름. BMS 폴백은 `info.txt`에서 값을 못 읽었을 때만 (CUSTOM 목록 15곡 중 14곡이 `test`로 나오던 문제, 2026-11-08 실기 확인)
+18. 감사 (2026-11-09, 문서만): 중국어 메타데이터 로직·업데이트 내성·문서 정합성. 결과는 [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md)
 
 ## 알려진 한계
 
@@ -50,3 +52,5 @@
 - 키뷰어 키 이름은 리뉴얼 입력 모듈에서 읽고, 못 읽으면 레인 이름(LL, L …)을 씁니다.
 - 결과 화면 특수 연출(시이 대신 다른 모델)은 커스텀 곡에 나오지 않습니다. 곡 ID로 고르기 때문입니다. [RESULT_ANIMATIONS.md](04-game-reference/RESULT_ANIMATIONS.md) 참고.
 - 노란 줄 `[Il2CppInterop] Class::Init signatures have been exhausted`는 MelonLoader 자체 메시지라 남습니다.
+- `info.txt`는 **반각 콜론 `:`·UTF-8**일 때만 읽힙니다. 전각 `：`, 전각 쉼표 난이도, GBK 등 다른 인코딩, `副标题`/`谱面作者` 같은 키는 제대로 처리되지 않습니다(코드 미수정). 축약형 교정에 `Guns N' Roses` → `Guns N'Roses` 같은 오탐이 있습니다. [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md) 1장.
+- 업데이트 내성의 남은 구멍(비자명 ICF는 실행 시 못 잡음, 필수 패치 실패 구분 없음, `.acf`만으로 빌드 판별)은 같은 문서 2장.

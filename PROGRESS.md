@@ -1,5 +1,7 @@
 # Sixtar Gate STARTRAIL IL2CPP 모딩 진행 상황
 
+> **이 파일은 작업 이력입니다.** 항목의 `[진행]`/"실기 미확인"은 그 날짜 기준이라 이후 확인된 것도 그대로 남아 있습니다. 현재 기능별 상태는 [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md), 기술 인수인계는 [AGENTS.md](AGENTS.md)를 보세요.
+
 - 대상 게임: Sixtar Gate STARTRAIL
 - 대상 실행 파일: `H:\steam\steamapps\common\Sixtar Gate STARTRAIL\Sixtar Gate STARTRAIL.exe`
 - 백엔드: Unity IL2CPP (Unity 2022.3.50f1, metadata v31)
@@ -36,3 +38,5 @@
 - [완료] 26. 전체 병목 점검·성능 개선 및 문서 최신화 (2026-10-31) — 비플레이 씬 `OnLateUpdate` 얼리 리턴 + `Overlay.HideAll()`(비플레이 매 프레임 IL2CPP 호출 제거, 마라톤 Esc 중단 시 배너 잔류 버그 수정), `Overlay.Item` 초기 `Active = true` 동기화, `SxtgBmsConverter`·`BmsParser` 루프 내 `Substring` 할당 제거, `ModConfig`/`MediaOverrideManager`/`Overlay`의 잔여 Unity 값 형식 생성자(`new Color(...)`, `new Rect(...)`, `new Vector2(...)`, `Mathf.Clamp01`)를 순수 managed 필드 초기화로 통일, `csproj` 버전 `2.2.0` 동기화, `AGENTS.md`/`docs/` 최신 상태 반영.
 - [완료] 27. `sxtg2 saver test` 이식 및 서버 종료/오프라인 완전 우회 구현 (`Features/OfflineBypass.cs`, 2026-10-31) — 리뉴얼 뒤끝(BACKND) 파이프라인(`BackEndWebRequest.InitializeModule`, `BackEndRequestService.GetTableVersions` 내장 `SXGT_TextAsset` 테이블 폴백, `BackEndUserDataService.GetUnlockData`/`RequestTravelModeArkkRewards` 로컬 보상 계산, `BackEndRankingService` 전 메서드, `UpdateCheckController.Initialize`, `UnitySessionLegacyConnector`, Steam 미실행 시 `ClientDataProvider.InitializeUnityEditor` 폴백 등 39개 훅)과 `sxtg2 saver test` 레거시 파이프라인(`ManagerWebRequest` 16개 메서드, `UpdateChecker.Check`, `UserAccountModule`, `ItemHelper` 등 24개 훅) 총 63개 훅(전체 117개 패치 클래스, 전수 `ICF=1` 및 `AccessTools` 시그니처/파라미터 검증 완료) 적용 및 `Mods/` 배포.
 - [x] **업데이트 내성 강화 (`Managers/PatchResilience.cs`, 2026-10-31):** 컴파일러 생성 클로저·코루틴(`__c__DisplayClass*`, `_*_d__*`, `_b__*`) 컴파일 타임 의존성 0건화 및 구조적 동적 탐색(`Expression.Lambda` 무리플렉션 접근자), 게임 오타 메서드 6종 양방향 자동 해석, 런타임 네이티브 첫 1~3바이트 ICF 자명 스텁 가드, `TrackData` 속성 전체 자동 복제 구현 및 117개 패치 전수 검증 완료.
+- [완료] 28. 오프라인 세션 복구·업데이트 감시·람다 번역가 (2026-11-07, PR #12·#13), 중국어 메타데이터 키·누수 방지·축약형 교정 (2026-11-07, main 직접 커밋), 제목 우선순위 수정 (2026-11-08, PR #14). 상세는 `docs/CURRENT_STATUS.md` 최근 변경 12~17.
+- [완료] 29. 감사 (2026-11-09, 문서만) — 중국어 메타데이터 로직(전각 콜론·UTF-8 고정·키 부분 일치·축약형 오탐), 업데이트 내성 남은 구멍, 문서 정합성. `docs/03-development/AUDIT_2026-11-09.md`.
