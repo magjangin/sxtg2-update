@@ -18,6 +18,11 @@ print(c[0x6772E0])   # 1이면 안전
 실제 사례: `NoteObject.SetTickData`(102개), `JudgeProcessor.set_IsAutoJudge`(44개), `FinishProcessor.set_TrackEndTiming`(11개), `TrackInfoViewerModule._Set_b__3_1`(11개), `BackgroundUIProcessor.<Initialize>b__1`, `NoteJudgedObserver.Notify`(입력 이벤트와 공유).
 작은 getter/setter, 빈 함수, 람다는 거의 다 공유된다고 보면 됩니다. 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
+**실행 중 자동 검사 (2026-11-10, `Managers/IcfScanner.cs`):** 부팅 때 IL2CPP 런타임의 모든 메서드(이 빌드 111,731개, 약 30ms)를 훑어
+훅 대상 주소의 공유 개수를 세고, 허용치(기본 1)를 넘는 패치는 건너뜁니다. 의도적으로 공유하는 대상은 패치 클래스에
+`[IcfShared(n, "이유")]`를 붙입니다. 결과는 `UserData/SixtarGateMod.IcfCounts.txt`에 저장되므로 업데이트 직후 이 파일을 열면
+대상별 공유 개수와 공유 메서드 이름이 보입니다. 단, 제네릭 인스턴스 코드는 세지 않으므로 새 대상을 고를 때는 위 script.json 확인도 하세요.
+
 ## 2. Unity 값 형식 헬퍼는 네이티브 호출
 
 인터롭 빌드에서 `new Rect(...)`, `rect.x`, `rect.yMax`, `Rect ==`, `Mathf.Clamp01`, `Mathf.Lerp`, `new Color(r,g,b,a)`, `Color.white`는 전부 `IL2CPP.il2cpp_runtime_invoke` + 결과 박싱입니다(`ilspycmd -t UnityEngine.Rect`로 확인).
@@ -75,4 +80,4 @@ print(c[0x6772E0])   # 1이면 안전
 게임이 업데이트되면 아래 세 가지가 가장 먼저 깨집니다:
 1. **컴파일러 생성 클로저·코루틴 순번 변경:** 메서드나 람다가 하나만 추가·삭제돼도 `__c__DisplayClass54_0`, `_WaitUpdateCheck_d__6`, `_GotoPlayScene_b__12`의 번호가 밀립니다. 컴파일 시점에 이 타입들을 직접 참조하면 업데이트 후 `TypeLoadException`이 나거나 엉뚱한 클로저가 패치됩니다. → `PatchResilience.FindClosureMethod` / `FindClosureCallback` / `FindCoroutineMoveNext`로 `(외부 타입, 부모 메서드 접두사, 파라미터 시그니처)` 기준 동적 탐색하고, 필드 접근은 패치 시점에 `Expression.Lambda`로 1회 컴파일된 델리게이트(`CreateGetter`/`CreateSetter`)를 씁니다.
 2. **게임 코드 오타 수정:** `GetNoteObejct`, `GetSelectableCategoty`, `ReqeustSessionPlayingCount`, `UnlockReqeustAchievement`, `CurrectionVolume`, `GetNoteReferance` 등 원본 오타가 업데이트에서 수정될 수 있습니다. → `PatchResilience.ResolveMethod` / `ResolvePropertySetter`에 오타·정상 철자를 함께 등록해 양쪽 모두 자동 대응합니다.
-3. **업데이트 후 빈 스텁화로 인한 ICF 폴딩:** 패치 대상 함수가 추후 업데이트에서 빈 함수(`ret` / `ret 0`)나 상수 반환(`xor al,al; ret` / `mov al,1; ret`)으로 바뀌면 수천 개 함수와 주소를 공유하게 됩니다. → `PatchResilience.ApplyAllPatches`가 패치 직전 `Il2CppMethodInfo::methodPointer`의 첫 1~3바이트 기계어를 검사해 공유 자명 스텁이면 자동으로 패치를 건너뛰고 경고를 남깁니다.
+3. **업데이트 후 빈 스텁화로 인한 ICF 폴딩:** 패치 대상 함수가 추후 업데이트에서 빈 함수(`ret` / `ret 0`)나 상수 반환(`xor al,al; ret` / `mov al,1; ret`)으로 바뀌면 수천 개 함수와 주소를 공유하게 됩니다. → `PatchResilience.ApplyAllPatches`가 패치 직전 `Il2CppMethodInfo::methodPointer`의 첫 1~3바이트 기계어를 검사해 공유 자명 스텁이면 자동으로 패치를 건너뛰고 경고를 남깁니다. 내용 있는 함수끼리 접힌 경우는 `IcfScanner`가 공유 개수로 잡습니다(1장).

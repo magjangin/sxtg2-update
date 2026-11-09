@@ -17,6 +17,9 @@ public static class MediaOverrideManager
     private const string LOG_PREFIX = "[MediaOverride]";
     private static readonly Dictionary<string, Sprite> SpriteCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, List<Action<Sprite>>> Pending = new(StringComparer.OrdinalIgnoreCase);
+    // Jackets that could not be decoded. Without this every list-row refresh retried a synchronous main-thread decode
+    // (and logged an error) for a broken or unsupported image file.
+    private static readonly HashSet<string> Failed = new(StringComparer.OrdinalIgnoreCase);
     private static bool _preloading;
 
     /// <summary>
@@ -28,10 +31,15 @@ public static class MediaOverrideManager
         if (album == null || !album.HasCustomJacket) return null;
         if (SpriteCache.TryGetValue(album.TrackId, out var cached) && cached != null)
             return cached;
+        if (Failed.Contains(album.TrackId)) return null;
 
         var sprite = LoadSpriteFromFile(album.JacketPath!);
         if (sprite != null) SpriteCache[album.TrackId] = sprite;
-        else Melon<Core>.Logger.Error($"{LOG_PREFIX} 스프라이트 생성 실패: '{album.JacketPath}'");
+        else
+        {
+            Failed.Add(album.TrackId);
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} 스프라이트 생성 실패: '{album.JacketPath}' (이 곡은 기본 자켓 유지)");
+        }
         return sprite;
     }
 
@@ -47,6 +55,7 @@ public static class MediaOverrideManager
             onReady(cached);
             return;
         }
+        if (Failed.Contains(album.TrackId)) return;
         if (Pending.TryGetValue(album.TrackId, out var waiting))
         {
             waiting.Add(onReady);
@@ -70,7 +79,7 @@ public static class MediaOverrideManager
         int loaded = 0;
         foreach (var album in albums)
         {
-            if (!album.HasCustomJacket || SpriteCache.ContainsKey(album.TrackId)) continue;
+            if (!album.HasCustomJacket || SpriteCache.ContainsKey(album.TrackId) || Failed.Contains(album.TrackId)) continue;
             bool done = false;
             RequestAlbumSprite(album, _ => done = true);
             float waitUntil = Time.realtimeSinceStartup + 10f;
@@ -135,6 +144,7 @@ public static class MediaOverrideManager
         // JPG, 16-bit / interlaced PNG or a failed upload: synchronous decoder.
         sprite ??= LoadSpriteFromFile(album.JacketPath!);
         if (sprite != null) SpriteCache[album.TrackId] = sprite;
+        else Failed.Add(album.TrackId);
         if (Pending.Remove(album.TrackId, out var callbacks) && sprite != null)
         {
             foreach (var cb in callbacks)

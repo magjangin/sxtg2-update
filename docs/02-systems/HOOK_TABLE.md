@@ -138,6 +138,8 @@
 
 `PlayLoadingManager.<>c__DisplayClass34_0.<OnLoadResource_Travel>b__2 / b__4`는 Outer Space 판(`DisplayClass35_0`)과 코드를 공유합니다.
 두 클래스의 필드 배치가 같아서(`<>4__this` 위치 동일) Postfix가 어느 쪽 `this`로 실행돼도 안전합니다.
+두 패치 클래스에는 `[IcfShared(2, …)]`가 붙어 있어, 실행 중 ICF 검사(`IcfScanner`)가 3개 이상으로 늘어난 것을 보면 건너뜁니다.
+나머지 대상은 모두 허용치 1입니다(2026-11-10 실행 중 검사 결과가 이 표의 `ICF×n`과 전부 일치).
 
 ## 일부러 패치하지 않는 곳
 

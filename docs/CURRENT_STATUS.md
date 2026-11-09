@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-09)
+# 현재 상태 (2026-11-10)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 120개(`[Harmony] 패치 120개 모두 적용 완료`). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -47,6 +47,8 @@
 18. **#15** 감사 (2026-11-09, 문서만): 중국어 메타데이터 로직·업데이트 내성·문서 정합성. 결과는 [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md)
 19. **#16** 감사 결과 수정 (2026-11-09): 곡 정보 전각 콜론·전각 쉼표/숫자·첫 값 채택·부제/채보자 키 무시·일본어 키, `TextDecoder`(UTF-8 외 인코딩), 축약형 교정 오탐 제거, 트랙 ID 충돌 번호 붙이기, `[CriticalPatch]` 필수 패치 표시, `GameAssembly.dll` 크기로 빌드 대조, 람다 스캔 확장·경고, `icf_check.py`. 오프라인 테스트 49건 통과, 실기 부팅(패치 120개·15곡·모드 선택 진입·예외 0) 확인, 커스텀 곡 플레이는 이번에 안 함
 
+20. **#17** 코드 리뷰·업데이트 내성 강화 (2026-11-10): 실행 중 ICF 검사(`Managers/IcfScanner.cs`, 훅 대상 주소를 공유하는 IL2CPP 메서드 수를 세어 허용치 초과 패치를 건너뜀, `[IcfShared]`, 빌드별 캐시), `NoteEffects` 동적 훅 안전 확인, 버그 7건(플레이 진입 Prefix null 안전, 게임 BMS 해석기 예외 시 1노트 대체, 곡 끝 연장 로그, Unity 예외 전달 집합 상한, 깨진 자켓 반복 디코딩, `*.bms`가 `.bmson`까지 맞던 문제·정렬, 람다 번역 시간 표시), 매 프레임 `UpdatePatternTime` 조기 반환. 실기 부팅 3회(검사 결과가 `HOOK_TABLE.md`와 일치, 시험 패치 건너뜀 확인, 캐시 경로). 커스텀 곡 플레이는 이번에 안 함. [REVIEW_2026-11-10.md](03-development/REVIEW_2026-11-10.md)
+
 ## 알려진 한계
 
 - 오른쪽 곡 목록에서 MAX COMBO가 `---`로 나옵니다. 직접 채우는 시도를 했으나 화면에 반영되지 않아 뺐습니다.
@@ -54,4 +56,4 @@
 - 결과 화면 특수 연출(시이 대신 다른 모델)은 커스텀 곡에 나오지 않습니다. 곡 ID로 고르기 때문입니다. [RESULT_ANIMATIONS.md](04-game-reference/RESULT_ANIMATIONS.md) 참고.
 - 노란 줄 `[Il2CppInterop] Class::Init signatures have been exhausted`는 MelonLoader 자체 메시지라 남습니다.
 - 곡 정보 파일이 UTF-8이 아니면 시스템 ANSI(한국어 PC = CP949)부터 시도하므로, 다른 나라 PC에서 "ANSI"로 저장한 파일(예: GBK)은 잘못 풀릴 수 있습니다. 간체 전용 글자는 게임 글꼴에 없을 수 있습니다(미확인). [CUSTOM_TRACKS.md](02-systems/CUSTOM_TRACKS.md).
-- 런타임 ICF 가드는 빈 스텁만 잡습니다. 업데이트 후에는 `tools/version_diff/icf_check.py`로 훅 대상의 주소 공유 개수를 확인하세요([BUILD_AND_DEPLOY.md](03-development/BUILD_AND_DEPLOY.md)).
+- 실행 중 ICF 검사는 제네릭 인스턴스 코드를 세지 않습니다. 업데이트 후에는 `tools/version_diff/icf_check.py`로도 한 번 확인하세요([BUILD_AND_DEPLOY.md](03-development/BUILD_AND_DEPLOY.md)).

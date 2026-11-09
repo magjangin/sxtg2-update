@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
@@ -110,15 +111,38 @@ public static class NoteEffects
     // trampoline plus a managed wrapper allocation, so they are only attached while a play actually uses
     // speed chaos / hidden / fade (no [HarmonyPatch] attribute: applied from SetNotePatches).
     private static bool _notePatchesActive;
+    private static bool _unsafeWarned;
+
+    private static MethodBase? HeadSetter() => AccessTools.PropertySetter(typeof(NoteObject), nameof(NoteObject.HeadPosition));
+    private static MethodBase? LengthSetter() => AccessTools.PropertySetter(typeof(NoteObject), nameof(NoteObject.NoteLength));
+
+    /// <summary>Lets the boot-time ICF scan cover these two dynamic targets too (Core registers them before patching).</summary>
+    public static void RegisterDynamicTargets()
+    {
+        PatchResilience.DynamicPatchTargets.Add(HeadSetter);
+        PatchResilience.DynamicPatchTargets.Add(LengthSetter);
+    }
 
     private static void SetNotePatches(bool active)
     {
         if (active == _notePatchesActive) return;
         var harmony = Melon<Core>.Instance.HarmonyInstance;
-        var head = AccessTools.PropertySetter(typeof(NoteObject), nameof(NoteObject.HeadPosition));
-        var length = AccessTools.PropertySetter(typeof(NoteObject), nameof(NoteObject.NoteLength));
+        var head = HeadSetter();
+        var length = LengthSetter();
         if (active)
         {
+            // Small setters are the usual victims of identical-code folding; never detour a shared body.
+            foreach (var m in new[] { head, length })
+            {
+                string reason = "대상 없음";
+                if (m != null && PatchResilience.IsSafeToPatchNow(m, out reason)) continue;
+                if (!_unsafeWarned)
+                {
+                    _unsafeWarned = true;
+                    Melon<Core>.Logger.Warning($"[NoteEffects] 노트 위치 훅을 붙일 수 없어 속도 카오스/히든/페이드를 끔: {reason}");
+                }
+                return;
+            }
             harmony.Patch(head, prefix: new HarmonyMethod(typeof(NoteObject_SetHeadPosition_Patch), nameof(NoteObject_SetHeadPosition_Patch.Prefix)));
             harmony.Patch(length, prefix: new HarmonyMethod(typeof(NoteObject_SetNoteLength_Patch), nameof(NoteObject_SetNoteLength_Patch.Prefix)));
         }

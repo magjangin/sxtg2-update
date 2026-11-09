@@ -197,9 +197,16 @@ public static class CustomTrackManager
         {
             foreach (var pat in patterns)
             {
-                var files = Directory.GetFiles(folder, pat, SearchOption.TopDirectoryOnly);
-                if (files.Length > 0)
-                    return files[0];
+                // Windows matches a 3-letter extension pattern against longer extensions too ("*.bms" also
+                // returns ".bmson", a JSON chart): keep exact extensions only.
+                string ext = pat.StartsWith("*", StringComparison.Ordinal) ? pat.Substring(1) : "";
+                var files = Array.FindAll(Directory.GetFiles(folder, pat, SearchOption.TopDirectoryOnly),
+                    f => ext.Length == 0 || string.Equals(Path.GetExtension(f), ext, StringComparison.OrdinalIgnoreCase));
+                if (files.Length == 0) continue;
+                // Directory order is only alphabetical on NTFS (exFAT/FAT32 return creation order): sort so the same
+                // folder always picks the same chart / audio / image.
+                Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+                return files[0];
             }
         }
         catch { }

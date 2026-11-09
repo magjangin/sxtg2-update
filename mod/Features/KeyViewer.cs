@@ -9,7 +9,8 @@ namespace SixtarGateMod.Features;
 
 /// <summary>
 /// sxtg2 key viewer, drawn on the uGUI Overlay (IMGUI is stripped in this build). Pressed state comes from JudgeProcessor.SetPressedState (PlayAssist.LanePressed),
-/// key labels from the game's own InputSystem bindings (InputListener.Instance.playActionMap).
+/// key labels from the game's own InputSystem bindings: the renewal InputListenerForUnityNewInputSystem._sixtarInputAction
+/// first, then the legacy InputListener.playActionMap, then lane names.
 /// Display order keeps sxtg2's layout with GATE in the middle.
 /// </summary>
 public static class KeyViewer

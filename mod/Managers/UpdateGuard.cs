@@ -124,13 +124,15 @@ public static class UpdateGuard
         {
             string firstFrame = FirstLine(stackTrace);
             string key = condition + "|" + firstFrame;
-            if (!_seen.Add(key)) return; // 같은 예외는 한 번만
-            if (_seen.Count > MaxForwardedMessages)
+            if (_seen.Contains(key)) return; // 같은 예외는 한 번만
+            // 상한을 넘으면 더 기억하지 않음(전에는 생략하면서도 계속 Add해서, 메시지마다 내용이 다른 예외가 쏟아지면 집합이 끝없이 커졌음)
+            if (_seen.Count >= MaxForwardedMessages)
             {
                 if (_suppressed++ == 0)
                     Melon<Core>.Logger.Warning($"{LOG_PREFIX} 게임 내부 예외가 {MaxForwardedMessages}종을 넘어 이후는 생략 (Player.log 참조)");
                 return;
             }
+            _seen.Add(key);
             Melon<Core>.Logger.Warning($"{LOG_PREFIX} 게임 내부 예외: {condition}" +
                                         (firstFrame.Length > 0 ? $"\n    위치: {firstFrame}" : "") +
                                         (CurrentBuildId != null && !VerifiedBuilds.Contains(CurrentBuildId) ? "\n    (검증되지 않은 빌드에서 발생)" : ""));
