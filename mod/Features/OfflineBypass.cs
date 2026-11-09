@@ -68,6 +68,7 @@ public static class OfflineBypass
     /// ItemProvideModule forever in WaitUntil(() => Web.HasInitialized).
     /// </summary>
     [HarmonyPatch(typeof(BackEndWebRequest), nameof(BackEndWebRequest.InitializeModule))]
+    [CriticalPatch("오프라인 부팅이 WaitUntil(Web.HasInitialized)에서 멈춤")]
     public static class BackEndWebRequest_InitializeModule_Patch
     {
         public static bool Prefix(BackEndWebRequest __instance)
@@ -584,6 +585,7 @@ public static class OfflineBypass
     /// UnitySessionModule.Instance.ExitSender(null)에서 NRE → 결과 화면으로 안 넘어감.
     /// </summary>
     [HarmonyPatch(typeof(BackEndChatServer), nameof(BackEndChatServer.Initialize))]
+    [CriticalPatch("오프라인에서 곡이 시작되지 않거나 결과 화면으로 넘어가지 않음 (UnitySession 커넥터 없음)")]
     public static class BackEndChatServer_Initialize_Patch
     {
         public static bool Prefix()

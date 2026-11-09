@@ -26,10 +26,11 @@ mod/
 │   ├── LambdaTranslator.cs   이중래퍼 람다 번역가 (Fast-Path 캐시 + x64 네이티브 오프셋 스마트 번역)
 │   └── UpdateGuard.cs        Steam 빌드 ID 검증 및 Unity 내부 예외 포워딩
 ├── Loaders/
-│   ├── BmsParser.cs          BPM, 마지막 노트 끝 시각
+│   ├── BmsParser.cs          BPM, 마지막 노트 끝 시각, #TITLE/#ARTIST
 │   ├── SxtgBmsConverter.cs   sxtg2 채널 → 게임 채널, 3자리 값 정규화
 │   ├── PngDecoder.cs         관리 코드 PNG 디코더 (작업 스레드)
-│   └── TrackInfoParser.cs    info.txt / trackinfo.txt
+│   ├── TextDecoder.cs        UTF-8 외 인코딩 판별 (곡 정보, BMS)
+│   └── TrackInfoParser.cs    info.txt / trackinfo.txt, 제목·아티스트 정규화
 └── Models/CustomAlbumInfo.cs 앨범 한 개의 경로와 메타데이터
 ```
 

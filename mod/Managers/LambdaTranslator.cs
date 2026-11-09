@@ -214,6 +214,11 @@ public static class LambdaTranslator
         {
             int idx = fallbackMatchIndex >= 0 && fallbackMatchIndex < candidates.Count ? fallbackMatchIndex : 0;
             chosen = candidates[idx];
+            // 같은 시그니처 후보가 여럿인데 기계어로 못 가렸으면 순서 추정임을 알린다(틀리면 로딩/결과 화면 자켓이 흰 박스).
+            if (!string.IsNullOrEmpty(accessedOwnerFieldName) && candidates.Count > 1)
+                Melon<Core>.Logger.Warning(
+                    $"{LOG_PREFIX} '{key}' 기계어 대조 실패(필드 '{accessedOwnerFieldName}' 오프셋 {targetFieldOffset}) → 후보 {candidates.Count}개 중 " +
+                    $"{idx}번째({chosen.Name})를 순서로 선택. 자켓이 엉뚱하면 tools/version_diff/dis.py로 본문을 확인하세요.");
         }
 
         _resolvedMethods[key] = chosen;
@@ -437,40 +442,45 @@ public static class LambdaTranslator
     /// </summary>
     private static unsafe bool NativeBodyAccessesOwnerField(MethodInfo candidate, int ownerPtrOffset, int targetFieldOffset)
     {
-        if (targetFieldOffset <= 0 || targetFieldOffset > 0x7F) return false;
+        if (targetFieldOffset <= 0) return false;
         IntPtr codePtr = PatchResilience.GetNativeCodePointer(candidate);
         if (codePtr == IntPtr.Zero) return false;
 
+        const int ScanBytes = 96;
         try
         {
             byte* p = (byte*)codePtr;
             bool sawOwnerDeref = ownerPtrOffset <= 0;
 
-            // 람다 본문 앞쪽 96바이트 스캔 (int3 패딩 또는 ret 전까지)
-            for (int i = 0; i < 96; i++)
+            // 람다 본문 앞쪽 96바이트 스캔 (int3 패딩 전까지)
+            for (int i = 0; i + 3 < ScanBytes; i++)
             {
                 byte b = p[i];
                 if (b == 0xCC) break; // int3 패딩 도달
 
-                // REX.W (0x48 or 0x4C) + MOV r64, r/m64 (0x8B) + ModRM (mod=01 disp8: 0x40..0x7F, r/m != 4(RSP))
-                if ((b == 0x48 || b == 0x4C) && i + 3 < 96 && p[i + 1] == 0x8B)
+                // REX.W(0x48~0x4F: R/X/B 조합 포함, 기준 레지스터 r8~r15도) + MOV r64, r/m64 (0x8B) + ModRM
+                if ((b & 0xF8) != 0x48 || p[i + 1] != 0x8B) continue;
+                byte modRm = p[i + 2];
+                int mod = (modRm >> 6) & 3;
+                int rm = modRm & 7;
+                if (mod != 1 && mod != 2) continue; // [reg + disp8] / [reg + disp32]만
+                int dispAt = i + 3 + (rm == 4 ? 1 : 0); // rm=4면 SIB 바이트(예: [r12 + disp])
+                int disp;
+                if (mod == 1)
                 {
-                    byte modRm = p[i + 2];
-                    int mod = (modRm >> 6) & 3;
-                    int rm = modRm & 7;
-                    if (mod == 1 && rm != 4) // [reg + disp8]
-                    {
-                        int disp8 = p[i + 3];
-                        if (!sawOwnerDeref && disp8 == ownerPtrOffset)
-                        {
-                            sawOwnerDeref = true;
-                        }
-                        else if (sawOwnerDeref && disp8 == targetFieldOffset)
-                        {
-                            return true;
-                        }
-                    }
+                    if (dispAt >= ScanBytes) continue;
+                    disp = (sbyte)p[dispAt];
                 }
+                else
+                {
+                    if (dispAt + 3 >= ScanBytes) continue;
+                    disp = p[dispAt] | (p[dispAt + 1] << 8) | (p[dispAt + 2] << 16) | (p[dispAt + 3] << 24);
+                }
+
+                if (!sawOwnerDeref && disp == ownerPtrOffset)
+                    sawOwnerDeref = true;
+                else if (sawOwnerDeref && disp == targetFieldOffset)
+                    return true;
             }
         }
         catch
