@@ -44,7 +44,8 @@
 15. `35bde96` (main 직접 커밋) 메모리 누수 방지: 공식 곡 전환 시 커스텀 오디오 스트림 해제, 디코딩/업로드 실패 텍스처 파괴, `NoteEffects` 동적 패치 해제, `JudgmentBar`·`KeyViewer` 리셋 (2026-11-07)
 16. `1e3e64f` (main 직접 커밋) `TrackInfoParser.NormalizeMetadataText`: 영문 축약형 사이 공백·전각 공백 교정 (2026-11-07)
 17. **#14** 제목/아티스트 우선순위 수정: `info.txt` → BMS `#TITLE` → 폴더 이름. BMS 폴백은 `info.txt`에서 값을 못 읽었을 때만 (CUSTOM 목록 15곡 중 14곡이 `test`로 나오던 문제, 2026-11-08 실기 확인)
-18. 감사 (2026-11-09, 문서만): 중국어 메타데이터 로직·업데이트 내성·문서 정합성. 결과는 [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md)
+18. **#15** 감사 (2026-11-09, 문서만): 중국어 메타데이터 로직·업데이트 내성·문서 정합성. 결과는 [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md)
+19. **#16** 감사 결과 수정 (2026-11-09): 곡 정보 전각 콜론·전각 쉼표/숫자·첫 값 채택·부제/채보자 키 무시·일본어 키, `TextDecoder`(UTF-8 외 인코딩), 축약형 교정 오탐 제거, 트랙 ID 충돌 번호 붙이기, `[CriticalPatch]` 필수 패치 표시, `GameAssembly.dll` 크기로 빌드 대조, 람다 스캔 확장·경고, `icf_check.py`. 오프라인 테스트 49건 통과, 실기 부팅(패치 120개·15곡·모드 선택 진입·예외 0) 확인, 커스텀 곡 플레이는 이번에 안 함
 
 ## 알려진 한계
 
@@ -52,5 +53,5 @@
 - 키뷰어 키 이름은 리뉴얼 입력 모듈에서 읽고, 못 읽으면 레인 이름(LL, L …)을 씁니다.
 - 결과 화면 특수 연출(시이 대신 다른 모델)은 커스텀 곡에 나오지 않습니다. 곡 ID로 고르기 때문입니다. [RESULT_ANIMATIONS.md](04-game-reference/RESULT_ANIMATIONS.md) 참고.
 - 노란 줄 `[Il2CppInterop] Class::Init signatures have been exhausted`는 MelonLoader 자체 메시지라 남습니다.
-- `info.txt`는 **반각 콜론 `:`·UTF-8**일 때만 읽힙니다. 전각 `：`, 전각 쉼표 난이도, GBK 등 다른 인코딩, `副标题`/`谱面作者` 같은 키는 제대로 처리되지 않습니다(코드 미수정). 축약형 교정에 `Guns N' Roses` → `Guns N'Roses` 같은 오탐이 있습니다. [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md) 1장.
-- 업데이트 내성의 남은 구멍(비자명 ICF는 실행 시 못 잡음, 필수 패치 실패 구분 없음, `.acf`만으로 빌드 판별)은 같은 문서 2장.
+- 곡 정보 파일이 UTF-8이 아니면 시스템 ANSI(한국어 PC = CP949)부터 시도하므로, 다른 나라 PC에서 "ANSI"로 저장한 파일(예: GBK)은 잘못 풀릴 수 있습니다. 간체 전용 글자는 게임 글꼴에 없을 수 있습니다(미확인). [CUSTOM_TRACKS.md](02-systems/CUSTOM_TRACKS.md).
+- 런타임 ICF 가드는 빈 스텁만 잡습니다. 업데이트 후에는 `tools/version_diff/icf_check.py`로 훅 대상의 주소 공유 개수를 확인하세요([BUILD_AND_DEPLOY.md](03-development/BUILD_AND_DEPLOY.md)).

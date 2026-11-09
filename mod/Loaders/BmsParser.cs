@@ -12,19 +12,21 @@ namespace SixtarGateMod.Loaders;
 /// long notes included. Time = measure position * 240 / base BPM (BPM changes and measure lengths are ignored).
 /// sxtg2 lanes are channels 16/11/12/13/14/15/18 with the note type in the value (01 normal, 02/03 long start/end);
 /// channels 04/05 carry the OPEN gate (04/05 start/end). 3-character charts (#WAV001) use values like "002".
+/// Non-UTF-8 charts are decoded as Shift-JIS first (BMS convention); a #TITLE/#ARTIST that still has U+FFFD is dropped.
 /// </summary>
 public static class BmsParser
 {
     public sealed record ParseResult(float BaseBpm, float MaxTime, string Title = "", string Artist = "");
 
     private const float DefaultBpm = 150f;
+    private const char Replacement = (char)0xFFFD; // undecodable byte marker
     private static readonly HashSet<string> LaneChannels = new() { "16", "11", "12", "13", "14", "15", "18" };
 
     public static ParseResult? ParseBmsFile(string filePath)
     {
         try
         {
-            return Parse(File.ReadAllLines(filePath));
+            return Parse(TextDecoder.ReadAllText(filePath, TextDecoder.BmsFallback).Split('\n'));
         }
         catch (Exception ex)
         {
@@ -46,12 +48,12 @@ public static class BmsParser
             if (l.StartsWith("#TITLE", StringComparison.OrdinalIgnoreCase))
             {
                 var val = l.Substring(6).Trim();
-                if (val.Length > 0 && string.IsNullOrEmpty(title)) title = TrackInfoParser.NormalizeMetadataText(val);
+                if (val.Length > 0 && val.IndexOf(Replacement) < 0 && string.IsNullOrEmpty(title)) title = TrackInfoParser.NormalizeMetadataText(val);
             }
             else if (l.StartsWith("#ARTIST", StringComparison.OrdinalIgnoreCase))
             {
                 var val = l.Substring(7).Trim();
-                if (val.Length > 0 && string.IsNullOrEmpty(artist)) artist = TrackInfoParser.NormalizeMetadataText(val);
+                if (val.Length > 0 && val.IndexOf(Replacement) < 0 && string.IsNullOrEmpty(artist)) artist = TrackInfoParser.NormalizeMetadataText(val);
             }
         }
 

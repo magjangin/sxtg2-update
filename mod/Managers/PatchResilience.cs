@@ -41,6 +41,7 @@ public static class PatchResilience
     {
         int applied = 0, failed = 0, skippedIcf = 0;
         var patchedNativeAddresses = new Dictionary<IntPtr, string>();
+        var criticalMissing = new List<string>();
 
         foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Core).Assembly))
         {
@@ -50,6 +51,7 @@ public static class PatchResilience
                 if (ShouldSkipForIcfStub(type, logger, patchedNativeAddresses))
                 {
                     skippedIcf++;
+                    NoteCritical(type, criticalMissing);
                     continue;
                 }
 
@@ -60,6 +62,7 @@ public static class PatchResilience
             {
                 failed++;
                 logger.Error($"[Harmony] 패치 '{type.Name}' 실패: {ex.Message}");
+                NoteCritical(type, criticalMissing);
             }
         }
 
@@ -67,8 +70,16 @@ public static class PatchResilience
             logger.Msg($"[Harmony] 패치 {applied}개 모두 적용 완료");
         else
             logger.Warning($"[Harmony] 패치 {applied}개 적용, ICF 보호로 {skippedIcf}개 건너뜀, {failed}개 실패");
+        foreach (var line in criticalMissing)
+            logger.Error($"[Harmony] 필수 패치 빠짐: {line}");
 
         LambdaTranslator.FlushSummary();
+    }
+
+    private static void NoteCritical(Type patchType, List<string> criticalMissing)
+    {
+        if (patchType.GetCustomAttribute<CriticalPatchAttribute>() is { } critical)
+            criticalMissing.Add($"{patchType.Name} — {critical.Consequence}");
     }
 
     private static bool ShouldSkipForIcfStub(
@@ -533,4 +544,15 @@ public static class PatchResilience
             }
         };
     }
+}
+
+/// <summary>
+/// Marks a patch the game cannot run without in offline mode. If it fails or is skipped, the summary prints an error
+/// naming what breaks, instead of the patch being one more line in the failure count.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class CriticalPatchAttribute : Attribute
+{
+    public string Consequence { get; }
+    public CriticalPatchAttribute(string consequence) => Consequence = consequence;
 }

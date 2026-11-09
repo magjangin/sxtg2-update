@@ -5,14 +5,17 @@
    → 형식·필드 오프셋·메서드 시그니처·RVA 차이 개수.
 2. 차이 중 모드가 훅하는 형식(mod 소스의 typeof(...))에 걸린 줄만 따로 출력.
 3. slices/에 남은 이전 바이너리 함수와 새 GameAssembly.dll 바이트 비교(python+pefile 있을 때).
+4. -ScriptJson을 주면 훅 대상의 ICF(주소 공유) 개수를 새 빌드 기준으로 다시 셈(icf_check.py).
 
 사용:
   powershell -ExecutionPolicy Bypass -File tools\version_diff\check_update.ps1
+  ... -ScriptJson <새 빌드 Il2CppDumper 출력\script.json>
   ... -UpdateBaseline   # 검토가 끝난 뒤 새 출력을 기준(cpp2il_out)으로 교체
 #>
 param(
     [string]$Repo = (Resolve-Path "$PSScriptRoot\..\..").Path,
     [string]$Game = "H:\steam\steamapps\common\Sixtar Gate STARTRAIL",
+    [string]$ScriptJson = "",
     [switch]$UpdateBaseline
 )
 $ErrorActionPreference = "Stop"
@@ -72,6 +75,16 @@ if ($py -and (Test-Path $slices)) {
     Write-Host ""
     Write-Host "[3] slices/ 함수 바이트 비교:"
     & python -I (Join-Path $PSScriptRoot "slicecmp.py") $slices (Join-Path $Game "GameAssembly.dll")
+}
+
+if ($py -and $ScriptJson) {
+    Write-Host ""
+    Write-Host "[4] 훅 대상 ICF 개수 (새 script.json 기준):"
+    & python -I (Join-Path $PSScriptRoot "icf_check.py") $ScriptJson (Join-Path $Repo "docs\02-systems\HOOK_TABLE.md")
+    if ($LASTEXITCODE -ne 0) { Write-Host "    ICF가 늘어난 대상이 있습니다. 그 패치는 다른 함수까지 건드리니 대상을 바꾸세요." }
+} else {
+    Write-Host ""
+    Write-Host "[4] ICF 개수 점검 생략: 새 빌드로 Il2CppDumper를 돌린 뒤 -ScriptJson <script.json>을 주세요."
 }
 
 Write-Host ""

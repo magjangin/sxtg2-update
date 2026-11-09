@@ -81,6 +81,15 @@ public static class CustomTrackManager
             try
             {
                 var album = BuildAlbumInfo(folder, bmsFile);
+                // "A B" and "A_B" folders map to the same ID; keep both by numbering the later one.
+                if (AlbumsByTrackId.ContainsKey(album.TrackId))
+                {
+                    string baseId = album.TrackId;
+                    int n = 2;
+                    while (AlbumsByTrackId.ContainsKey($"{baseId}_{n}")) n++;
+                    album.TrackId = $"{baseId}_{n}";
+                    Melon<Core>.Logger.Warning($"{LOG_PREFIX} 곡 ID '{baseId}'가 겹쳐 '{Path.GetFileName(folder)}'는 '{album.TrackId}'로 등록");
+                }
                 LoadedAlbums.Add(album);
                 AlbumsByTrackId[album.TrackId] = album;
                 scanCount++;

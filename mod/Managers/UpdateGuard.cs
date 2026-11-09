@@ -26,6 +26,15 @@ public static class UpdateGuard
         "26455233", // 2026-11-07 ver 1.1.007 / Release 1 (1027)
     };
 
+    /// <summary>
+    /// 검증된 빌드의 GameAssembly.dll 크기(바이트). .acf의 buildid는 DepotDownloader 설치나 업데이트 차단용 수정으로
+    /// 실제 바이너리와 어긋날 수 있어 크기로 한 번 더 확인한다. 크기 기록이 없는 빌드(26218612)는 .acf만 믿는다.
+    /// </summary>
+    private static readonly Dictionary<string, long> VerifiedGameAssemblySizes = new(StringComparer.Ordinal)
+    {
+        ["26455233"] = 64_716_288,
+    };
+
     private const int MaxForwardedMessages = 30;
     private static readonly HashSet<string> _seen = new(StringComparer.Ordinal);
     private static int _suppressed;
@@ -46,16 +55,36 @@ public static class UpdateGuard
             // {steamapps}\common\{게임} → {steamapps}\appmanifest_1802720.acf
             string? steamapps = Directory.GetParent(gameRoot)?.Parent?.FullName;
             string acf = steamapps == null ? "" : Path.Combine(steamapps, $"appmanifest_{SteamAppId}.acf");
+            var ga = new FileInfo(Path.Combine(gameRoot, "GameAssembly.dll"));
+            string gaInfo = ga.Exists ? $"GameAssembly {ga.Length:N0}바이트, {ga.LastWriteTime:yyyy-MM-dd HH:mm}" : "GameAssembly 없음";
+            string? sizeMatch = null;
+            if (ga.Exists)
+                foreach (var kv in VerifiedGameAssemblySizes)
+                    if (kv.Value == ga.Length) sizeMatch = kv.Key;
+
             if (!File.Exists(acf))
             {
-                Melon<Core>.Logger.Msg($"{LOG_PREFIX} Steam 매니페스트를 찾지 못해 빌드 확인을 건너뜀 ({acf})");
+                // DepotDownloader 등 매니페스트 없는 설치: 바이너리 크기로만 판별
+                CurrentBuildId = sizeMatch;
+                if (sizeMatch != null)
+                    Melon<Core>.Logger.Msg($"{LOG_PREFIX} Steam 매니페스트 없음, GameAssembly 크기로 빌드 {sizeMatch} 확인 (실기 검증된 빌드, {gaInfo})");
+                else
+                    Melon<Core>.Logger.Warning($"{LOG_PREFIX} Steam 매니페스트({acf})가 없고 GameAssembly 크기도 검증된 빌드와 다름 ({gaInfo}). 검증되지 않은 빌드로 봅니다.");
                 return;
             }
 
             var m = Regex.Match(File.ReadAllText(acf), "\"buildid\"\\s+\"(\\d+)\"");
             CurrentBuildId = m.Success ? m.Groups[1].Value : null;
-            var ga = new FileInfo(Path.Combine(gameRoot, "GameAssembly.dll"));
-            string gaInfo = ga.Exists ? $"GameAssembly {ga.LastWriteTime:yyyy-MM-dd HH:mm}" : "GameAssembly 없음";
+
+            // .acf가 검증된 빌드라고 해도 바이너리 크기가 기록과 다르면 실제로는 다른 빌드
+            if (CurrentBuildId != null && ga.Exists
+                && VerifiedGameAssemblySizes.TryGetValue(CurrentBuildId, out long expected) && expected != ga.Length)
+            {
+                Melon<Core>.Logger.Warning(
+                    $"{LOG_PREFIX} 매니페스트는 빌드 {CurrentBuildId}인데 GameAssembly 크기가 기록({expected:N0}바이트)과 다름 ({gaInfo}). " +
+                    "매니페스트를 고쳤거나 게임 파일이 바뀐 것입니다.");
+                CurrentBuildId = sizeMatch ?? CurrentBuildId + "?"; // "?"를 붙여 검증 목록과 안 맞게 함
+            }
 
             if (CurrentBuildId != null && VerifiedBuilds.Contains(CurrentBuildId))
             {
