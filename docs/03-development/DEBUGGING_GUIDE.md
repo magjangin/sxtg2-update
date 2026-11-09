@@ -34,7 +34,7 @@
 
 - **훅이 불리는지:** Prefix 첫 줄에 `Core.DebugLog`를 넣고 `DebugLog=1`.
 - **두 번 불리는지:** 같은 타임스탬프에 같은 줄이 두 번 → Harmony 이중 적용([IL2CPP_PITFALLS.md](IL2CPP_PITFALLS.md) 5번).
-- **엉뚱한 화면에서 불리는지:** ICF. `script.json`으로 주소 중복 확인.
+- **엉뚱한 화면에서 불리는지:** ICF. `UserData/SixtarGateMod.IcfCounts.txt`(실행 중 검사 결과) 또는 `script.json`으로 주소 중복 확인.
 - **값이 나중에 덮이는지:** 비동기 콜백. 콜백 Postfix나 재적용 코루틴.
 - **성능:** 매 프레임 훅에서 Unity 값 형식 헬퍼, `GetComponent`, `FindObjectOfType`, 문자열 보간, `File.Exists`를 찾아봅니다.
 

@@ -90,7 +90,8 @@ public static class PlayAssist
             // Long notes report every tick; only the head tick carries a real input offset.
             var ticks = data?.TickJudgeList;
             if (data == null || ticks == null || ticks.Count != 1) return;
-            JudgmentBar.RegisterHit(data.DeltaTime, (int)data.Taken);        }
+            JudgmentBar.RegisterHit(data.DeltaTime, (int)data.Taken);
+        }
         catch { }
     }
 

@@ -72,9 +72,16 @@ public static class LambdaTranslator
     private static int _translatedCount;
     private static readonly Stopwatch _stopwatch = new();
 
+    /// <summary>"빌드ID|GameAssembly 크기|수정 시각" — 같은 바이너리인지 판단하는 지문(IcfScanner 캐시도 사용).</summary>
+    public static string BuildFingerprint => _currentBuildFingerprint;
+
+    /// <summary>GameAssembly.dll이 올라간 주소(RVA 계산용). 못 찾으면 IntPtr.Zero.</summary>
+    public static IntPtr GameAssemblyBase => _gameAssemblyBase;
+
     public static void Initialize(string gameRoot)
     {
-        _stopwatch.Restart();
+        // 번역에 쓴 시간만 잰다(전에는 Initialize부터 FlushSummary까지라 Harmony 패치 약 2초가 섞여 "3131ms"처럼 보였음).
+        _stopwatch.Reset();
         _fastHits = 0;
         _translatedCount = 0;
         _dirty = false;
@@ -129,7 +136,6 @@ public static class LambdaTranslator
 
     public static void FlushSummary()
     {
-        _stopwatch.Stop();
         try
         {
             if (_dirty) SaveCache();
@@ -168,6 +174,20 @@ public static class LambdaTranslator
         // 같은 프로세스 내 반복 호출(ICF 검사 -> Harmony 패치)은 메모리 캐시로 즉시 반환
         if (_resolvedMethods.TryGetValue(key, out var inMemory))
             return inMemory;
+
+        _stopwatch.Start();
+        try { return TranslateClosureMethodCore(key, outerType, methodPrefix, paramTypes, fallbackMatchIndex, accessedOwnerFieldName); }
+        finally { _stopwatch.Stop(); }
+    }
+
+    private static MethodInfo? TranslateClosureMethodCore(
+        string key,
+        Type outerType,
+        string methodPrefix,
+        Type[] paramTypes,
+        int fallbackMatchIndex,
+        string? accessedOwnerFieldName)
+    {
 
         // 1단계 래퍼 (Fast-Path): 버전 지문이 일치하고 사전에 등록된 경우 O(1) 직행
         if (!_retranslating && _entries.TryGetValue(key, out var cached))
@@ -260,6 +280,18 @@ public static class LambdaTranslator
     /// [이중래퍼] 코루틴 상태머신(_*_d__*)의 MoveNext()와 상태(__1__state) 접근자를 번역합니다.
     /// </summary>
     public static MethodInfo? TranslateCoroutineMoveNext(
+        string key,
+        Type outerType,
+        string coroutinePrefix,
+        out Func<Il2CppObjectBase, int>? getState,
+        out Action<Il2CppObjectBase, int>? setState)
+    {
+        _stopwatch.Start();
+        try { return TranslateCoroutineMoveNextCore(key, outerType, coroutinePrefix, out getState, out setState); }
+        finally { _stopwatch.Stop(); }
+    }
+
+    private static MethodInfo? TranslateCoroutineMoveNextCore(
         string key,
         Type outerType,
         string coroutinePrefix,

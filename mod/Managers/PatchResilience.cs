@@ -19,7 +19,9 @@ namespace SixtarGateMod.Managers;
 ///    ReqeustSessionPlayingCount, UnlockReqeustAchievement, CurrectionVolume, GetNoteReferance).
 /// 3. Runtime Identical Code Folding (ICF) native stub guard: inspects the first bytes of the IL2CPP native function
 ///    pointer before patching and refuses to detour 1-to-3 byte trivial stubs (ret / ret 0 / xor al,al;ret / mov al,1;ret)
-///    that MSVC /OPT:ICF shares across thousands of unrelated methods.
+///    that MSVC /OPT:ICF shares across thousands of unrelated methods, plus <see cref="IcfScanner"/>: counts every IL2CPP
+///    method sharing each hook's native address at run time and skips a patch whose target got folded with other
+///    functions by a game update (allowed sharing is declared per patch with [IcfShared]).
 /// 4. Compiled Expression-tree property accessors bound once at patch time (zero reflection overhead per call).
 /// </summary>
 public static class PatchResilience
@@ -37,18 +39,52 @@ public static class PatchResilience
     /// <summary>
     /// Applies all [HarmonyPatch] classes in the mod assembly one by one with runtime ICF trivial-stub protection.
     /// </summary>
-    public static void ApplyAllPatches(HarmonyLib.Harmony harmony, MelonLogger.Instance logger)
+    /// <summary>
+    /// [HarmonyPatch]가 없어 실행 중에 붙였다 떼는 패치 대상(NoteEffects 등). 시작할 때 ICF 검사에 함께 넣는다.
+    /// </summary>
+    public static readonly List<Func<MethodBase?>> DynamicPatchTargets = new();
+
+    public static void ApplyAllPatches(HarmonyLib.Harmony harmony, MelonLogger.Instance logger, string gameRoot)
     {
         int applied = 0, failed = 0, skippedIcf = 0;
-        var patchedNativeAddresses = new Dictionary<IntPtr, string>();
         var criticalMissing = new List<string>();
 
+        // 1) 패치 클래스별 대상과 네이티브 주소를 먼저 모두 구한다(LambdaTranslator가 결과를 기억하므로 Harmony가
+        //    다시 TargetMethod를 불러도 같은 값).
+        var plan = new List<(Type Type, List<(MethodBase Method, IntPtr Code)> Targets)>();
+        var addresses = new HashSet<IntPtr>();
         foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Core).Assembly))
         {
             if (type.GetCustomAttributes(typeof(HarmonyPatch), false).Length == 0) continue;
+            var targets = new List<(MethodBase, IntPtr)>();
+            foreach (var target in ResolveDeclaredTargets(type))
+            {
+                if (target == null) continue;
+                IntPtr code = GetNativeCodePointer(target);
+                targets.Add((target, code));
+                if (code != IntPtr.Zero) addresses.Add(code);
+            }
+            plan.Add((type, targets));
+        }
+        foreach (var resolve in DynamicPatchTargets)
+        {
             try
             {
-                if (ShouldSkipForIcfStub(type, logger, patchedNativeAddresses))
+                if (resolve() is { } m && GetNativeCodePointer(m) is var code && code != IntPtr.Zero)
+                    addresses.Add(code);
+            }
+            catch { }
+        }
+
+        // 2) 그 주소들을 다른 메서드가 같이 쓰는지 런타임에서 센다(같은 빌드면 캐시).
+        IcfScanner.Prepare(addresses, gameRoot);
+
+        // 3) 대상별로 검사하고 패치
+        foreach (var (type, targets) in plan)
+        {
+            try
+            {
+                if (ShouldSkipForIcf(type, targets, logger))
                 {
                     skippedIcf++;
                     NoteCritical(type, criticalMissing);
@@ -82,38 +118,46 @@ public static class PatchResilience
             criticalMissing.Add($"{patchType.Name} — {critical.Consequence}");
     }
 
-    private static bool ShouldSkipForIcfStub(
-        Type patchType,
-        MelonLogger.Instance logger,
-        Dictionary<IntPtr, string> patchedNativeAddresses)
+    private static bool ShouldSkipForIcf(Type patchType, List<(MethodBase Method, IntPtr Code)> targets, MelonLogger.Instance logger)
     {
-        var targets = ResolveDeclaredTargets(patchType);
-        foreach (var target in targets)
+        int allowed = patchType.GetCustomAttribute<IcfSharedAttribute>()?.MaxShared ?? 1;
+        foreach (var (target, code) in targets)
         {
-            if (target == null) continue;
-            IntPtr nativeCode = GetNativeCodePointer(target);
-            if (nativeCode == IntPtr.Zero) continue;
-
-            if (IsTrivialNativeStub(nativeCode, out string stubDesc))
+            if (code == IntPtr.Zero) continue;
+            if (!IsSafeNativeTarget(target, code, allowed, out string reason))
             {
-                logger.Warning(
-                    $"[Harmony/ICFGuard] '{patchType.Name}' ({target.DeclaringType?.Name}.{target.Name}) 건너뜀: " +
-                    $"네이티브 주소 0x{nativeCode.ToInt64():X}가 여러 함수가 공유하는 빈 스텁({stubDesc})임");
+                logger.Warning($"[Harmony/ICFGuard] '{patchType.Name}' ({target.DeclaringType?.Name}.{target.Name}) 건너뜀: {reason}");
                 return true;
-            }
-
-            string targetLabel = $"{patchType.Name} -> {target.DeclaringType?.Name}.{target.Name}";
-            if (patchedNativeAddresses.TryGetValue(nativeCode, out string? existing))
-            {
-                Core.DebugLog($"[Harmony/ICFGuard] 참고: '{targetLabel}'가 '{existing}'와 네이티브 주소 0x{nativeCode.ToInt64():X}를 공유함");
-            }
-            else
-            {
-                patchedNativeAddresses[nativeCode] = targetLabel;
             }
         }
         return false;
     }
+
+    /// <summary>
+    /// 패치해도 되는 네이티브 주소인지: 빈 스텁이 아니고, 런타임 검사로 센 공유 개수가 <paramref name="allowed"/> 이하.
+    /// </summary>
+    public static bool IsSafeNativeTarget(MethodBase target, IntPtr code, int allowed, out string reason)
+    {
+        reason = "";
+        if (code == IntPtr.Zero) return true;
+        if (IsTrivialNativeStub(code, out string stubDesc))
+        {
+            reason = $"네이티브 주소 {IcfScanner.Rva(code)}가 여러 함수가 공유하는 빈 스텁({stubDesc})임";
+            return false;
+        }
+        int shared = IcfScanner.GetShareCount(code, out string sharers);
+        if (shared > allowed)
+        {
+            reason = $"네이티브 주소 {IcfScanner.Rva(code)}를 메서드 {shared}개가 공유함(허용 {allowed}개, 예: {sharers}). " +
+                     "게임 업데이트로 코드가 접혔으므로 패치하면 다른 클래스의 this로도 실행됨 — 다른 대상으로 옮겨야 함";
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>실행 중에 붙이는 패치(NoteEffects 등)용: 대상이 안전한지 확인.</summary>
+    public static bool IsSafeToPatchNow(MethodBase target, out string reason)
+        => IsSafeNativeTarget(target, GetNativeCodePointer(target), 1, out reason);
 
     private static List<MethodBase?> ResolveDeclaredTargets(Type patchType)
     {

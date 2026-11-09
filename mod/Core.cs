@@ -61,9 +61,10 @@ public class Core : MelonMod
         CustomTrackManager.Initialize();
         ModConfig.Initialize(gameRoot);
         CustomNoteSkin.Initialize(gameRoot);
+        NoteEffects.RegisterDynamicTargets();
 
         LoggerInstance.Msg("[Harmony] 패치 적용 중...");
-        PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance);
+        PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance, gameRoot);
     }
 
     // sxtg2 overlays (judgment bar, key viewer). IMGUI drawing is stripped from this game build
@@ -212,10 +213,13 @@ public class Core : MelonMod
         {
             CurrentPlayStyleIsLunar = playStyle == EPlayStyle.LIGHT;
             KeyViewer.ResetBindings();
-            if (track != null && (track.Category == CUSTOM_CATEGORY_NAME || track.TrackID.StartsWith("CUSTOM_") || track.DisplayName.Contains("(Custom 1-Note)")))
+            // Null-safe: an exception thrown from this prefix would abort GotoPlayScene itself (no song starts).
+            if (track != null && (track.Category == CUSTOM_CATEGORY_NAME
+                                  || (track.TrackID?.StartsWith("CUSTOM_", StringComparison.Ordinal) ?? false)
+                                  || (track.DisplayName?.Contains("(Custom 1-Note)", StringComparison.Ordinal) ?? false)))
             {
                 IsCustomTrackActive = true;
-                if (CustomTrackManager.AlbumsByTrackId.TryGetValue(track.TrackID, out var album))
+                if (CustomTrackManager.FindAlbum(track.TrackID) is { } album)
                 {
                     CustomTrackManager.CurrentSelectedAlbum = album;
                     CustomMusicSelect.LastCustomTrackId = track.TrackID;
@@ -344,7 +348,17 @@ public class Core : MelonMod
                     Melon<Core>.Logger.Msg("[CustomChart] 기본 1노트 BMS 사용");
                 }
 
-                __result = bms.Parse(bmsContent);
+                try
+                {
+                    __result = bms.Parse(bmsContent);
+                }
+                catch (Exception ex)
+                {
+                    // A chart the game's BMSConverter rejects (unknown channel -> KeyNotFoundException, ...) used to
+                    // escape into PatternConverter and leave the loading screen stuck. Play the 1-note chart instead.
+                    Melon<Core>.Logger.Error($"[CustomChart] 게임 BMS 해석기가 차트를 거부함 ({ex.GetType().Name}: {ex.Message}). 1노트 BMS로 대체");
+                    __result = new BMSConverter().Parse(DefaultBms);
+                }
                 Melon<Core>.Logger.Msg($"[CustomChart] BMS 패턴 해석 완료: 마커 {__result?.Markers?.Count}개, 블록 {__result?.Blocks?.Count}개");
                 return false;
             }
@@ -398,17 +412,19 @@ public class Core : MelonMod
     [HarmonyPatch(typeof(FinishProcessor), "UpdatePatternTime")]
     public static class FinishProcessor_UpdatePatternTime_Patch
     {
-        private static bool _logged;
+        private static IntPtr _loggedFor;
 
+        // Runs every frame of every play: bail out before touching the IL2CPP properties when not a custom song.
         public static void Prefix(FinishProcessor __instance)
         {
             // Finish fires at TrackEndOffset + TrackEndTiming + _finishOffset: only the sum has to reach the song length.
             float length = CustomSongLength();
+            if (length <= 0f) return;
             float offset = __instance.TrackEndOffset;
-            if (length <= 0f || offset + __instance.TrackEndTiming >= length - 0.05f) return;
-            if (!_logged)
+            if (offset + __instance.TrackEndTiming >= length - 0.05f) return;
+            if (_loggedFor != __instance.Pointer) // once per play (a new FinishProcessor per play)
             {
-                _logged = true;
+                _loggedFor = __instance.Pointer;
                 Melon<Core>.Logger.Msg($"[FinishProcessor] 종료 시점이 오프셋 {offset:F1}초 + {__instance.TrackEndTiming:F1}초라서 곡 길이 {length:F1}초로 연장");
             }
             __instance.TrackEndTiming = Math.Max(0f, length - offset);
@@ -629,6 +645,7 @@ public class Core : MelonMod
     }
 
     [HarmonyPatch]
+    [IcfShared(2, "Outer Space 판 DisplayClass35_0의 같은 람다와 공유. 두 클로저의 <>4__this 위치가 같아 어느 쪽 this로 실행돼도 안전")]
     public static class PlayLoading_JacketCallback_Patch
     {
         private static Func<Il2CppObjectBase, Il2CppSixtarGate.PlayLoading.PlayLoadingManager?>? _getOwner;
@@ -643,6 +660,7 @@ public class Core : MelonMod
     }
 
     [HarmonyPatch]
+    [IcfShared(2, "Outer Space 판 DisplayClass35_0의 같은 람다와 공유. 두 클로저의 <>4__this 위치가 같아 어느 쪽 this로 실행돼도 안전")]
     public static class PlayLoading_ThumbnailCallback_Patch
     {
         private static Func<Il2CppObjectBase, Il2CppSixtarGate.PlayLoading.PlayLoadingManager?>? _getOwner;
