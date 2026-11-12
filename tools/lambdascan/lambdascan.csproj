@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 모드의 NativeLambdaScan.cs를 그대로 가져와 실제 GameAssembly.dll 바이트로 시험한다(IL2CPP 불필요). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../mod/Managers/NativeLambdaScan.cs" Link="NativeLambdaScan.cs" />
+  </ItemGroup>
+</Project>

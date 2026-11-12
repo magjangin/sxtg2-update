@@ -117,7 +117,7 @@ public static class IcfScanner
                     if (code == IntPtr.Zero || !wanted.Contains(code)) continue;
                     counts[code] = counts.TryGetValue(code, out int n) ? n + 1 : 1;
                     if (!names.TryGetValue(code, out var list)) names[code] = list = new List<string>();
-                    if (list.Count <= MaxSharerNames)
+                    if (list.Count < MaxSharerNames)
                         list.Add(MethodLabel(klass, method));
                 }
             }

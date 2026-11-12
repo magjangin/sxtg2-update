@@ -19,3 +19,5 @@ tools/version_diff/obj/
 __pycache__/
 *.pyc
 *.pickle
+tools/lambdascan/bin/
+tools/lambdascan/obj/

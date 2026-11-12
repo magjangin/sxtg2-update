@@ -93,6 +93,9 @@ public static class PatchResilience
 
                 harmony.CreateClassProcessor(type).Patch();
                 applied++;
+                // 대상을 미리 못 구했는데 Harmony는 붙였다 = ICF 검사를 거치지 않은 패치
+                if (targets.Count == 0)
+                    logger.Warning($"[Harmony/ICFGuard] '{type.Name}' 대상 주소를 미리 구하지 못해 ICF 검사 없이 적용됨 (TargetMethod/특성 확인 필요)");
             }
             catch (Exception ex)
             {
@@ -338,6 +341,7 @@ public static class PatchResilience
 
     /// <summary>
     /// Finds a lambda method inside any compiler-generated closure nested in <paramref name="outerType"/>
+    /// (or on <paramref name="outerType"/> itself for lambdas that capture only <c>this</c>)
     /// via the Double-Wrapper <see cref="LambdaTranslator"/> (O(1) cached dictionary lookup on matching builds,
     /// structural + native field-offset translation when the game updates).
     /// </summary>
@@ -347,12 +351,7 @@ public static class PatchResilience
         int matchIndex,
         string? accessedOwnerFieldName,
         params Type[] paramTypes)
-    {
-        string paramSig = string.Join(",", Array.ConvertAll(paramTypes, p => p.Name));
-        string key = $"{outerType.FullName ?? outerType.Name}:{methodPrefix}({paramSig})#{matchIndex}:{accessedOwnerFieldName ?? "*"}";
-        return LambdaTranslator.TranslateClosureMethod(
-            key, outerType, methodPrefix, paramTypes, matchIndex, accessedOwnerFieldName);
-    }
+        => FindClosureMethodCore(outerType, methodPrefix, matchIndex, accessedOwnerFieldName, null, paramTypes);
 
     public static MethodInfo? FindClosureMethod(Type outerType, string methodPrefix, int matchIndex, params Type[] paramTypes)
         => FindClosureMethod(outerType, methodPrefix, matchIndex, null, paramTypes);
@@ -361,10 +360,31 @@ public static class PatchResilience
         => FindClosureMethod(outerType, methodPrefix, 0, null, paramTypes);
 
     /// <summary>
+    /// <see cref="FindClosureMethod(Type, string, Type[])"/>와 같되, 패치가 읽는 캡처 필드(<paramref name="requiredClosureMembers"/>,
+    /// 예: "track", "args")가 있는 클로저의 람다만 후보로 삼는다. 같은 시그니처 람다가 다른 클로저에 생겨도 헷갈리지 않음.
+    /// </summary>
+    public static MethodInfo? FindClosureMethodCapturing(
+        Type outerType, string methodPrefix, string[] requiredClosureMembers, params Type[] paramTypes)
+        => FindClosureMethodCore(outerType, methodPrefix, 0, null, requiredClosureMembers, paramTypes);
+
+    private static MethodInfo? FindClosureMethodCore(
+        Type outerType, string methodPrefix, int matchIndex, string? accessedOwnerFieldName, string[]? requiredClosureMembers, Type[] paramTypes)
+    {
+        string paramSig = string.Join(",", Array.ConvertAll(paramTypes, p => p.Name));
+        string key = $"{outerType.FullName ?? outerType.Name}:{methodPrefix}({paramSig})#{matchIndex}:{accessedOwnerFieldName ?? "*"}{CaptureSuffix(requiredClosureMembers)}";
+        return LambdaTranslator.TranslateClosureMethod(
+            key, outerType, methodPrefix, paramTypes, matchIndex, accessedOwnerFieldName, requiredClosureMembers);
+    }
+
+    private static string CaptureSuffix(string[]? members)
+        => members is { Length: > 0 } ? "|" + string.Join(",", members) : "";
+
+    /// <summary>
     /// Finds a closure callback method and compiles a fast getter for its outer class reference (__4__this).
     /// When <paramref name="accessedOwnerFieldName"/> is supplied, the translator inspects the x64 native body of
     /// candidate lambdas against the IL2CPP field offset on <typeparamref name="TOwner"/> so lambda order changes
     /// across game updates never confuse same-signature callbacks (e.g. jacketFull vs trackThumbnail).
+    /// Lambdas that cannot reach a <typeparamref name="TOwner"/> (static <c>&lt;&gt;c</c> lambdas) are not candidates.
     /// </summary>
     public static MethodInfo? FindClosureCallback<TOwner>(
         Type outerType,
@@ -372,16 +392,18 @@ public static class PatchResilience
         Type paramType,
         out Func<Il2CppObjectBase, TOwner?>? getOwner,
         int matchIndex = 0,
-        string? accessedOwnerFieldName = null)
+        string? accessedOwnerFieldName = null,
+        string[]? requiredClosureMembers = null)
         where TOwner : class
     {
-        string key = $"{outerType.FullName ?? outerType.Name}:{methodPrefix}({paramType.Name})#{matchIndex}:{accessedOwnerFieldName ?? "*"}";
+        string key = $"{outerType.FullName ?? outerType.Name}:{methodPrefix}({paramType.Name})#{matchIndex}:{accessedOwnerFieldName ?? "*"}{CaptureSuffix(requiredClosureMembers)}";
         return LambdaTranslator.TranslateClosureCallback(
-            key, outerType, methodPrefix, paramType, out getOwner, matchIndex, accessedOwnerFieldName);
+            key, outerType, methodPrefix, paramType, out getOwner, matchIndex, accessedOwnerFieldName, requiredClosureMembers);
     }
 
     /// <summary>
-    /// Finds a method inside a known closure type by prefix and parameter types.
+    /// Finds a method inside a known closure type by prefix and parameter types. Exact parameter types win over
+    /// assignable ones; if several still match, the lowest lambda number is used and a warning names them.
     /// </summary>
     public static MethodInfo? FindMethodInType(Type type, string methodPrefix, params Type[] paramTypes)
     {
@@ -389,15 +411,28 @@ public static class PatchResilience
             ? "<" + methodPrefix.Substring(1).Replace("_b__", ">b__")
             : methodPrefix;
 
+        var exact = new List<MethodInfo>();
+        var loose = new List<MethodInfo>();
         foreach (var m in type.GetMethods(AllFlags))
         {
             if (!m.Name.StartsWith(methodPrefix, StringComparison.Ordinal) &&
                 !m.Name.StartsWith(altPrefix, StringComparison.Ordinal))
                 continue;
-            if (ParametersMatch(m.GetParameters(), paramTypes))
-                return m;
+            var ps = m.GetParameters();
+            if (!ParametersMatch(ps, paramTypes)) continue;
+            bool isExact = true;
+            for (int i = 0; i < ps.Length; i++)
+                if (ps[i].ParameterType != paramTypes[i]) isExact = false;
+            (isExact ? exact : loose).Add(m);
         }
-        return null;
+
+        var pool = exact.Count > 0 ? exact : loose;
+        if (pool.Count == 0) return null;
+        pool.Sort((a, b) => string.CompareOrdinal(a.Name.PadLeft(64), b.Name.PadLeft(64))); // 람다 번호 순(자릿수 맞춤)
+        if (pool.Count > 1)
+            Melon<Core>.Logger.Warning(
+                $"[LambdaTranslator] {type.Name}에서 '{methodPrefix}' 시그니처가 같은 메서드 {pool.Count}개({string.Join(", ", pool.ConvertAll(m => m.Name))}) → {pool[0].Name} 선택");
+        return pool[0];
     }
 
     /// <summary>

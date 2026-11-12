@@ -1,14 +1,15 @@
 # 코드 구조
 
-`mod/` 26개 파일, 6,837줄 (2026-11-10 갱신). 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+`mod/` 27개 파일, 7,295줄 (2026-11-12 갱신). 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
 | 파일 | 줄 | 역할 |
 | --- | ---: | --- |
 | `Features/OfflineBypass.cs` | 1015 | 완전 오프라인·서버 종료 우회 (리뉴얼 BACKND 42개 + `sxtg2 saver test` 레거시 24개, 총 66개 훅) |
-| `Core.cs` | 828 | 진입점. CUSTOM 탭, 플레이 진입, 차트 주입, 곡 끝, BGA, 자켓, 프리뷰, 해금 |
-| `Managers/LambdaTranslator.cs` | 630 | 이중래퍼 람다 번역가: O(1) Fast-Path 캐시 + x64 기계어 변위 스마트 구조 번역 |
+| `Core.cs` | 840 | 진입점. CUSTOM 탭, 플레이 진입, 차트 주입, 곡 끝, BGA, 자켓, 프리뷰, 해금 |
+| `Managers/LambdaTranslator.cs` | 862 | 이중래퍼 람다 번역가: 캐시 직행(RVA 대조) + 후보 수집·거르기(바깥 형식 람다, 캡처 필드, 소유자) + 기계어 대조로 번역 |
+| `Managers/NativeLambdaScan.cs` | 179 | 람다 x64 본문에서 클로저 → 소유자 → 대상 필드 로드를 레지스터를 따라 찾는 순수 함수 (`tools/lambdascan`으로 오프라인 시험) |
 | `Managers/IcfScanner.cs` | 233 | 실행 중 ICF 검사: 훅 대상 주소를 공유하는 IL2CPP 메서드 수, `[IcfShared]`, 빌드별 캐시 `UserData/SixtarGateMod.IcfCounts.txt` |
-| `Managers/PatchResilience.cs` | 602 | 업데이트 내성: 클로저·코루틴 동적 탐색, 오타 대응, ICF 가드(빈 스텁 + `IcfScanner` 공유 수), Expression 복제기 |
+| `Managers/PatchResilience.cs` | 637 | 업데이트 내성: 클로저·코루틴 동적 탐색, 오타 대응, ICF 가드(빈 스텁 + `IcfScanner` 공유 수), Expression 복제기 |
 | `Managers/ModConfig.cs` | 454 | 설정 파일. 절반 이상이 기본 템플릿 문자열 |
 | `Features/PlayAssist.cs` | 274 | 판정 세션, AutoPlay, AllPerfect(+불빛 생략), 점수, 기록 차단, 종료 시 리소스 리셋 |
 | `Managers/CustomTrackManager.cs` | 277 | hwa 스캔, 차트 텍스트 캐시, TrackData 복제, BMS 헤더 폴백 |
