@@ -65,6 +65,7 @@ docs/
 - [DEBUGGING_GUIDE.md](03-development/DEBUGGING_GUIDE.md)
 - [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md): 감사 기록 — 중국어 메타데이터 제약, 업데이트 내성의 남은 구멍, 문서 정정 목록
 - [REVIEW_2026-11-10.md](03-development/REVIEW_2026-11-10.md): 코드 리뷰 — 실행 중 ICF 검사(`IcfScanner`), 버그 7건, 병목, 실기 검증 결과
+- [REVIEW_2026-11-12.md](03-development/REVIEW_2026-11-12.md): 코드 리뷰 — 람다 찾기 강화(바깥 형식 람다, 레지스터 추적 기계어 대조 `NativeLambdaScan`, 사전 검증), 오프라인 시험 `tools/lambdascan`, 실기 부팅 3회
 
 **04-game-reference**
 - [MODE_SELECT.md](04-game-reference/MODE_SELECT.md): 모드 7종과 테마 8종

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using HarmonyLib;
@@ -19,20 +18,20 @@ namespace SixtarGateMod.Managers;
 ///
 /// [1단계 래퍼 - Fast-Path Dictionary Cache (O(1) 직행)]
 /// - GameAssembly.dll의 크기·수정 시각 및 Steam Build ID를 버전 지문(Fingerprint)으로 삼아,
-///   논리적 람다 키(예: "PlayLoading.JacketFull") -> 실제 컴파일러 생성 중첩 타입명/메서드명/소유자 필드명을
+///   논리적 람다 키 -> 실제 컴파일러 생성 중첩 타입명/메서드명/소유자 필드명/RVA/고른 방법을
 ///   UserData/SixtarGateMod.LambdaMap.json 에 캐싱.
-/// - 평소 부팅 시에는 GetNestedTypes() 전체 탐색이나 바이트 분석 없이 캐시된 이름으로 O(1) 직행.
+/// - 평소 부팅 시에는 GetNestedTypes() 전체 탐색이나 바이트 분석 없이 캐시된 이름으로 직행하고, 현재 네이티브 주소가
+///   저장된 RVA와 같은지만 확인(다르면 재번역).
 ///
 /// [2단계 래퍼 - Smart Structural &amp; Native Offset Translator (업데이트 시 자동 재번역)]
-/// - 게임이 업데이트되어 지문이 바뀌었거나 1단계 직행에 실패하면 번역가가 작동:
-///   1) 대상 외부 클래스(OuterType)의 클로저/상태머신을 1회 인덱싱.
-///   2) 부모 메서드 접두사 + 파라미터 시그니처로 1차 후보군 추출.
-///   3) 동일 시그니처 람다가 여러 개일 때(예: PlayLoadingManager의 jacketFull vs trackThumbnail,
-///      Result.TrackInfoModule의 jacket vs thumbnail), 단순 순서(matchIndex)에만 의존하지 않고:
-///      - IL2CPP 런타임에서 소유자 클래스의 대상 필드 오프셋(il2cpp_field_get_offset)을 조회하고,
-///      - 각 후보 람다의 네이티브 기계어(x64) 내부에서 실제로 참조하는 소유자 필드 변위(displacement)와 대조하여
-///        람다 순서가 바뀌어도 100% 정확한 람다로 자동 번역!
-///   4) 번역 결과를 새 버전 사전에 저장하고 로그로 번역 내역을 보고.
+/// 1) 후보 수집: 바깥 형식의 클로저(<c>&lt;&gt;c__DisplayClass</c>, <c>&lt;&gt;c</c>)와 바깥 형식 자신(Roslyn은 this만 잡는
+///    람다를 바깥 형식의 인스턴스 메서드 <c>&lt;M&gt;b__N_M</c>로 만듦)에서 부모 메서드 접두사 + 파라미터가 맞는 람다.
+/// 2) 걸러내기: 패치가 읽는 캡처 필드(예: track, args)가 있는 클로저만, 콜백이면 소유자(<c>&lt;&gt;4__this</c>)에 닿는 것만,
+///    파라미터 형식이 정확히 같은 것 우선. 순서는 리플렉션 순서가 아니라 람다 번호(소스 순서) 기준.
+/// 3) 같은 시그니처 후보가 여럿이면(PlayLoadingManager의 jacketFull vs trackThumbnail 등) 소유자의 대상 필드
+///    오프셋(il2cpp_field_get_offset)과 각 후보의 x64 본문을 <see cref="NativeLambdaScan"/>으로 대조
+///    (레지스터를 따라가는 엄격 모드 → 못 맞히면 느슨 모드). 후보가 하나여도 검증해, 대상 필드를 안 읽으면 경고.
+/// 4) 결과와 "어떻게 골랐는지"(how)를 저장. 순서 추정(order)으로 고른 항목은 캐시 직행 때도 경고를 다시 낸다.
 /// </summary>
 public static class LambdaTranslator
 {
@@ -42,6 +41,19 @@ public static class LambdaTranslator
     private const BindingFlags AllFlags =
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
+    /// <summary>번역 방법. 캐시에 저장되며 "order"/"ambiguous"는 확인되지 않은 선택이라 매 부팅 경고.</summary>
+    private static class How
+    {
+        public const string Native = "native";          // 엄격 기계어 대조로 하나만 맞음
+        public const string NativeLoose = "native-loose"; // 느슨 대조로 하나만 맞음
+        public const string Ambiguous = "ambiguous";    // 기계어로 여러 개가 맞아 순서로 고름
+        public const string Single = "single";          // 후보 하나(필드 지정 없음)
+        public const string Order = "order";            // 후보 여럿을 순서로 고름(기계어 확인 실패/필드 지정 없음)
+        public const string Coroutine = "coroutine";
+
+        public static bool Unverified(string how) => how == Order || how == Ambiguous;
+    }
+
     public sealed class LambdaEntry
     {
         public string ClosureTypeName { get; set; } = "";
@@ -49,6 +61,8 @@ public static class LambdaTranslator
         public string OwnerFieldName { get; set; } = "";
         public int TargetFieldOffset { get; set; } = -1;
         public string RvaHex { get; set; } = "";
+        public string How { get; set; } = "";
+        public int Candidates { get; set; }
     }
 
     private sealed class ClosureGroupIndex
@@ -57,9 +71,18 @@ public static class LambdaTranslator
         public readonly List<Type> StateMachineTypes = new();
     }
 
+    private sealed class Candidate
+    {
+        public MethodInfo Method = null!;
+        public bool OnOuter;   // 바깥 형식 자신의 인스턴스 메서드(this만 캡처한 람다)
+        public bool Exact;     // 파라미터 형식이 정확히 같음
+        public int Ordinal;    // 람다 번호(b__N 또는 b__M_N의 N)
+    }
+
     private static readonly Dictionary<string, LambdaEntry> _entries = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, MethodInfo> _resolvedMethods = new(StringComparer.Ordinal);
     private static readonly Dictionary<Type, ClosureGroupIndex> _typeIndexCache = new();
+    private static readonly HashSet<string> _requestedKeys = new(StringComparer.Ordinal);
 
     private static string _cacheFilePath = "";
     private static string _currentBuildFingerprint = "";
@@ -70,6 +93,7 @@ public static class LambdaTranslator
     private static bool _retranslating;
     private static int _fastHits;
     private static int _translatedCount;
+    private static int _unverifiedCount;
     private static readonly Stopwatch _stopwatch = new();
 
     /// <summary>"빌드ID|GameAssembly 크기|수정 시각" — 같은 바이너리인지 판단하는 지문(IcfScanner 캐시도 사용).</summary>
@@ -84,7 +108,9 @@ public static class LambdaTranslator
         _stopwatch.Reset();
         _fastHits = 0;
         _translatedCount = 0;
+        _unverifiedCount = 0;
         _dirty = false;
+        _requestedKeys.Clear();
 
         try
         {
@@ -110,27 +136,35 @@ public static class LambdaTranslator
                 }
             }
             catch { }
-
-            LoadCache();
-
-            if (!string.Equals(_cachedBuildFingerprint, _currentBuildFingerprint, StringComparison.Ordinal))
-            {
-                _retranslating = true;
-                if (!string.IsNullOrEmpty(_cachedBuildFingerprint))
-                    Melon<Core>.Logger.Msg($"{LOG_PREFIX} 게임 빌드 변경 감지 -> 람다/코루틴 번역 사전을 새 버전에 맞게 재번역합니다.");
-                else
-                    Melon<Core>.Logger.Msg($"{LOG_PREFIX} 람다 번역 사전 초기화 중...");
-                _entries.Clear();
-                _resolvedMethods.Clear();
-            }
-            else
-            {
-                _retranslating = false;
-            }
         }
         catch (Exception ex)
         {
             Melon<Core>.Logger.Warning($"{LOG_PREFIX} 초기화 경고 (실시간 번역 모드로 동작): {ex.Message}");
+        }
+
+        // 캐시 파일이 깨졌거나 못 읽으면 빈 사전으로 시작(전에는 읽기 예외가 나면 지문 비교를 건너뛰어
+        // 일부만 읽힌 사전을 지문 확인 없이 그대로 썼음).
+        try { LoadCache(); }
+        catch (Exception ex)
+        {
+            _entries.Clear();
+            _cachedBuildFingerprint = "";
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 번역 사전({CacheFileName})을 읽지 못해 새로 만듭니다: {ex.Message}");
+        }
+
+        if (!string.Equals(_cachedBuildFingerprint, _currentBuildFingerprint, StringComparison.Ordinal))
+        {
+            _retranslating = true;
+            if (!string.IsNullOrEmpty(_cachedBuildFingerprint))
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 게임 빌드 변경 감지 -> 람다/코루틴 번역 사전을 새 버전에 맞게 재번역합니다.");
+            else
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 람다 번역 사전 초기화 중...");
+            _entries.Clear();
+            _resolvedMethods.Clear();
+        }
+        else
+        {
+            _retranslating = false;
         }
     }
 
@@ -138,18 +172,33 @@ public static class LambdaTranslator
     {
         try
         {
+            // 이번 실행에서 아무 패치도 묻지 않은 항목(모드에서 지운 패치, 키 형식이 바뀐 옛 항목)은 사전에서 뺀다.
+            if (_requestedKeys.Count > 0)
+            {
+                var stale = new List<string>();
+                foreach (var k in _entries.Keys)
+                    if (!_requestedKeys.Contains(k)) stale.Add(k);
+                foreach (var k in stale) _entries.Remove(k);
+                if (stale.Count > 0)
+                {
+                    _dirty = true;
+                    Core.DebugLog($"{LOG_PREFIX} 쓰지 않는 사전 항목 {stale.Count}개 정리");
+                }
+            }
+
             if (_dirty) SaveCache();
 
+            string unverified = _unverifiedCount > 0 ? $", 기계어로 확인 못 한 선택 {_unverifiedCount}개(위 경고 참조)" : "";
             if (_translatedCount > 0)
             {
                 Melon<Core>.Logger.Msg(
                     $"{LOG_PREFIX} 번역 완료: 새로 번역 {_translatedCount}개, 캐시 직행 {_fastHits}개 " +
-                    $"({_stopwatch.Elapsed.TotalMilliseconds:F1}ms, 사전 저장됨)");
+                    $"({_stopwatch.Elapsed.TotalMilliseconds:F1}ms, 사전 저장됨{unverified})");
             }
             else if (_fastHits > 0)
             {
                 Melon<Core>.Logger.Msg(
-                    $"{LOG_PREFIX} 1단계 캐시 직행 완료: 람다/코루틴 {_fastHits}개 즉시 연결 ({_stopwatch.Elapsed.TotalMilliseconds:F1}ms)");
+                    $"{LOG_PREFIX} 1단계 캐시 직행 완료: 람다/코루틴 {_fastHits}개 즉시 연결 ({_stopwatch.Elapsed.TotalMilliseconds:F1}ms{unverified})");
             }
         }
         catch (Exception ex)
@@ -163,20 +212,30 @@ public static class LambdaTranslator
     /// 1단계: 번역 사전 캐시에서 O(1) 직행.
     /// 2단계: 캐시 미스 또는 게임 업데이트 시 구조 인덱싱 + 네이티브 필드 오프셋 지문 대조로 정확히 번역.
     /// </summary>
+    /// <param name="requiredClosureMembers">패치가 읽는 캡처 필드 이름(예: "track", "args"). 이 필드가 있는 클로저의 람다만 후보.</param>
+    /// <param name="ownerType">콜백이 소유자 객체를 꺼내 써야 하면 그 형식. 소유자에 닿지 못하는 람다(정적 <c>&lt;&gt;c</c> 등)는 후보에서 뺌.
+    /// <paramref name="accessedOwnerFieldName"/>은 이 형식(없으면 <paramref name="outerType"/>)의 필드.</param>
     public static MethodInfo? TranslateClosureMethod(
         string key,
         Type outerType,
         string methodPrefix,
         Type[] paramTypes,
         int fallbackMatchIndex = 0,
-        string? accessedOwnerFieldName = null)
+        string? accessedOwnerFieldName = null,
+        string[]? requiredClosureMembers = null,
+        Type? ownerType = null)
     {
+        _requestedKeys.Add(key);
         // 같은 프로세스 내 반복 호출(ICF 검사 -> Harmony 패치)은 메모리 캐시로 즉시 반환
         if (_resolvedMethods.TryGetValue(key, out var inMemory))
             return inMemory;
 
         _stopwatch.Start();
-        try { return TranslateClosureMethodCore(key, outerType, methodPrefix, paramTypes, fallbackMatchIndex, accessedOwnerFieldName); }
+        try
+        {
+            return TranslateClosureMethodCore(
+                key, outerType, methodPrefix, paramTypes, fallbackMatchIndex, accessedOwnerFieldName, requiredClosureMembers, ownerType);
+        }
         finally { _stopwatch.Stop(); }
     }
 
@@ -186,23 +245,31 @@ public static class LambdaTranslator
         string methodPrefix,
         Type[] paramTypes,
         int fallbackMatchIndex,
-        string? accessedOwnerFieldName)
+        string? accessedOwnerFieldName,
+        string[]? requiredClosureMembers,
+        Type? ownerType)
     {
-
         // 1단계 래퍼 (Fast-Path): 버전 지문이 일치하고 사전에 등록된 경우 O(1) 직행
         if (!_retranslating && _entries.TryGetValue(key, out var cached))
         {
-            var fastMethod = TryBindCachedMethod(outerType, cached, paramTypes);
+            var fastMethod = TryBindCachedMethod(outerType, cached, paramTypes, out string? why);
             if (fastMethod != null)
             {
                 _resolvedMethods[key] = fastMethod;
                 _fastHits++;
+                if (How.Unverified(cached.How) && cached.Candidates > 1)
+                {
+                    _unverifiedCount++;
+                    Melon<Core>.Logger.Warning(
+                        $"{LOG_PREFIX} '{key}'는 후보 {cached.Candidates}개 중 {cached.MethodName}을(를) 기계어로 확인하지 못하고 순서로 고른 결과입니다" +
+                        $"(how={cached.How}). 화면이 이상하면 tools/version_diff/dis.py로 본문을 확인하세요.");
+                }
                 return fastMethod;
             }
-            Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' 캐시 항목({cached.ClosureTypeName}.{cached.MethodName})이 현재 바이너리와 달라 재번역합니다.");
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' 캐시 항목({cached.ClosureTypeName}.{cached.MethodName})이 현재 바이너리와 달라 재번역합니다: {why}");
         }
 
-        // 2단계 래퍼 (Smart Translator): 인덱싱된 클로저 목록에서 후보 추출 + 네이티브 필드 오프셋 지문 대조
+        // 2단계 래퍼 (Smart Translator)
         var candidates = CollectClosureCandidates(outerType, methodPrefix, paramTypes);
         if (candidates.Count == 0)
         {
@@ -210,40 +277,159 @@ public static class LambdaTranslator
             return null;
         }
 
-        MethodInfo? chosen = null;
+        if (requiredClosureMembers is { Length: > 0 })
+        {
+            candidates = Filter(candidates, c => HasMembers(c.Method.DeclaringType!, requiredClosureMembers), key,
+                $"캡처 필드({string.Join(", ", requiredClosureMembers)})가 있는 클로저");
+        }
+        if (ownerType != null)
+        {
+            candidates = Filter(candidates, c => CanReachOwner(c, outerType, ownerType), key,
+                $"소유자({ownerType.Name})에 닿는 람다");
+        }
+        if (candidates.Exists(c => c.Exact))
+            candidates = candidates.FindAll(c => c.Exact);
+
+        MethodInfo chosen;
+        string how;
         int targetFieldOffset = -1;
+        int idx = fallbackMatchIndex >= 0 && fallbackMatchIndex < candidates.Count ? fallbackMatchIndex : 0;
 
         if (!string.IsNullOrEmpty(accessedOwnerFieldName))
         {
-            targetFieldOffset = GetIl2CppFieldOffset(outerType, accessedOwnerFieldName!);
-            if (targetFieldOffset > 0 && candidates.Count > 1)
+            targetFieldOffset = GetIl2CppFieldOffset(ownerType ?? outerType, accessedOwnerFieldName!);
+            (chosen, how) = ChooseByNativeBody(key, outerType, candidates, idx, accessedOwnerFieldName!, targetFieldOffset);
+        }
+        else
+        {
+            chosen = candidates[idx].Method;
+            how = candidates.Count == 1 ? How.Single : How.Order;
+            if (candidates.Count > 1)
             {
-                foreach (var cand in candidates)
-                {
-                    int ownerPtrOffset = GetOwnerFieldOffsetOnClosure(cand.DeclaringType!, outerType);
-                    if (NativeBodyAccessesOwnerField(cand, ownerPtrOffset, targetFieldOffset))
-                    {
-                        chosen = cand;
-                        break;
-                    }
-                }
+                _unverifiedCount++;
+                Melon<Core>.Logger.Warning(
+                    $"{LOG_PREFIX} '{key}' 같은 시그니처 후보 {candidates.Count}개({Names(candidates)}) 중 {idx}번째({chosen.Name})를 순서로 선택. " +
+                    "구별할 필드(accessedOwnerFieldName)나 캡처 필드(requiredClosureMembers)를 지정하세요.");
             }
         }
 
-        if (chosen == null)
+        _resolvedMethods[key] = chosen;
+        RecordTranslation(key, outerType, chosen, targetFieldOffset, how, candidates.Count);
+        return chosen;
+    }
+
+    private static (MethodInfo Chosen, string How) ChooseByNativeBody(
+        string key, Type outerType, List<Candidate> candidates, int idx, string fieldName, int targetFieldOffset)
+    {
+        var results = new NativeLambdaScan.Result[candidates.Count];
+        Array.Fill(results, NativeLambdaScan.Result.Inconclusive);
+        if (targetFieldOffset > 0)
         {
-            int idx = fallbackMatchIndex >= 0 && fallbackMatchIndex < candidates.Count ? fallbackMatchIndex : 0;
-            chosen = candidates[idx];
-            // 같은 시그니처 후보가 여럿인데 기계어로 못 가렸으면 순서 추정임을 알린다(틀리면 로딩/결과 화면 자켓이 흰 박스).
-            if (!string.IsNullOrEmpty(accessedOwnerFieldName) && candidates.Count > 1)
+            // 엄격 모드(레지스터 추적) → 아무것도 못 맞히면 느슨 모드
+            var hits = ScanAll(outerType, candidates, targetFieldOffset, strict: true, results);
+            string how = How.Native;
+            if (hits.Count == 0)
+            {
+                hits = ScanAll(outerType, candidates, targetFieldOffset, strict: false, null);
+                how = How.NativeLoose;
+            }
+
+            if (hits.Count == 1)
+                return (candidates[hits[0]].Method, how);
+
+            if (hits.Count > 1)
+            {
+                int pick = hits.Contains(idx) ? idx : hits[0];
+                _unverifiedCount++;
                 Melon<Core>.Logger.Warning(
-                    $"{LOG_PREFIX} '{key}' 기계어 대조 실패(필드 '{accessedOwnerFieldName}' 오프셋 {targetFieldOffset}) → 후보 {candidates.Count}개 중 " +
-                    $"{idx}번째({chosen.Name})를 순서로 선택. 자켓이 엉뚱하면 tools/version_diff/dis.py로 본문을 확인하세요.");
+                    $"{LOG_PREFIX} '{key}' 필드 '{fieldName}'(0x{targetFieldOffset:X})를 읽는 후보가 {hits.Count}개 → {candidates[pick].Method.Name}을(를) 순서로 선택.");
+                return (candidates[pick].Method, How.Ambiguous);
+            }
         }
 
-        _resolvedMethods[key] = chosen;
-        RecordTranslation(key, outerType, chosen, targetFieldOffset);
-        return chosen;
+        var chosen = candidates[idx].Method;
+        if (candidates.Count > 1)
+        {
+            _unverifiedCount++;
+            Melon<Core>.Logger.Warning(
+                $"{LOG_PREFIX} '{key}' 기계어 대조 실패(필드 '{fieldName}' 오프셋 {targetFieldOffset}) → 후보 {candidates.Count}개({Names(candidates)}) 중 " +
+                $"{idx}번째({chosen.Name})를 순서로 선택. 자켓이 엉뚱하면 tools/version_diff/dis.py로 본문을 확인하세요.");
+            return (chosen, How.Order);
+        }
+
+        // 후보 하나: 소유자 로드는 보이는데 대상 필드를 안 읽으면 업데이트로 람다 역할이 바뀌었을 수 있음
+        if (results[0] == NativeLambdaScan.Result.OwnerOnly)
+            Melon<Core>.Logger.Warning(
+                $"{LOG_PREFIX} '{key}' 유일한 후보 {chosen.Name}의 본문에서 소유자는 읽지만 필드 '{fieldName}'(0x{targetFieldOffset:X}) 접근이 보이지 않습니다. " +
+                "게임 업데이트로 람다가 바뀌었을 수 있으니 dis.py로 확인하세요.");
+        return (chosen, How.Single);
+    }
+
+    private static List<int> ScanAll(Type outerType, List<Candidate> candidates, int targetFieldOffset, bool strict, NativeLambdaScan.Result[]? results)
+    {
+        var hits = new List<int>();
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var c = candidates[i];
+            int ownerPtrOffset = c.OnOuter ? 0 : GetOwnerFieldOffsetOnClosure(c.Method.DeclaringType!, outerType);
+            var r = ScanNative(c.Method, ownerPtrOffset, targetFieldOffset, strict);
+            if (results != null) results[i] = r;
+            if (r == NativeLambdaScan.Result.Hit) hits.Add(i);
+        }
+        return hits;
+    }
+
+    private static unsafe NativeLambdaScan.Result ScanNative(MethodInfo method, int ownerPtrOffset, int targetFieldOffset, bool strict)
+    {
+        IntPtr codePtr = PatchResilience.GetNativeCodePointer(method);
+        if (codePtr == IntPtr.Zero) return NativeLambdaScan.Result.Inconclusive;
+        try
+        {
+            var span = new ReadOnlySpan<byte>((void*)codePtr, NativeLambdaScan.DefaultScanBytes);
+            return NativeLambdaScan.Scan(span, ownerPtrOffset, targetFieldOffset, strict);
+        }
+        catch
+        {
+            return NativeLambdaScan.Result.Inconclusive;
+        }
+    }
+
+    private static List<Candidate> Filter(List<Candidate> candidates, Predicate<Candidate> keep, string key, string what)
+    {
+        var kept = candidates.FindAll(keep);
+        if (kept.Count > 0) return kept;
+        Melon<Core>.Logger.Warning(
+            $"{LOG_PREFIX} '{key}' 후보 {candidates.Count}개({Names(candidates)}) 중 {what}가 없음 → 거르지 않고 진행(패치가 필요한 값을 못 읽을 수 있음)");
+        return candidates;
+    }
+
+    private static bool HasMembers(Type closureType, string[] names)
+    {
+        foreach (string n in names)
+        {
+            if (closureType.GetProperty(n, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) == null &&
+                closureType.GetField(n, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) == null)
+                return false;
+        }
+        return true;
+    }
+
+    private static bool CanReachOwner(Candidate c, Type outerType, Type ownerType)
+    {
+        if (c.OnOuter) return !c.Method.IsStatic && ownerType.IsAssignableFrom(outerType);
+        return PatchResilience.FindProperty(c.Method.DeclaringType!, ownerType, "__4__this", "<>4__this") != null;
+    }
+
+    private static string Names(List<Candidate> candidates)
+    {
+        var sb = new StringBuilder();
+        for (int i = 0; i < candidates.Count && i < 6; i++)
+        {
+            if (i > 0) sb.Append(", ");
+            sb.Append(candidates[i].Method.DeclaringType?.Name).Append('.').Append(candidates[i].Method.Name);
+        }
+        if (candidates.Count > 6) sb.Append(", …");
+        return sb.ToString();
     }
 
     /// <summary>
@@ -258,20 +444,33 @@ public static class LambdaTranslator
         Type paramType,
         out Func<Il2CppObjectBase, TOwner?>? getOwner,
         int fallbackMatchIndex = 0,
-        string? accessedOwnerFieldName = null)
+        string? accessedOwnerFieldName = null,
+        string[]? requiredClosureMembers = null)
         where TOwner : class
     {
         getOwner = null;
         var method = TranslateClosureMethod(
-            key, outerType, methodPrefix, new[] { paramType }, fallbackMatchIndex, accessedOwnerFieldName);
+            key, outerType, methodPrefix, new[] { paramType }, fallbackMatchIndex, accessedOwnerFieldName,
+            requiredClosureMembers, typeof(TOwner));
         if (method?.DeclaringType is Type closureType)
         {
-            string? cachedOwnerField = _entries.TryGetValue(key, out var e) && !string.IsNullOrEmpty(e.OwnerFieldName)
-                ? e.OwnerFieldName
-                : null;
-            getOwner = cachedOwnerField != null
-                ? PatchResilience.CreateGetter<TOwner>(closureType, cachedOwnerField, "__4__this", "<>4__this")
-                : PatchResilience.CreateGetter<TOwner>(closureType, "__4__this", "<>4__this");
+            if (closureType == outerType || closureType.IsAssignableFrom(outerType))
+            {
+                // this만 잡은 람다는 바깥 형식의 인스턴스 메서드라 __instance가 곧 소유자
+                getOwner = inst => inst as TOwner;
+            }
+            else
+            {
+                string? cachedOwnerField = _entries.TryGetValue(key, out var e) && !string.IsNullOrEmpty(e.OwnerFieldName)
+                    ? e.OwnerFieldName
+                    : null;
+                getOwner = cachedOwnerField != null
+                    ? PatchResilience.CreateGetter<TOwner>(closureType, cachedOwnerField, "__4__this", "<>4__this")
+                    : PatchResilience.CreateGetter<TOwner>(closureType, "__4__this", "<>4__this");
+            }
+            if (getOwner == null)
+                Melon<Core>.Logger.Warning(
+                    $"{LOG_PREFIX} '{key}' {closureType.Name}.{method.Name}에서 {typeof(TOwner).Name}(소유자)을 꺼낼 필드가 없음 → 패치는 붙지만 아무것도 안 함");
         }
         return method;
     }
@@ -286,6 +485,7 @@ public static class LambdaTranslator
         out Func<Il2CppObjectBase, int>? getState,
         out Action<Il2CppObjectBase, int>? setState)
     {
+        _requestedKeys.Add(key);
         _stopwatch.Start();
         try { return TranslateCoroutineMoveNextCore(key, outerType, coroutinePrefix, out getState, out setState); }
         finally { _stopwatch.Stop(); }
@@ -303,8 +503,7 @@ public static class LambdaTranslator
 
         if (_resolvedMethods.TryGetValue(key, out var inMemory) && inMemory.DeclaringType is Type memNested)
         {
-            getState = PatchResilience.CreateValueGetter<int>(memNested, "__1__state", "<>1__state");
-            setState = PatchResilience.CreateSetter<int>(memNested, "__1__state", "<>1__state");
+            BindState(memNested, out getState, out setState);
             return inMemory;
         }
 
@@ -313,84 +512,156 @@ public static class LambdaTranslator
         {
             var nested = outerType.GetNestedType(cached.ClosureTypeName, BindingFlags.Public | BindingFlags.NonPublic);
             var moveNext = nested != null ? AccessTools.Method(nested, cached.MethodName) : null;
-            if (nested != null && moveNext != null)
+            string? why = moveNext == null ? "상태머신/메서드 없음" : RvaMismatch(moveNext, cached);
+            if (nested != null && moveNext != null && why == null)
             {
-                getState = PatchResilience.CreateValueGetter<int>(nested, "__1__state", "<>1__state");
-                setState = PatchResilience.CreateSetter<int>(nested, "__1__state", "<>1__state");
+                BindState(nested, out getState, out setState);
                 _resolvedMethods[key] = moveNext;
                 _fastHits++;
                 return moveNext;
             }
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' 캐시 항목({cached.ClosureTypeName})이 현재 바이너리와 달라 재번역합니다: {why}");
         }
 
-        // 2단계 래퍼 (Smart Translator)
-        string altPrefix = coroutinePrefix.StartsWith("_", StringComparison.Ordinal)
-            ? "<" + coroutinePrefix.Substring(1).Replace("_d__", ">d__")
-            : coroutinePrefix;
+        // 2단계 래퍼 (Smart Translator): 이름이 정확히 "접두사 + 번호"인 상태머신만(예: _WaitUpdateCheck_d__6).
+        // 전에는 StartsWith라 "_WaitUpdateCheck_d__" 뒤에 다른 글자가 붙은 형식도 맞았음.
+        string core = coroutinePrefix.StartsWith("_", StringComparison.Ordinal) && coroutinePrefix.EndsWith("_d__", StringComparison.Ordinal)
+            ? coroutinePrefix.Substring(1, coroutinePrefix.Length - 5)
+            : coroutinePrefix.TrimEnd('_');
+        var nameRx = new Regex("^(?:_" + Regex.Escape(core) + "_d__|<" + Regex.Escape(core) + ">d__)(\\d+)$");
 
         var group = GetOrBuildGroupIndex(outerType);
+        var matches = new List<(Type Type, MethodInfo MoveNext, int Ordinal)>();
         foreach (var nested in group.StateMachineTypes)
         {
-            if (!nested.Name.StartsWith(coroutinePrefix, StringComparison.Ordinal) &&
-                !nested.Name.StartsWith(altPrefix, StringComparison.Ordinal))
-                continue;
-
+            var m = nameRx.Match(nested.Name);
+            if (!m.Success) continue;
             var moveNext = AccessTools.Method(nested, "MoveNext");
-            if (moveNext != null)
+            if (moveNext == null) continue;
+            matches.Add((nested, moveNext, int.Parse(m.Groups[1].Value)));
+        }
+
+        if (matches.Count == 0)
+        {
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' 코루틴 번역 실패: {outerType.Name}에서 '{coroutinePrefix}' 상태머신을 찾지 못함");
+            return null;
+        }
+        matches.Sort((a, b) => a.Ordinal.CompareTo(b.Ordinal));
+        if (matches.Count > 1)
+            Melon<Core>.Logger.Warning(
+                $"{LOG_PREFIX} '{key}' 이름이 맞는 상태머신 {matches.Count}개(오버로드된 코루틴?) → 번호가 가장 작은 {matches[0].Type.Name} 선택");
+
+        var chosen = matches[0];
+        BindState(chosen.Type, out getState, out setState);
+        if (getState == null || setState == null)
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' {chosen.Type.Name}에 상태 필드(<>1__state)가 없음 → 패치는 붙지만 아무것도 안 함");
+        _resolvedMethods[key] = chosen.MoveNext;
+        RecordTranslation(key, outerType, chosen.MoveNext, -1, How.Coroutine, matches.Count);
+        return chosen.MoveNext;
+    }
+
+    private static void BindState(Type stateMachine, out Func<Il2CppObjectBase, int>? getState, out Action<Il2CppObjectBase, int>? setState)
+    {
+        getState = PatchResilience.CreateValueGetter<int>(stateMachine, "__1__state", "<>1__state");
+        setState = PatchResilience.CreateSetter<int>(stateMachine, "__1__state", "<>1__state");
+    }
+
+    private static MethodInfo? TryBindCachedMethod(Type outerType, LambdaEntry cached, Type[] paramTypes, out string? why)
+    {
+        why = null;
+        if (string.IsNullOrEmpty(cached.ClosureTypeName) || string.IsNullOrEmpty(cached.MethodName))
+        {
+            why = "항목이 비어 있음";
+            return null;
+        }
+
+        var nested = cached.ClosureTypeName == outerType.Name
+            ? outerType // this만 잡은 람다(바깥 형식의 인스턴스 메서드)
+            : outerType.GetNestedType(cached.ClosureTypeName, BindingFlags.Public | BindingFlags.NonPublic);
+        if (nested == null)
+        {
+            why = $"형식 {cached.ClosureTypeName} 없음";
+            return null;
+        }
+
+        MethodInfo? method = nested.GetMethod(cached.MethodName, AllFlags, null, paramTypes, null);
+        if (method == null)
+        {
+            foreach (var m in nested.GetMethods(AllFlags))
             {
-                getState = PatchResilience.CreateValueGetter<int>(nested, "__1__state", "<>1__state");
-                setState = PatchResilience.CreateSetter<int>(nested, "__1__state", "<>1__state");
-                _resolvedMethods[key] = moveNext;
-                RecordTranslation(key, outerType, moveNext, -1);
-                return moveNext;
+                if (string.Equals(m.Name, cached.MethodName, StringComparison.Ordinal) &&
+                    ParametersCompatible(m.GetParameters(), paramTypes, out _))
+                {
+                    method = m;
+                    break;
+                }
             }
         }
-
-        Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' 코루틴 번역 실패: {outerType.Name}에서 '{coroutinePrefix}' 상태머신을 찾지 못함");
-        return null;
-    }
-
-    private static MethodInfo? TryBindCachedMethod(Type outerType, LambdaEntry cached, Type[] paramTypes)
-    {
-        if (string.IsNullOrEmpty(cached.ClosureTypeName) || string.IsNullOrEmpty(cached.MethodName))
-            return null;
-
-        var nested = outerType.GetNestedType(cached.ClosureTypeName, BindingFlags.Public | BindingFlags.NonPublic);
-        if (nested == null) return null;
-
-        var method = nested.GetMethod(cached.MethodName, AllFlags, null, paramTypes, null);
-        if (method != null) return method;
-
-        foreach (var m in nested.GetMethods(AllFlags))
+        if (method == null)
         {
-            if (string.Equals(m.Name, cached.MethodName, StringComparison.Ordinal) &&
-                ParametersCompatible(m.GetParameters(), paramTypes))
-                return m;
+            why = $"메서드 {cached.MethodName} 없음";
+            return null;
         }
-        return null;
+
+        why = RvaMismatch(method, cached);
+        return why == null ? method : null;
     }
 
-    private static List<MethodInfo> CollectClosureCandidates(Type outerType, string methodPrefix, Type[] paramTypes)
+    /// <summary>
+    /// 지문이 같아도 네이티브 주소가 저장된 RVA와 다르면(지문 충돌, 바이너리 교체) 캐시를 믿지 않는다. 같으면 null.
+    /// GameAssembly 기준 주소를 못 구해 RVA 대신 절대 주소가 저장된 경우는 ASLR로 매번 달라지므로 비교하지 않음.
+    /// </summary>
+    private static string? RvaMismatch(MethodInfo method, LambdaEntry cached)
+    {
+        if (string.IsNullOrEmpty(cached.RvaHex) || _gameAssemblyBase == IntPtr.Zero) return null;
+        IntPtr code = PatchResilience.GetNativeCodePointer(method);
+        if (code == IntPtr.Zero) return null;
+        string now = $"0x{code.ToInt64() - _gameAssemblyBase.ToInt64():X}";
+        return string.Equals(now, cached.RvaHex, StringComparison.OrdinalIgnoreCase) ? null : $"RVA {cached.RvaHex} → {now}";
+    }
+
+    private static readonly Regex OrdinalRx = new(@"b__(?:\d+_)?(\d+)$", RegexOptions.Compiled);
+
+    private static List<Candidate> CollectClosureCandidates(Type outerType, string methodPrefix, Type[] paramTypes)
     {
         string altPrefix = methodPrefix.StartsWith("_", StringComparison.Ordinal)
             ? "<" + methodPrefix.Substring(1).Replace("_b__", ">b__")
             : methodPrefix;
 
-        var list = new List<MethodInfo>();
+        var list = new List<Candidate>();
         var group = GetOrBuildGroupIndex(outerType);
 
-        foreach (var nested in group.ClosureTypes)
+        void Consider(MethodInfo m, bool onOuter)
         {
-            foreach (var m in nested.GetMethods(AllFlags))
+            if (!m.Name.StartsWith(methodPrefix, StringComparison.Ordinal) &&
+                !m.Name.StartsWith(altPrefix, StringComparison.Ordinal))
+                return;
+            if (onOuter && m.IsStatic) return; // 바깥 형식의 정적 메서드는 람다 본문이 아님
+            if (!ParametersCompatible(m.GetParameters(), paramTypes, out bool exact)) return;
+            var om = OrdinalRx.Match(m.Name);
+            list.Add(new Candidate
             {
-                if (!m.Name.StartsWith(methodPrefix, StringComparison.Ordinal) &&
-                    !m.Name.StartsWith(altPrefix, StringComparison.Ordinal))
-                    continue;
-
-                if (ParametersCompatible(m.GetParameters(), paramTypes))
-                    list.Add(m);
-            }
+                Method = m,
+                OnOuter = onOuter,
+                Exact = exact,
+                Ordinal = om.Success && int.TryParse(om.Groups[1].Value, out int n) ? n : int.MaxValue,
+            });
         }
+
+        foreach (var nested in group.ClosureTypes)
+            foreach (var m in nested.GetMethods(AllFlags))
+                Consider(m, false);
+        // Roslyn은 this만 캡처한 람다를 바깥 형식의 인스턴스 메서드(<M>b__N_M)로 만든다. 업데이트로 람다가
+        // 지역 변수를 더 이상 캡처하지 않게 되면 클로저에서 바깥 형식으로 옮겨 가므로 여기도 본다.
+        foreach (var m in outerType.GetMethods(AllFlags))
+            Consider(m, true);
+
+        // 리플렉션 순서(메타데이터 순서)는 보장되지 않으므로 람다 번호(Roslyn의 메서드 안 람다 순번 = 소스 순서)로 정렬
+        list.Sort((a, b) =>
+        {
+            int c = a.Ordinal.CompareTo(b.Ordinal);
+            return c != 0 ? c : string.CompareOrdinal(a.Method.DeclaringType?.Name + a.Method.Name, b.Method.DeclaringType?.Name + b.Method.Name);
+        });
         return list;
     }
 
@@ -412,14 +683,17 @@ public static class LambdaTranslator
         return group;
     }
 
-    private static bool ParametersCompatible(ParameterInfo[] actual, Type[] expected)
+    private static bool ParametersCompatible(ParameterInfo[] actual, Type[] expected, out bool exact)
     {
+        exact = false;
         if (actual.Length != expected.Length) return false;
+        exact = true;
         for (int i = 0; i < actual.Length; i++)
         {
-            if (actual[i].ParameterType != expected[i] &&
-                !expected[i].IsAssignableFrom(actual[i].ParameterType) &&
-                !actual[i].ParameterType.IsAssignableFrom(expected[i]))
+            var a = actual[i].ParameterType;
+            if (a == expected[i]) continue;
+            exact = false;
+            if (!expected[i].IsAssignableFrom(a) && !a.IsAssignableFrom(expected[i]))
                 return false;
         }
         return true;
@@ -465,68 +739,11 @@ public static class LambdaTranslator
         return 0x18; // IL2CPP 클로저의 기본 <>4__this 오프셋 폴백
     }
 
-    /// <summary>
-    /// 람다의 네이티브 기계어(최대 96바이트)를 스캔하여,
-    /// 클로저의 <c>&lt;&gt;4__this</c> 로드 후 소유자 객체의 <paramref name="targetFieldOffset"/> 변위(`mov reg, [reg + disp8]`)를
-    /// 실제로 참조하는지 검사합니다.
-    /// 예: PlayLoadingManager._OnLoadResource_Travel_b__2 는 [rcx + 0x30] (jacketFull),
-    ///     _b__4 는 [rcx + 0x40] (trackThumbnail)을 참조하므로 순서가 뒤집혀도 정확히 구별합니다.
-    /// </summary>
-    private static unsafe bool NativeBodyAccessesOwnerField(MethodInfo candidate, int ownerPtrOffset, int targetFieldOffset)
-    {
-        if (targetFieldOffset <= 0) return false;
-        IntPtr codePtr = PatchResilience.GetNativeCodePointer(candidate);
-        if (codePtr == IntPtr.Zero) return false;
-
-        const int ScanBytes = 96;
-        try
-        {
-            byte* p = (byte*)codePtr;
-            bool sawOwnerDeref = ownerPtrOffset <= 0;
-
-            // 람다 본문 앞쪽 96바이트 스캔 (int3 패딩 전까지)
-            for (int i = 0; i + 3 < ScanBytes; i++)
-            {
-                byte b = p[i];
-                if (b == 0xCC) break; // int3 패딩 도달
-
-                // REX.W(0x48~0x4F: R/X/B 조합 포함, 기준 레지스터 r8~r15도) + MOV r64, r/m64 (0x8B) + ModRM
-                if ((b & 0xF8) != 0x48 || p[i + 1] != 0x8B) continue;
-                byte modRm = p[i + 2];
-                int mod = (modRm >> 6) & 3;
-                int rm = modRm & 7;
-                if (mod != 1 && mod != 2) continue; // [reg + disp8] / [reg + disp32]만
-                int dispAt = i + 3 + (rm == 4 ? 1 : 0); // rm=4면 SIB 바이트(예: [r12 + disp])
-                int disp;
-                if (mod == 1)
-                {
-                    if (dispAt >= ScanBytes) continue;
-                    disp = (sbyte)p[dispAt];
-                }
-                else
-                {
-                    if (dispAt + 3 >= ScanBytes) continue;
-                    disp = p[dispAt] | (p[dispAt + 1] << 8) | (p[dispAt + 2] << 16) | (p[dispAt + 3] << 24);
-                }
-
-                if (!sawOwnerDeref && disp == ownerPtrOffset)
-                    sawOwnerDeref = true;
-                else if (sawOwnerDeref && disp == targetFieldOffset)
-                    return true;
-            }
-        }
-        catch
-        {
-            return false;
-        }
-        return false;
-    }
-
-    private static void RecordTranslation(string key, Type outerType, MethodInfo chosen, int targetFieldOffset)
+    private static void RecordTranslation(string key, Type outerType, MethodInfo chosen, int targetFieldOffset, string how, int candidateCount)
     {
         string closureName = chosen.DeclaringType?.Name ?? "";
         string ownerFieldName = "";
-        if (chosen.DeclaringType != null)
+        if (chosen.DeclaringType != null && chosen.DeclaringType != outerType)
         {
             var ownerProp = PatchResilience.FindProperty(chosen.DeclaringType, outerType, "__4__this", "<>4__this");
             if (ownerProp != null) ownerFieldName = ownerProp.Name;
@@ -534,13 +751,8 @@ public static class LambdaTranslator
 
         IntPtr codePtr = PatchResilience.GetNativeCodePointer(chosen);
         string rvaHex = "";
-        if (codePtr != IntPtr.Zero)
-        {
-            long rva = _gameAssemblyBase != IntPtr.Zero
-                ? codePtr.ToInt64() - _gameAssemblyBase.ToInt64()
-                : codePtr.ToInt64();
-            rvaHex = $"0x{rva:X}";
-        }
+        if (codePtr != IntPtr.Zero && _gameAssemblyBase != IntPtr.Zero)
+            rvaHex = $"0x{codePtr.ToInt64() - _gameAssemblyBase.ToInt64():X}";
 
         _entries[key] = new LambdaEntry
         {
@@ -549,14 +761,18 @@ public static class LambdaTranslator
             OwnerFieldName = ownerFieldName,
             TargetFieldOffset = targetFieldOffset,
             RvaHex = rvaHex,
+            How = how,
+            Candidates = candidateCount,
         };
         _dirty = true;
         _translatedCount++;
 
         Core.DebugLog(
             $"{LOG_PREFIX} 번역됨 [{key}] -> {outerType.Name}.{closureName}.{chosen.Name} " +
-            $"(RVA={rvaHex}{(targetFieldOffset > 0 ? $", FieldOffset=0x{targetFieldOffset:X}" : "")})");
+            $"(RVA={rvaHex}, how={how}, 후보 {candidateCount}개{(targetFieldOffset > 0 ? $", FieldOffset=0x{targetFieldOffset:X}" : "")})");
     }
+
+    private static readonly Regex EntryRx = new("\"(?<key>[^\"]+)\"\\s*:\\s*\\{(?<body>[^{}]*)\\}", RegexOptions.Compiled);
 
     private static void LoadCache()
     {
@@ -569,27 +785,35 @@ public static class LambdaTranslator
         if (fpMatch.Success)
             _cachedBuildFingerprint = fpMatch.Groups[1].Value;
 
-        var entryMatches = Regex.Matches(
-            json,
-            "\"(?<key>[^\"]+)\"\\s*:\\s*\\{\\s*" +
-            "\"closure\"\\s*:\\s*\"(?<closure>[^\"]*)\"\\s*,\\s*" +
-            "\"method\"\\s*:\\s*\"(?<method>[^\"]*)\"\\s*,\\s*" +
-            "\"ownerField\"\\s*:\\s*\"(?<ownerField>[^\"]*)\"\\s*,\\s*" +
-            "\"fieldOffset\"\\s*:\\s*(?<fieldOffset>-?\\d+)\\s*,\\s*" +
-            "\"rva\"\\s*:\\s*\"(?<rva>[^\"]*)\"\\s*\\}");
-
-        foreach (Match m in entryMatches)
+        // 항목마다 필드를 따로 읽어 순서·추가 필드(how, candidates)에 영향받지 않게 함(옛 형식도 그대로 읽힘)
+        foreach (Match m in EntryRx.Matches(json))
         {
-            string key = m.Groups["key"].Value;
-            _entries[key] = new LambdaEntry
+            string body = m.Groups["body"].Value;
+            string closure = Str(body, "closure"), method = Str(body, "method");
+            if (closure.Length == 0 || method.Length == 0) continue;
+            _entries[Unescape(m.Groups["key"].Value)] = new LambdaEntry
             {
-                ClosureTypeName = m.Groups["closure"].Value,
-                MethodName = m.Groups["method"].Value,
-                OwnerFieldName = m.Groups["ownerField"].Value,
-                TargetFieldOffset = int.TryParse(m.Groups["fieldOffset"].Value, out int fo) ? fo : -1,
-                RvaHex = m.Groups["rva"].Value,
+                ClosureTypeName = closure,
+                MethodName = method,
+                OwnerFieldName = Str(body, "ownerField"),
+                TargetFieldOffset = Int(body, "fieldOffset", -1),
+                RvaHex = Str(body, "rva"),
+                How = Str(body, "how"),
+                Candidates = Int(body, "candidates", 0),
             };
         }
+    }
+
+    private static string Str(string body, string name)
+    {
+        var m = Regex.Match(body, "\"" + name + "\"\\s*:\\s*\"(?<v>(?:[^\"\\\\]|\\\\.)*)\"");
+        return m.Success ? Unescape(m.Groups["v"].Value) : "";
+    }
+
+    private static int Int(string body, string name, int fallback)
+    {
+        var m = Regex.Match(body, "\"" + name + "\"\\s*:\\s*(?<v>-?\\d+)");
+        return m.Success && int.TryParse(m.Groups["v"].Value, out int v) ? v : fallback;
     }
 
     private static void SaveCache()
@@ -602,24 +826,29 @@ public static class LambdaTranslator
         sb.AppendLine($"  \"updatedAt\": \"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\",");
         sb.AppendLine("  \"entries\": {");
 
-        int i = 0;
-        foreach (var kv in _entries)
+        var keys = new List<string>(_entries.Keys);
+        keys.Sort(StringComparer.Ordinal);
+        for (int i = 0; i < keys.Count; i++)
         {
-            i++;
-            var e = kv.Value;
-            string comma = i < _entries.Count ? "," : "";
+            var e = _entries[keys[i]];
+            string comma = i < keys.Count - 1 ? "," : "";
             sb.AppendLine(
-                $"    \"{EscapeJson(kv.Key)}\": {{ " +
+                $"    \"{EscapeJson(keys[i])}\": {{ " +
                 $"\"closure\": \"{EscapeJson(e.ClosureTypeName)}\", " +
                 $"\"method\": \"{EscapeJson(e.MethodName)}\", " +
                 $"\"ownerField\": \"{EscapeJson(e.OwnerFieldName)}\", " +
                 $"\"fieldOffset\": {e.TargetFieldOffset}, " +
-                $"\"rva\": \"{EscapeJson(e.RvaHex)}\" }}{comma}");
+                $"\"rva\": \"{EscapeJson(e.RvaHex)}\", " +
+                $"\"how\": \"{EscapeJson(e.How)}\", " +
+                $"\"candidates\": {e.Candidates} }}{comma}");
         }
 
         sb.AppendLine("  }");
         sb.AppendLine("}");
-        File.WriteAllText(_cacheFilePath, sb.ToString(), Encoding.UTF8);
+        // 쓰는 도중 게임이 꺼져도 사전이 반쪽이 되지 않게 임시 파일에 쓰고 바꿔치기
+        string tmp = _cacheFilePath + ".tmp";
+        File.WriteAllText(tmp, sb.ToString(), new UTF8Encoding(false));
+        File.Move(tmp, _cacheFilePath, overwrite: true);
         _cachedBuildFingerprint = _currentBuildFingerprint;
         _retranslating = false;
         _dirty = false;
@@ -627,4 +856,7 @@ public static class LambdaTranslator
 
     private static string EscapeJson(string s)
         => string.IsNullOrEmpty(s) ? "" : s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+    private static string Unescape(string s)
+        => s.IndexOf('\\') < 0 ? s : s.Replace("\\\"", "\"").Replace("\\\\", "\\");
 }

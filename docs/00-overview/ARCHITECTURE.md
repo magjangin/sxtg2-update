@@ -25,6 +25,7 @@ mod/
 │   ├── PatchResilience.cs    업데이트 내성 (클로저·코루틴 동적 탐색, 오타 양방향 해석, ICF 가드로 패치 건너뛰기)
 │   ├── IcfScanner.cs         실행 중 ICF 검사 (훅 대상 주소를 공유하는 IL2CPP 메서드 수, 빌드별 캐시)
 │   ├── LambdaTranslator.cs   이중래퍼 람다 번역가 (Fast-Path 캐시 + x64 네이티브 오프셋 스마트 번역)
+│   ├── NativeLambdaScan.cs   람다 기계어에서 소유자 → 대상 필드 로드 찾기 (레지스터 추적, 순수 함수)
 │   └── UpdateGuard.cs        Steam 빌드 ID 검증 및 Unity 내부 예외 포워딩
 ├── Loaders/
 │   ├── BmsParser.cs          BPM, 마지막 노트 끝 시각, #TITLE/#ARTIST

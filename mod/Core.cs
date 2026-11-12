@@ -247,6 +247,7 @@ public class Core : MelonMod
     // For custom tracks skip both lookups and hand b__14 a TextAsset holding the album BMS directly.
     // Resolved structurally via PatchResilience so closure/lambda ordinal changes across game updates never break it.
     [HarmonyPatch]
+    [CriticalPatch("커스텀 곡이 로딩 화면에서 멈춤 (FMOD 뱅크 조회 NRE)")]
     public static class SixtarGlobal_GotoPlayScene_LoadBundle_Patch
     {
         private static Func<Il2CppObjectBase, ITrack?>? _getTrack;
@@ -256,8 +257,9 @@ public class Core : MelonMod
 
         public static MethodBase? TargetMethod()
         {
-            var target = PatchResilience.FindClosureMethod(
-                typeof(SixtarGlobal), "_GotoPlayScene_b__", typeof(ISixtarAssetBundle));
+            // track/args를 캡처한 클로저의 번들 콜백만(다른 클로저에 같은 시그니처 람다가 생겨도 헷갈리지 않게)
+            var target = PatchResilience.FindClosureMethodCapturing(
+                typeof(SixtarGlobal), "_GotoPlayScene_b__", new[] { "track", "args" }, typeof(ISixtarAssetBundle));
             if (target?.DeclaringType is Type closureType)
             {
                 _getTrack = PatchResilience.CreateGetter<ITrack>(closureType, "track");
@@ -268,6 +270,15 @@ public class Core : MelonMod
                 var patternMethod = PatchResilience.FindMethodInType(closureType, "_GotoPlayScene_b__", typeof(TextAsset));
                 if (patternMethod != null)
                     _invokePatternReady = PatchResilience.CreateAction<TextAsset>(closureType, patternMethod);
+            }
+            // 대상은 찾았는데 필요한 접근자가 없으면 Prefix가 매번 원본으로 넘겨 커스텀 곡이 로딩에서 멈춘다.
+            // 조용히 붙이지 말고 패치 실패로 보고(필수 패치 빠짐 오류로 드러남).
+            if (target != null && (_getTrack == null || _invokePatternReady == null))
+            {
+                Melon<Core>.Logger.Error(
+                    $"[CustomChart] {target.DeclaringType?.Name}.{target.Name}에서 track 접근자({_getTrack != null}) 또는 " +
+                    $"패턴 콜백(TextAsset 람다, {_invokePatternReady != null})을 찾지 못함");
+                return null;
             }
             return target;
         }
@@ -600,7 +611,8 @@ public class Core : MelonMod
 
         public static MethodBase? TargetMethod()
         {
-            var m = PatchResilience.FindClosureCallback(typeof(TrackObject), "_LoadThumbnail_b__", typeof(Sprite), out _getOwner);
+            var m = PatchResilience.FindClosureCallback(typeof(TrackObject), "_LoadThumbnail_b__", typeof(Sprite), out _getOwner,
+                requiredClosureMembers: new[] { "track" });
             if (m?.DeclaringType is Type closureType)
                 _getTrack = PatchResilience.CreateGetter<ITrack>(closureType, "track");
             return m;
