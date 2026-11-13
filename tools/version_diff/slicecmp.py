@@ -6,6 +6,7 @@ import pefile
 slice_dir, game_dll = sys.argv[1], sys.argv[2]
 g = pefile.PE(game_dll, fast_load=True)
 gdata = g.get_memory_mapped_image()
+g.close()
 
 total = same = diff = missing = 0
 diffs = []
@@ -13,10 +14,12 @@ for path in sorted(glob.glob(os.path.join(slice_dir, "*.dll"))):
     names = path + ".names.json"
     if not os.path.exists(names):
         continue
-    meta = json.load(open(names, encoding="utf-8"))
+    with open(names, encoding="utf-8") as nf:
+        meta = json.load(nf)
     s = pefile.PE(path, fast_load=True)
     sbase = s.OPTIONAL_HEADER.ImageBase
     sdata = s.get_memory_mapped_image()
+    s.close()
     for f in meta["functions"]:
         va = int(f["va"], 16); rva = int(f["rva"], 16); size = int(f["size"], 16)
         off = va - sbase  # 슬라이스 안의 RVA

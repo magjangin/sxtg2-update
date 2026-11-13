@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-12)
+# 현재 상태 (2026-11-14)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 120개(`[Harmony] 패치 120개 모두 적용 완료`). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -51,7 +51,8 @@
 
 21. **#18** 코드 리뷰·람다 찾기 강화 (2026-11-12): 후보에 바깥 형식 인스턴스 메서드(`this`만 잡은 람다) 포함, 람다 번호 정렬, 정확한 형식 우선, 캡처 필드·소유자 도달로 거르기, 레지스터를 따라가는 기계어 대조(`Managers/NativeLambdaScan.cs`, 모든 후보 대조·후보 1개도 검증), 사전에 `how`·RVA 대조·안 쓰는 키 정리, 코루틴 이름 정확 일치, `GotoPlayScene` 번들 콜백 `[CriticalPatch]`, ICF 검사 없이 붙은 패치 경고. 오프라인 시험 `tools/lambdascan` 35건, 실기 부팅 3회(옛 사전 → 새 형식, 직행 9개, 사전 삭제 후 재번역 9개 RVA 동일·경고 0). 커스텀 곡 플레이는 이번에 안 함. [REVIEW_2026-11-12.md](03-development/REVIEW_2026-11-12.md)
 
-22. 병목 확인·람다 기계어 대조 명령 단위·사전 JIT 검사 (2026-11-14): 부팅 비용 실측(Harmony 120개 2.1초 = 패치당 고정 17ms, 튀는 패치 없음 → 패치별 시간 로그만 추가), `Managers/X64Decoder.cs`로 명령 경계를 따라 레지스터 추적(`lea`/`call`/`xor` 덮어쓰기 반영, capstone 대조 명령 188,398개 불일치 0), `FindMethodInType`도 번역 사전에(항목 10개), `Managers/PatchPreflight.cs`로 패치 코드를 미리 JIT해 업데이트로 사라진 인터롭 멤버를 쓰는 패치는 건너뜀, hwa 폴더 경로를 게임 루트로 통일. 실기 부팅 2회(120개 적용·사전 JIT 435개 54ms·재번역 10개 RVA 동일·경고 0). 커스텀 곡 플레이는 이번에도 안 함(사용자가 PC 사용 중). [REVIEW_2026-11-14.md](03-development/REVIEW_2026-11-14.md)
+22. **#19** 병목 확인·람다 기계어 대조 명령 단위·사전 JIT 검사 (2026-11-14): 부팅 비용 실측(Harmony 120개 2.1초 = 패치당 고정 17ms, 튀는 패치 없음 → 패치별 시간 로그만 추가), `Managers/X64Decoder.cs`로 명령 경계를 따라 레지스터 추적(`lea`/`call`/`xor` 덮어쓰기 반영, capstone 대조 명령 188,398개 불일치 0), `FindMethodInType`도 번역 사전에(항목 10개), `Managers/PatchPreflight.cs`로 패치 코드를 미리 JIT해 업데이트로 사라진 인터롭 멤버를 쓰는 패치는 건너뜀, hwa 폴더 경로를 게임 루트로 통일. 실기 부팅 2회(120개 적용·사전 JIT 435개 54ms·재번역 10개 RVA 동일·경고 0). 커스텀 곡 플레이는 이번에도 안 함(사용자가 PC 사용 중). [REVIEW_2026-11-14.md](03-development/REVIEW_2026-11-14.md)
+23. 전 파일 리팩토링·병목 개선·업데이트 내성 강화 (2026-11-14): `LambdaTranslator.TranslateMethodInType` 외부 타입/캐시 바인딩·로그 중복 수정, `PatchPreflight` IL/서브그래프 캐시 및 `InlineField`/`InlineType`/`InlineTok` 토큰 검사, `PatchResilience` Expression 델리게이트 캐시 + `CreateSetter` 타입 폴백 + 핵심 7개 패치 `[CriticalPatch]` 확대, `CustomTrackManager`/`Loaders` 폴더당 단일 디렉터리 스캔·무할당 `Span`/`char[]` 파싱, `UpdatePatternTime` 매 프레임 IL2CPP 프로퍼티 호출 제거, `tools/` 핸들·캐시 정리. Release 빌드(경고/오류 0), `lambdascan` 40건 `ALL PASS`, 실제 `hwa\` 15곡+엣지 케이스 SHA-256 동등성 100% 검증 및 `Mods/` 배포(실기 부팅은 PC 사용 중으로 생략). [REVIEW_2026-11-14.md](03-development/REVIEW_2026-11-14.md) 7장.
 
 ## 알려진 한계
 

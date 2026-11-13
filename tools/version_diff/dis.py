@@ -6,9 +6,11 @@ import pefile, capstone
 dll, sj = sys.argv[1], sys.argv[2]
 cache = sj + ".addr.pickle"
 if os.path.exists(cache):
-    names, meta = pickle.load(open(cache, "rb"))
+    with open(cache, "rb") as f:
+        names, meta = pickle.load(f)
 else:
-    d = json.load(open(sj, encoding="utf-8"))
+    with open(sj, encoding="utf-8") as f:
+        d = json.load(f)
     names = {}
     for m in d["ScriptMethod"]:
         names.setdefault(m["Address"], []).append(m["Name"])
@@ -17,12 +19,14 @@ else:
         meta[m["Address"]] = m["Name"]
     for m in d.get("ScriptMetadata", []):
         meta[m["Address"]] = m["Name"]
-    pickle.dump((names, meta), open(cache, "wb"))
+    with open(cache, "wb") as f:
+        pickle.dump((names, meta), f)
 starts = sorted(names)
 
 pe = pefile.PE(dll, fast_load=True)
 img = pe.get_memory_mapped_image()
 base = pe.OPTIONAL_HEADER.ImageBase
+pe.close()
 md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 
 def nm(rva):

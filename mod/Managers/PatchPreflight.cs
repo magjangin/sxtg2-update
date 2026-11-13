@@ -30,6 +30,12 @@ public static class PatchPreflight
     /// <summary>메서드별 결과(null = 통과). 여러 패치가 같은 도우미를 불러도 한 번만 JIT.</summary>
     private static readonly Dictionary<MethodBase, string?> Verdicts = new();
 
+    /// <summary>메서드별 IL 피호출자·토큰 검사 캐시. 부팅 중 각 메서드의 IL을 한 번만 읽는다.</summary>
+    private static readonly Dictionary<MethodBase, (List<MethodBase> Callees, string? ResolveError)> CalleeCache = new();
+
+    /// <summary>서브그래프 전체가 통과한 메서드 집합(재귀·공유 도우미 재탐색 생략).</summary>
+    private static readonly HashSet<MethodBase> CleanSubgraphs = new();
+
     private static Dictionary<short, OpCode>? _opcodes;
 
     public static int MethodsChecked => Verdicts.Count;
@@ -47,16 +53,23 @@ public static class PatchPreflight
         while (queue.Count > 0)
         {
             var m = queue.Dequeue();
+            if (CleanSubgraphs.Contains(m)) continue;
+
             string? why = Prepare(m);
             if (why != null) return $"{Describe(m)}: {why}";
 
-            var callees = Callees(m, out string? resolveError);
+            var (callees, resolveError) = GetOrParseCallees(m);
             if (resolveError != null) return $"{Describe(m)}: {resolveError}";
             foreach (var callee in callees)
             {
-                if (callee.Module == module && seen.Add(callee)) queue.Enqueue(callee);
+                if (callee.Module == module && !CleanSubgraphs.Contains(callee) && seen.Add(callee))
+                    queue.Enqueue(callee);
             }
         }
+
+        // 도달 가능한 모든 메서드가 통과했으므로 이번 패치에서 확인한 서브그래프 노드들은 다시 훑지 않는다.
+        foreach (var m in seen)
+            CleanSubgraphs.Add(m);
         return null;
     }
 
@@ -93,15 +106,28 @@ public static class PatchPreflight
         return verdict;
     }
 
-    /// <summary>IL을 명령 단위로 읽어 call/callvirt/newobj/ldftn/ldvirtftn 대상 메서드를 모은다.</summary>
-    private static List<MethodBase> Callees(MethodBase m, out string? resolveError)
+    /// <summary>IL을 명령 단위로 읽어 call/callvirt/newobj/ldftn/ldvirtftn 및 필드·타입 토큰을 검사·수집한다.</summary>
+    private static (List<MethodBase> Callees, string? ResolveError) GetOrParseCallees(MethodBase m)
     {
-        resolveError = null;
+        if (CalleeCache.TryGetValue(m, out var cached))
+            return cached;
+
+        string? resolveError = null;
         var result = new List<MethodBase>();
         byte[]? il;
         try { il = m.GetMethodBody()?.GetILAsByteArray(); }
-        catch { return result; }
-        if (il == null) return result;
+        catch
+        {
+            var empty = (result, (string?)null);
+            CalleeCache[m] = empty;
+            return empty;
+        }
+        if (il == null)
+        {
+            var empty = (result, (string?)null);
+            CalleeCache[m] = empty;
+            return empty;
+        }
 
         var ops = Opcodes();
         Type[]? typeArgs = m.DeclaringType is { IsGenericType: true } dt ? dt.GetGenericArguments() : null;
@@ -113,28 +139,54 @@ public static class PatchPreflight
             if (!ops.TryGetValue(value, out var op)) break; // 알 수 없는 바이트: 더 읽지 않음(검사만 줄어듦)
             i += op.Size;
 
-            if (op.OperandType == OperandType.InlineMethod && i + 4 <= il.Length)
+            if (i + 4 <= il.Length && op.OperandType is OperandType.InlineMethod or OperandType.InlineField or OperandType.InlineType or OperandType.InlineTok)
             {
                 int token = BitConverter.ToInt32(il, i);
-                try
+                if (TryResolveToken(m.Module, op.OperandType, token, typeArgs, methodArgs, out MethodBase? callee, ref resolveError) && callee != null)
                 {
-                    if (m.Module.ResolveMethod(token, typeArgs, methodArgs) is MethodBase callee)
-                    {
-                        // 제네릭 인스턴스는 정의로 바꿔 IL을 따라감(JIT 검사는 정의에서 건너뜀)
-                        if (callee is MethodInfo mi && mi.IsGenericMethod && !mi.IsGenericMethodDefinition)
-                            callee = mi.GetGenericMethodDefinition();
-                        result.Add(callee);
-                    }
+                    // 제네릭 인스턴스는 정의로 바꿔 IL을 따라감(JIT 검사는 정의에서 건너뜀)
+                    if (callee is MethodInfo mi && mi.IsGenericMethod && !mi.IsGenericMethodDefinition)
+                        callee = mi.GetGenericMethodDefinition();
+                    result.Add(callee);
                 }
-                catch (Exception ex) when (ex is MissingMemberException or TypeLoadException or BadImageFormatException)
-                {
-                    resolveError ??= $"{ex.GetType().Name}: {ex.Message}";
-                }
-                catch { }
             }
             i += OperandSize(op.OperandType, il, i);
         }
-        return result;
+
+        var entry = (result, resolveError);
+        CalleeCache[m] = entry;
+        return entry;
+    }
+
+    private static bool TryResolveToken(
+        Module module, OperandType opType, int token, Type[]? typeArgs, Type[]? methodArgs,
+        out MethodBase? callee, ref string? resolveError)
+    {
+        callee = null;
+        try
+        {
+            switch (opType)
+            {
+                case OperandType.InlineMethod:
+                    callee = module.ResolveMethod(token, typeArgs, methodArgs);
+                    return callee != null;
+                case OperandType.InlineField:
+                    module.ResolveField(token, typeArgs, methodArgs);
+                    return false;
+                case OperandType.InlineType:
+                    module.ResolveType(token, typeArgs, methodArgs);
+                    return false;
+                case OperandType.InlineTok:
+                    module.ResolveMember(token, typeArgs, methodArgs);
+                    return false;
+            }
+        }
+        catch (Exception ex) when (ex is MissingMemberException or TypeLoadException or BadImageFormatException)
+        {
+            resolveError ??= $"{ex.GetType().Name}: {ex.Message}";
+        }
+        catch { }
+        return false;
     }
 
     private static int OperandSize(OperandType t, byte[] il, int at) => t switch

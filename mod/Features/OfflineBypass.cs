@@ -202,6 +202,7 @@ public static class OfflineBypass
     /// and use either cached tables on disk or the built-in serialized SXGT_TextAsset tables.
     /// </summary>
     [HarmonyPatch(typeof(BackEndRequestService), nameof(BackEndRequestService.GetTableVersions))]
+    [CriticalPatch("오프라인 부팅 시 내장 테이블 폴백")]
     public static class BackEndRequestService_GetTableVersions_Patch
     {
         public static bool Prefix(Il2CppSystem.Action<Il2CppSystem.Collections.Generic.List<IRequestService.ITableVersion>> getTableVersions)
@@ -260,6 +261,7 @@ public static class OfflineBypass
     /// callback before setting HasInitialized = true.
     /// </summary>
     [HarmonyPatch(typeof(BackEndUserDataService), nameof(BackEndUserDataService.GetUnlockData))]
+    [CriticalPatch("오프라인 부팅 시 해금 데이터 초기화")]
     public static class BackEndUserDataService_GetUnlockData_Patch
     {
         public static bool Prefix(Il2CppSystem.Action<Il2CppSystem.Collections.Generic.List<string>> getUnlockItemList)

@@ -37,6 +37,10 @@ public static class PatchResilience
         nameof(Il2CppObjectBase.WasCollected),
     };
 
+    private static readonly Dictionary<(Type TargetType, MemberInfo Member, Type ValueType), Delegate> GetterCache = new();
+    private static readonly Dictionary<(Type TargetType, MemberInfo Member, Type ValueType), Delegate> SetterCache = new();
+    private static readonly Dictionary<(Type TargetType, MethodInfo Method, Type ArgType), Delegate> ActionCache = new();
+
     /// <summary>
     /// Applies all [HarmonyPatch] classes in the mod assembly one by one with runtime ICF trivial-stub protection.
     /// </summary>
@@ -101,6 +105,14 @@ public static class PatchResilience
         {
             try
             {
+                if (targets.Count == 0)
+                {
+                    failed++;
+                    logger.Error($"[Harmony] 패치 '{type.Name}'의 대상 메서드를 찾지 못해 건너뜁니다.");
+                    NoteCritical(type, criticalMissing);
+                    continue;
+                }
+
                 if (ShouldSkipForIcf(type, targets, logger))
                 {
                     skippedIcf++;
@@ -112,9 +124,6 @@ public static class PatchResilience
                 harmony.CreateClassProcessor(type).Patch();
                 patchTimes.Add((type.Name, (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency));
                 applied++;
-                // 대상을 미리 못 구했는데 Harmony는 붙였다 = ICF 검사를 거치지 않은 패치
-                if (targets.Count == 0)
-                    logger.Warning($"[Harmony/ICFGuard] '{type.Name}' 대상 주소를 미리 구하지 못해 ICF 검사 없이 적용됨 (TargetMethod/특성 확인 필요)");
             }
             catch (Exception ex)
             {
@@ -232,7 +241,12 @@ public static class PatchResilience
                 if (info.argumentTypes != null) argTypes = info.argumentTypes;
             }
 
-            if (declType != null && !string.IsNullOrEmpty(methodName))
+            if (declType != null && methodType == MethodType.Constructor)
+            {
+                if (AccessTools.Constructor(declType, argTypes) is MethodBase ctor)
+                    list.Add(ctor);
+            }
+            else if (declType != null && !string.IsNullOrEmpty(methodName))
             {
                 MethodBase? resolved = methodType switch
                 {
@@ -240,7 +254,8 @@ public static class PatchResilience
                     MethodType.Setter => AccessTools.PropertySetter(declType, methodName),
                     _ => AccessTools.Method(declType, methodName, argTypes),
                 };
-                list.Add(resolved);
+                if (resolved != null)
+                    list.Add(resolved);
             }
         }
         catch
@@ -466,11 +481,19 @@ public static class PatchResilience
     /// assignable to <paramref name="propertyType"/> if a field was renamed in a game update.
     /// </summary>
     public static PropertyInfo? FindProperty(Type targetType, Type propertyType, params string[] preferredNames)
+        => FindPropertyCore(targetType, propertyType, requireSetter: false, preferredNames);
+
+    private static PropertyInfo? FindPropertyCore(Type targetType, Type valueType, bool requireSetter, params string[] preferredNames)
     {
+        bool Matches(PropertyInfo p) => requireSetter
+            ? p.SetMethod != null && p.PropertyType.IsAssignableFrom(valueType)
+            : p.GetMethod != null && valueType.IsAssignableFrom(p.PropertyType);
+
         foreach (string name in preferredNames)
         {
-            var p = targetType.GetProperty(name, AllFlags);
-            if (p != null && p.GetMethod != null && propertyType.IsAssignableFrom(p.PropertyType))
+            var p = targetType.GetProperty(name, AllFlags)
+                ?? targetType.GetProperty($"_{name}_k__BackingField", AllFlags);
+            if (p != null && Matches(p))
                 return p;
         }
 
@@ -478,9 +501,11 @@ public static class PatchResilience
         int count = 0;
         foreach (var p in targetType.GetProperties(AllFlags))
         {
-            if (BasePropertyNames.Contains(p.Name) || p.GetMethod == null) continue;
-            if (p.PropertyType == propertyType ||
-                (propertyType != typeof(Il2CppObjectBase) && propertyType.IsAssignableFrom(p.PropertyType)))
+            if (BasePropertyNames.Contains(p.Name)) continue;
+            bool ok = requireSetter
+                ? p.SetMethod != null && (p.PropertyType == valueType || (valueType != typeof(Il2CppObjectBase) && p.PropertyType.IsAssignableFrom(valueType)))
+                : p.GetMethod != null && (p.PropertyType == valueType || (valueType != typeof(Il2CppObjectBase) && valueType.IsAssignableFrom(p.PropertyType)));
+            if (ok)
             {
                 singleMatch = p;
                 count++;
@@ -497,18 +522,25 @@ public static class PatchResilience
     {
         var prop = FindProperty(targetType, typeof(T), preferredNames);
         if (prop?.GetMethod == null) return null;
+        var key = (targetType, (MemberInfo)prop, typeof(T));
+        if (GetterCache.TryGetValue(key, out var cached))
+            return (Func<Il2CppObjectBase, T?>)cached;
+
+        Func<Il2CppObjectBase, T?> compiled;
         try
         {
             var instParam = Expression.Parameter(typeof(Il2CppObjectBase), "inst");
             var castInst = Expression.Convert(instParam, targetType);
             var propAccess = Expression.Property(castInst, prop);
             var castResult = Expression.Convert(propAccess, typeof(T));
-            return Expression.Lambda<Func<Il2CppObjectBase, T?>>(castResult, instParam).Compile();
+            compiled = Expression.Lambda<Func<Il2CppObjectBase, T?>>(castResult, instParam).Compile();
         }
         catch
         {
-            return inst => prop.GetValue(inst) as T;
+            compiled = inst => prop.GetValue(inst) as T;
         }
+        GetterCache[key] = compiled;
+        return compiled;
     }
 
     /// <summary>
@@ -519,38 +551,40 @@ public static class PatchResilience
     {
         var prop = FindProperty(targetType, typeof(T), preferredNames);
         if (prop?.GetMethod == null) return null;
+        var key = (targetType, (MemberInfo)prop, typeof(T));
+        if (GetterCache.TryGetValue(key, out var cached))
+            return (Func<Il2CppObjectBase, T>)cached;
+
+        Func<Il2CppObjectBase, T> compiled;
         try
         {
             var instParam = Expression.Parameter(typeof(Il2CppObjectBase), "inst");
             var castInst = Expression.Convert(instParam, targetType);
             var propAccess = Expression.Property(castInst, prop);
-            return Expression.Lambda<Func<Il2CppObjectBase, T>>(propAccess, instParam).Compile();
+            compiled = Expression.Lambda<Func<Il2CppObjectBase, T>>(propAccess, instParam).Compile();
         }
         catch
         {
-            return inst => (T)prop.GetValue(inst)!;
+            compiled = inst => (T)prop.GetValue(inst)!;
         }
+        GetterCache[key] = compiled;
+        return compiled;
     }
 
     /// <summary>
     /// Compiles a zero-reflection property setter: (Il2CppObjectBase inst, T val) =&gt; ((TargetType)inst).Prop = val.
-    /// Checks both normal property names and Il2CppInterop auto-property backing fields (_Name_k__BackingField).
+    /// Checks both normal property names and Il2CppInterop auto-property backing fields (_Name_k__BackingField),
+    /// falling back to a unique writable property of type <typeparamref name="T"/>.
     /// </summary>
     public static Action<Il2CppObjectBase, T>? CreateSetter<T>(Type targetType, params string[] preferredNames)
     {
-        PropertyInfo? prop = null;
-        foreach (string name in preferredNames)
-        {
-            var candidate = targetType.GetProperty(name, AllFlags)
-                ?? targetType.GetProperty($"_{name}_k__BackingField", AllFlags);
-            if (candidate?.SetMethod != null && candidate.PropertyType.IsAssignableFrom(typeof(T)))
-            {
-                prop = candidate;
-                break;
-            }
-        }
+        var prop = FindPropertyCore(targetType, typeof(T), requireSetter: true, preferredNames);
         if (prop?.SetMethod == null) return null;
+        var key = (targetType, (MemberInfo)prop, typeof(T));
+        if (SetterCache.TryGetValue(key, out var cached))
+            return (Action<Il2CppObjectBase, T>)cached;
 
+        Action<Il2CppObjectBase, T> compiled;
         try
         {
             var instParam = Expression.Parameter(typeof(Il2CppObjectBase), "inst");
@@ -558,12 +592,14 @@ public static class PatchResilience
             var castInst = Expression.Convert(instParam, targetType);
             var propAccess = Expression.Property(castInst, prop);
             var assign = Expression.Assign(propAccess, Expression.Convert(valParam, prop.PropertyType));
-            return Expression.Lambda<Action<Il2CppObjectBase, T>>(assign, instParam, valParam).Compile();
+            compiled = Expression.Lambda<Action<Il2CppObjectBase, T>>(assign, instParam, valParam).Compile();
         }
         catch
         {
-            return (inst, val) => prop.SetValue(inst, val);
+            compiled = (inst, val) => prop.SetValue(inst, val);
         }
+        SetterCache[key] = compiled;
+        return compiled;
     }
 
     /// <summary>
@@ -571,18 +607,25 @@ public static class PatchResilience
     /// </summary>
     public static Action<Il2CppObjectBase, TArg>? CreateAction<TArg>(Type targetType, MethodInfo method)
     {
+        var key = (targetType, method, typeof(TArg));
+        if (ActionCache.TryGetValue(key, out var cached))
+            return (Action<Il2CppObjectBase, TArg>)cached;
+
+        Action<Il2CppObjectBase, TArg> compiled;
         try
         {
             var instParam = Expression.Parameter(typeof(Il2CppObjectBase), "inst");
             var argParam = Expression.Parameter(typeof(TArg), "arg");
             var castInst = Expression.Convert(instParam, targetType);
             var call = Expression.Call(castInst, method, argParam);
-            return Expression.Lambda<Action<Il2CppObjectBase, TArg>>(call, instParam, argParam).Compile();
+            compiled = Expression.Lambda<Action<Il2CppObjectBase, TArg>>(call, instParam, argParam).Compile();
         }
         catch
         {
-            return (inst, arg) => method.Invoke(inst, new object?[] { arg });
+            compiled = (inst, arg) => method.Invoke(inst, new object?[] { arg });
         }
+        ActionCache[key] = compiled;
+        return compiled;
     }
 
     /// <summary>
