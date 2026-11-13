@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -46,16 +47,32 @@ public static class PatchResilience
 
     public static void ApplyAllPatches(HarmonyLib.Harmony harmony, MelonLogger.Instance logger, string gameRoot)
     {
-        int applied = 0, failed = 0, skippedIcf = 0;
+        int applied = 0, failed = 0, skippedIcf = 0, skippedPreflight = 0;
         var criticalMissing = new List<string>();
+        var total = Stopwatch.StartNew();
+        var preflightTime = new Stopwatch();
+        var patchTimes = new List<(string Name, double Ms)>();
 
         // 1) 패치 클래스별 대상과 네이티브 주소를 먼저 모두 구한다(LambdaTranslator가 결과를 기억하므로 Harmony가
-        //    다시 TargetMethod를 불러도 같은 값).
+        //    다시 TargetMethod를 불러도 같은 값). 그 전에 패치 코드를 미리 JIT해, 게임 업데이트로 인터롭 멤버가
+        //    사라진 패치는 붙이지 않는다(붙이면 처음 불릴 때마다 트램펄린 오류).
         var plan = new List<(Type Type, List<(MethodBase Method, IntPtr Code)> Targets)>();
         var addresses = new HashSet<IntPtr>();
         foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Core).Assembly))
         {
             if (type.GetCustomAttributes(typeof(HarmonyPatch), false).Length == 0) continue;
+
+            preflightTime.Start();
+            string? broken = PatchPreflight.Check(type);
+            preflightTime.Stop();
+            if (broken != null)
+            {
+                skippedPreflight++;
+                logger.Error($"[Harmony/Preflight] '{type.Name}' 건너뜀: 게임 업데이트로 모드가 쓰는 멤버가 바뀜 — {broken}");
+                NoteCritical(type, criticalMissing);
+                continue;
+            }
+
             var targets = new List<(MethodBase, IntPtr)>();
             foreach (var target in ResolveDeclaredTargets(type))
             {
@@ -91,7 +108,9 @@ public static class PatchResilience
                     continue;
                 }
 
+                long t0 = Stopwatch.GetTimestamp();
                 harmony.CreateClassProcessor(type).Patch();
+                patchTimes.Add((type.Name, (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency));
                 applied++;
                 // 대상을 미리 못 구했는데 Harmony는 붙였다 = ICF 검사를 거치지 않은 패치
                 if (targets.Count == 0)
@@ -105,12 +124,25 @@ public static class PatchResilience
             }
         }
 
-        if (failed == 0 && skippedIcf == 0)
-            logger.Msg($"[Harmony] 패치 {applied}개 모두 적용 완료");
+        total.Stop();
+        string timing = $"{total.Elapsed.TotalSeconds:F2}초, 사전 JIT 검사 메서드 {PatchPreflight.MethodsChecked}개 {preflightTime.Elapsed.TotalMilliseconds:F0}ms";
+        if (failed == 0 && skippedIcf == 0 && skippedPreflight == 0)
+            logger.Msg($"[Harmony] 패치 {applied}개 모두 적용 완료 ({timing})");
         else
-            logger.Warning($"[Harmony] 패치 {applied}개 적용, ICF 보호로 {skippedIcf}개 건너뜀, {failed}개 실패");
+            logger.Warning($"[Harmony] 패치 {applied}개 적용, ICF 보호로 {skippedIcf}개 건너뜀, 사전 JIT 검사로 {skippedPreflight}개 건너뜀, {failed}개 실패 ({timing})");
         foreach (var line in criticalMissing)
             logger.Error($"[Harmony] 필수 패치 빠짐: {line}");
+
+        // 부팅 병목 확인용: Harmony 적용(IL2CPP 디트로 생성)이 오래 걸린 패치
+        if (ModConfig.DebugLog && patchTimes.Count > 0)
+        {
+            patchTimes.Sort((a, b) => b.Ms.CompareTo(a.Ms));
+            var top = new List<string>();
+            for (int i = 0; i < patchTimes.Count && i < 5; i++) top.Add($"{patchTimes[i].Name} {patchTimes[i].Ms:F0}ms");
+            double sum = 0;
+            foreach (var p in patchTimes) sum += p.Ms;
+            logger.Msg($"[Harmony] Harmony 적용 시간 합계 {sum:F0}ms (평균 {sum / patchTimes.Count:F1}ms), 느린 순: {string.Join(", ", top)}");
+        }
 
         LambdaTranslator.FlushSummary();
     }
@@ -402,37 +434,17 @@ public static class PatchResilience
     }
 
     /// <summary>
-    /// Finds a method inside a known closure type by prefix and parameter types. Exact parameter types win over
-    /// assignable ones; if several still match, the lowest lambda number is used and a warning names them.
+    /// Finds a method inside a known closure type by prefix and parameter types, through <see cref="LambdaTranslator"/>
+    /// (cached in the lambda map with its RVA like every other lambda). Exact parameter types win over assignable ones;
+    /// if several still match, the lowest lambda number is used and a warning names them.
     /// </summary>
     public static MethodInfo? FindMethodInType(Type type, string methodPrefix, params Type[] paramTypes)
     {
-        string altPrefix = methodPrefix.StartsWith("_", StringComparison.Ordinal)
-            ? "<" + methodPrefix.Substring(1).Replace("_b__", ">b__")
-            : methodPrefix;
-
-        var exact = new List<MethodInfo>();
-        var loose = new List<MethodInfo>();
-        foreach (var m in type.GetMethods(AllFlags))
-        {
-            if (!m.Name.StartsWith(methodPrefix, StringComparison.Ordinal) &&
-                !m.Name.StartsWith(altPrefix, StringComparison.Ordinal))
-                continue;
-            var ps = m.GetParameters();
-            if (!ParametersMatch(ps, paramTypes)) continue;
-            bool isExact = true;
-            for (int i = 0; i < ps.Length; i++)
-                if (ps[i].ParameterType != paramTypes[i]) isExact = false;
-            (isExact ? exact : loose).Add(m);
-        }
-
-        var pool = exact.Count > 0 ? exact : loose;
-        if (pool.Count == 0) return null;
-        pool.Sort((a, b) => string.CompareOrdinal(a.Name.PadLeft(64), b.Name.PadLeft(64))); // 람다 번호 순(자릿수 맞춤)
-        if (pool.Count > 1)
-            Melon<Core>.Logger.Warning(
-                $"[LambdaTranslator] {type.Name}에서 '{methodPrefix}' 시그니처가 같은 메서드 {pool.Count}개({string.Join(", ", pool.ConvertAll(m => m.Name))}) → {pool[0].Name} 선택");
-        return pool[0];
+        string paramSig = string.Join(",", Array.ConvertAll(paramTypes, p => p.Name));
+        // 클로저 형식 이름(…DisplayClass54_0)은 업데이트로 바뀌므로 키에는 바깥 형식만 쓴다
+        string outer = type.DeclaringType?.FullName ?? type.FullName ?? type.Name;
+        string key = $"{outer}:in-closure:{methodPrefix}({paramSig})";
+        return LambdaTranslator.TranslateMethodInType(key, type, methodPrefix, paramTypes);
     }
 
     /// <summary>
@@ -447,19 +459,6 @@ public static class PatchResilience
     {
         string key = $"{outerType.FullName ?? outerType.Name}:{coroutinePrefix}.MoveNext";
         return LambdaTranslator.TranslateCoroutineMoveNext(key, outerType, coroutinePrefix, out getState, out setState);
-    }
-
-    private static bool ParametersMatch(ParameterInfo[] actual, Type[] expected)
-    {
-        if (actual.Length != expected.Length) return false;
-        for (int i = 0; i < actual.Length; i++)
-        {
-            if (actual[i].ParameterType != expected[i] &&
-                !expected[i].IsAssignableFrom(actual[i].ParameterType) &&
-                !actual[i].ParameterType.IsAssignableFrom(expected[i]))
-                return false;
-        }
-        return true;
     }
 
     /// <summary>

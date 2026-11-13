@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../mod/Managers/NativeLambdaScan.cs" Link="NativeLambdaScan.cs" />
+    <Compile Include="../../mod/Managers/X64Decoder.cs" Link="X64Decoder.cs" />
   </ItemGroup>
 </Project>

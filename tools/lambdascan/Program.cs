@@ -54,6 +54,56 @@ T2("outer-instance lambda", new byte[] { 0x48, 0x83, 0xEC, 0x28, 0x48, 0x8B, 0x4
 T2("REX.B + SIB", new byte[] { 0x4C, 0x8B, 0x61, 0x18, 0x49, 0x8B, 0x4C, 0x24, 0x48, 0xCC, 0xCC }, 0x18, 0x48, H);
 // 합성: 소유자를 다른 값으로 덮은 뒤 같은 변위 → 엄격 모드는 Hit 아님
 T2("owner overwritten", new byte[] { 0x48, 0x8B, 0x49, 0x18, 0x48, 0x8B, 0x0D, 1, 2, 3, 4, 0x48, 0x8B, 0x49, 0x30, 0xCC, 0xCC }, 0x18, 0x30, O);
+// 2026-11-14 명령 경계 해독: lea/call이 클로저 레지스터를 덮으면 그 뒤 같은 변위는 소유자 로드가 아님
+var I = NativeLambdaScan.Result.Inconclusive;
+// lea rcx,[rip+X]; mov rax,[rcx+0x18]; mov rcx,[rax+0x30]
+T2("lea clobbers closure rcx", new byte[] { 0x48, 0x8D, 0x0D, 1, 2, 3, 4, 0x48, 0x8B, 0x41, 0x18, 0x48, 0x8B, 0x48, 0x30, 0xCC, 0xCC }, 0x18, 0x30, I);
+// call rel32; mov rax,[rcx+0x18]; mov rcx,[rax+0x30]
+T2("call clobbers volatile rcx", new byte[] { 0xE8, 1, 2, 3, 4, 0x48, 0x8B, 0x41, 0x18, 0x48, 0x8B, 0x48, 0x30, 0xCC, 0xCC }, 0x18, 0x30, I);
+// mov rbx,rcx; call; mov rax,[rbx+0x18]; mov rcx,[rax+0x30] → rbx는 call을 넘어 살아남음
+T2("closure in rbx survives call", new byte[] { 0x48, 0x8B, 0xD9, 0xE8, 1, 2, 3, 4, 0x48, 0x8B, 0x43, 0x18, 0x48, 0x8B, 0x48, 0x30, 0xCC, 0xCC }, 0x18, 0x30, H);
+// xor ecx,ecx(32비트 쓰기)도 rcx를 덮음
+T2("xor ecx,ecx clobbers rcx", new byte[] { 0x33, 0xC9, 0x48, 0x8B, 0x41, 0x18, 0x48, 0x8B, 0x48, 0x30, 0xCC, 0xCC }, 0x18, 0x30, I);
+// 다른 명령의 즉값 안에 든 "48 8B 41 18"을 mov로 읽지 않음: mov eax, imm32(=48 8B 41 18) 뒤 mov rcx,[rax+0x30]
+T2("mov bytes inside an immediate", new byte[] { 0xB8, 0x48, 0x8B, 0x41, 0x18, 0x48, 0x8B, 0x48, 0x30, 0xCC, 0xCC }, 0x18, 0x30, I);
+
+// capstone 대조: X64Decoder 길이가 실제 람다 본문의 명령 길이와 같은지(tools/lambdascan/capstone_lengths.py 출력)
+if (args.Length > 1)
+{
+    int funcs = 0, insns = 0, mismatch = 0, unknownStops = 0, fullyDecoded = 0;
+    foreach (var line in File.ReadLines(args[1]))
+    {
+        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2) continue;
+        int rva = Convert.ToInt32(parts[0], 16);
+        var code = At(rva);
+        funcs++;
+        int at = 0;
+        bool ok = true;
+        for (int k = 1; k < parts.Length; k++)
+        {
+            int want = int.Parse(parts[k]);
+            if (!X64Decoder.TryDecode(code, at, out var ins))
+            {
+                // 192바이트 경계에 걸린 마지막 명령은 capstone도 못 읽으므로 여기 오지 않음 → 진짜 미지원
+                unknownStops++; ok = false;
+                if (unknownStops <= 8) Console.WriteLine($"  미지원 0x{rva:X}+0x{at:X}: {BitConverter.ToString(code.Slice(at, Math.Min(8, code.Length - at)).ToArray())}");
+                break;
+            }
+            insns++;
+            if (ins.Length != want)
+            {
+                mismatch++; ok = false;
+                if (mismatch <= 8) Console.WriteLine($"  길이 다름 0x{rva:X}+0x{at:X}: 해독 {ins.Length}, capstone {want}: {BitConverter.ToString(code.Slice(at, Math.Min(10, code.Length - at)).ToArray())}");
+                break;
+            }
+            at += want;
+        }
+        if (ok) fullyDecoded++;
+    }
+    Console.WriteLine($"capstone 대조: 함수 {funcs}개, 명령 {insns}개, 길이 다름 {mismatch}, 미지원에서 멈춤 {unknownStops}, 끝까지 해독 {fullyDecoded}");
+    if (mismatch > 0) fail++;
+}
 Console.WriteLine(fail == 0 ? "ALL PASS" : $"{fail} FAIL");
 return fail;
 

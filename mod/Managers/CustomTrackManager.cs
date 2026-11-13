@@ -28,13 +28,13 @@ public static class CustomTrackManager
 
     public static CustomAlbumInfo? CurrentSelectedAlbum { get; set; } = null;
 
-    public static void Initialize()
+    public static void Initialize(string gameRoot)
     {
         try
         {
-            // Base directory is the game root folder (e.g., H:\steam\steamapps\common\Sixtar Gate STARTRAIL)
-            string gameFolder = AppDomain.CurrentDomain.BaseDirectory;
-            HwaFolderPath = Path.GetFullPath(Path.Combine(gameFolder, "hwa"));
+            // Same root as every other folder of the mod (MelonEnvironment.GameRootDirectory). AppDomain.BaseDirectory
+            // happened to be the game folder too, but it is the loader's choice, not a guarantee.
+            HwaFolderPath = Path.GetFullPath(Path.Combine(gameRoot, "hwa"));
 
             if (!Directory.Exists(HwaFolderPath))
             {
