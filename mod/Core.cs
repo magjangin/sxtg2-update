@@ -58,7 +58,7 @@ public class Core : MelonMod
         string gameRoot = MelonLoader.Utils.MelonEnvironment.GameRootDirectory;
         UpdateGuard.Initialize(gameRoot);
         LambdaTranslator.Initialize(gameRoot);
-        CustomTrackManager.Initialize();
+        CustomTrackManager.Initialize(gameRoot);
         ModConfig.Initialize(gameRoot);
         CustomNoteSkin.Initialize(gameRoot);
         NoteEffects.RegisterDynamicTargets();

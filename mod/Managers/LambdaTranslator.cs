@@ -257,13 +257,7 @@ public static class LambdaTranslator
             {
                 _resolvedMethods[key] = fastMethod;
                 _fastHits++;
-                if (How.Unverified(cached.How) && cached.Candidates > 1)
-                {
-                    _unverifiedCount++;
-                    Melon<Core>.Logger.Warning(
-                        $"{LOG_PREFIX} '{key}'는 후보 {cached.Candidates}개 중 {cached.MethodName}을(를) 기계어로 확인하지 못하고 순서로 고른 결과입니다" +
-                        $"(how={cached.How}). 화면이 이상하면 tools/version_diff/dis.py로 본문을 확인하세요.");
-                }
+                WarnIfUnverified(key, cached);
                 return fastMethod;
             }
             Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' 캐시 항목({cached.ClosureTypeName}.{cached.MethodName})이 현재 바이너리와 달라 재번역합니다: {why}");
@@ -476,6 +470,70 @@ public static class LambdaTranslator
     }
 
     /// <summary>
+    /// 이미 찾은 클로저 형식 안에서 다른 람다를 찾는다(예: GotoPlayScene 번들 콜백과 같은 클로저의 TextAsset 패턴 콜백).
+    /// 2026-11-14 전에는 PatchResilience.FindMethodInType이 사전 밖에서 매번 찾고 이름 문자열을 PadLeft로 정렬했다.
+    /// 이제 같은 사전(RVA 대조·how 기록·안 쓰는 항목 정리)에 들어가고, 정렬은 람다 번호 기준.
+    /// </summary>
+    public static MethodInfo? TranslateMethodInType(string key, Type closureType, string methodPrefix, Type[] paramTypes)
+    {
+        _requestedKeys.Add(key);
+        if (_resolvedMethods.TryGetValue(key, out var inMemory)) return inMemory;
+
+        _stopwatch.Start();
+        try
+        {
+            if (!_retranslating && _entries.TryGetValue(key, out var cached))
+            {
+                var fast = TryBindCachedMethod(closureType, cached, paramTypes, out string? why);
+                if (fast != null)
+                {
+                    _resolvedMethods[key] = fast;
+                    _fastHits++;
+                    WarnIfUnverified(key, cached);
+                    return fast;
+                }
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' 캐시 항목({cached.ClosureTypeName}.{cached.MethodName})이 현재 바이너리와 달라 재번역합니다: {why}");
+            }
+
+            var candidates = new List<Candidate>();
+            foreach (var m in closureType.GetMethods(AllFlags))
+            {
+                if (!MatchesPrefix(m.Name, methodPrefix) || !ParametersCompatible(m.GetParameters(), paramTypes, out bool exact)) continue;
+                candidates.Add(new Candidate { Method = m, Exact = exact, Ordinal = LambdaOrdinal(m.Name) });
+            }
+            if (candidates.Count == 0)
+            {
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} '{key}' 번역 실패: {closureType.Name}에서 '{methodPrefix}' 시그니처 메서드를 찾지 못함");
+                return null;
+            }
+            if (candidates.Exists(c => c.Exact)) candidates = candidates.FindAll(c => c.Exact);
+            SortByOrdinal(candidates);
+
+            var chosen = candidates[0].Method;
+            string how = candidates.Count == 1 ? How.Single : How.Order;
+            if (candidates.Count > 1)
+            {
+                _unverifiedCount++;
+                Melon<Core>.Logger.Warning(
+                    $"{LOG_PREFIX} '{key}' {closureType.Name}에서 시그니처가 같은 메서드 {candidates.Count}개({Names(candidates)}) → 번호가 가장 작은 {chosen.Name} 선택");
+            }
+            _resolvedMethods[key] = chosen;
+            RecordTranslation(key, closureType, chosen, -1, how, candidates.Count);
+            return chosen;
+        }
+        finally { _stopwatch.Stop(); }
+    }
+
+    private static void WarnIfUnverified(string key, LambdaEntry cached)
+    {
+        if (!How.Unverified(cached.How) || cached.Candidates <= 1) return;
+        _unverifiedCount++;
+        Melon<Core>.Logger.Warning(
+            $"{LOG_PREFIX} '{key}'는 후보 {cached.Candidates}개 중 {cached.MethodName}을(를) 기계어로 확인하지 못하고 순서로 고른 결과입니다" +
+            $"(how={cached.How}). 화면이 이상하면 tools/version_diff/dis.py로 본문을 확인하세요.");
+    }
+
+    /// <summary>
     /// [이중래퍼] 코루틴 상태머신(_*_d__*)의 MoveNext()와 상태(__1__state) 접근자를 번역합니다.
     /// </summary>
     public static MethodInfo? TranslateCoroutineMoveNext(
@@ -622,30 +680,41 @@ public static class LambdaTranslator
 
     private static readonly Regex OrdinalRx = new(@"b__(?:\d+_)?(\d+)$", RegexOptions.Compiled);
 
+    /// <summary>람다 번호(<c>b__N</c> 또는 <c>b__M_N</c>의 N). 없으면 int.MaxValue.</summary>
+    private static int LambdaOrdinal(string name)
+    {
+        var om = OrdinalRx.Match(name);
+        return om.Success && int.TryParse(om.Groups[1].Value, out int n) ? n : int.MaxValue;
+    }
+
+    /// <summary>Il2CppInterop 이름(<c>_M_b__</c>)과 원래 이름(<c>&lt;M&gt;b__</c>) 둘 다 받는다.</summary>
+    private static bool MatchesPrefix(string name, string methodPrefix)
+    {
+        if (name.StartsWith(methodPrefix, StringComparison.Ordinal)) return true;
+        if (!methodPrefix.StartsWith("_", StringComparison.Ordinal)) return false;
+        string altPrefix = "<" + methodPrefix.Substring(1).Replace("_b__", ">b__");
+        return name.StartsWith(altPrefix, StringComparison.Ordinal);
+    }
+
+    /// <summary>리플렉션 순서(메타데이터 순서)는 보장되지 않으므로 람다 번호(Roslyn의 메서드 안 람다 순번 = 소스 순서)로 정렬.</summary>
+    private static void SortByOrdinal(List<Candidate> list)
+        => list.Sort((a, b) =>
+        {
+            int c = a.Ordinal.CompareTo(b.Ordinal);
+            return c != 0 ? c : string.CompareOrdinal(a.Method.DeclaringType?.Name + a.Method.Name, b.Method.DeclaringType?.Name + b.Method.Name);
+        });
+
     private static List<Candidate> CollectClosureCandidates(Type outerType, string methodPrefix, Type[] paramTypes)
     {
-        string altPrefix = methodPrefix.StartsWith("_", StringComparison.Ordinal)
-            ? "<" + methodPrefix.Substring(1).Replace("_b__", ">b__")
-            : methodPrefix;
-
         var list = new List<Candidate>();
         var group = GetOrBuildGroupIndex(outerType);
 
         void Consider(MethodInfo m, bool onOuter)
         {
-            if (!m.Name.StartsWith(methodPrefix, StringComparison.Ordinal) &&
-                !m.Name.StartsWith(altPrefix, StringComparison.Ordinal))
-                return;
+            if (!MatchesPrefix(m.Name, methodPrefix)) return;
             if (onOuter && m.IsStatic) return; // 바깥 형식의 정적 메서드는 람다 본문이 아님
             if (!ParametersCompatible(m.GetParameters(), paramTypes, out bool exact)) return;
-            var om = OrdinalRx.Match(m.Name);
-            list.Add(new Candidate
-            {
-                Method = m,
-                OnOuter = onOuter,
-                Exact = exact,
-                Ordinal = om.Success && int.TryParse(om.Groups[1].Value, out int n) ? n : int.MaxValue,
-            });
+            list.Add(new Candidate { Method = m, OnOuter = onOuter, Exact = exact, Ordinal = LambdaOrdinal(m.Name) });
         }
 
         foreach (var nested in group.ClosureTypes)
@@ -656,12 +725,7 @@ public static class LambdaTranslator
         foreach (var m in outerType.GetMethods(AllFlags))
             Consider(m, true);
 
-        // 리플렉션 순서(메타데이터 순서)는 보장되지 않으므로 람다 번호(Roslyn의 메서드 안 람다 순번 = 소스 순서)로 정렬
-        list.Sort((a, b) =>
-        {
-            int c = a.Ordinal.CompareTo(b.Ordinal);
-            return c != 0 ? c : string.CompareOrdinal(a.Method.DeclaringType?.Name + a.Method.Name, b.Method.DeclaringType?.Name + b.Method.Name);
-        });
+        SortByOrdinal(list);
         return list;
     }
 

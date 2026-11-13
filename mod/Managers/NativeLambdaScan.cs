@@ -51,6 +51,12 @@ public static class NativeLambdaScan
             : ScanLoose(code, ownerPtrOffset, targetFieldOffset);
     }
 
+    /// <summary>
+    /// 엄격 모드: <see cref="X64Decoder"/>로 명령 경계를 따라 걸으며 레지스터 소속을 추적한다(2026-11-14).
+    /// 전에는 바이트를 하나씩 밀며 64비트 mov만 봤기 때문에 ① 다른 명령의 변위·즉값 바이트를 mov로 잘못 읽을 수 있었고
+    /// ② lea/xor/pop/32비트 mov와 call(휘발 레지스터 rax·rcx·rdx·r8~r11을 덮음)이 클로저·소유자 레지스터를 덮는 것을
+    /// 몰라, 덮인 뒤의 같은 변위 로드를 소유자 로드로 오인할 수 있었다. 모르는 명령을 만나면 그 자리에서 멈춘다.
+    /// </summary>
     private static Result ScanStrict(ReadOnlySpan<byte> code, int ownerPtrOffset, int targetFieldOffset)
     {
         // 레지스터 16개를 비트로: closure = 클로저 포인터를 담은 레지스터, owner = 소유자 포인터를 담은 레지스터
@@ -59,68 +65,38 @@ public static class NativeLambdaScan
         if (ownerPtrOffset > 0) { closure = 1 << Rcx; sawOwner = false; }
         else { owner = 1 << Rcx; sawOwner = true; }
 
-        for (int i = 0; i + 2 < code.Length; i++)
+        for (int i = 0; i < code.Length;)
         {
-            byte b = code[i];
-            if (b == 0xCC && code[i + 1] == 0xCC) break; // 함수 끝 int3 패딩
+            if (code[i] == 0xCC && i + 1 < code.Length && code[i + 1] == 0xCC) break; // 함수 끝 int3 패딩
+            if (!X64Decoder.TryDecode(code, i, out var ins) || ins.Length <= 0) break;  // 모르는 명령: 추측하지 않음
+            i += ins.Length;
 
-            // REX.W(0x48~0x4F) + MOV r64, r/m64 (8B) 또는 MOV r/m64, r64 (89)
-            if ((b & 0xF8) != 0x48) continue;
-            byte op = code[i + 1];
-            if (op != 0x8B && op != 0x89) continue;
-
-            int rexR = (b >> 2) & 1, rexB = b & 1;
-            byte modRm = code[i + 2];
-            int mod = modRm >> 6;
-            int reg = ((modRm >> 3) & 7) | (rexR << 3);
-            int rm = (modRm & 7) | (rexB << 3);
-
-            if (mod == 3)
+            if ((ins.Kind == X64Decoder.Kind.MovLoad64 || ins.Kind == X64Decoder.Kind.MovStore64) && ins.Mod == 3)
             {
                 // 레지스터 복사: 원본의 소속을 그대로 옮김
-                int dst = op == 0x8B ? reg : rm;
-                int src = op == 0x8B ? rm : reg;
-                bool srcClosure = (closure & (1 << src)) != 0, srcOwner = (owner & (1 << src)) != 0;
-                closure = Set(closure, dst, srcClosure);
-                owner = Set(owner, dst, srcOwner);
-                i += 2;
+                int dst = ins.Kind == X64Decoder.Kind.MovLoad64 ? ins.Reg : ins.Rm;
+                int src = ins.Kind == X64Decoder.Kind.MovLoad64 ? ins.Rm : ins.Reg;
+                closure = Set(closure, dst, (closure & (1 << src)) != 0);
+                owner = Set(owner, dst, (owner & (1 << src)) != 0);
                 continue;
             }
 
-            if (op == 0x89)
+            if (ins.Kind == X64Decoder.Kind.MovLoad64 && ins.BaseReg >= 0)
             {
-                // 메모리에 저장: 레지스터는 안 바뀜. 길이만 건너뜀
-                i += 2 + AddressLength(code, i + 2, mod, modRm & 7);
+                // MOV r64, [기준+변위]
+                if ((owner & (1 << ins.BaseReg)) != 0 && ins.Disp == targetFieldOffset)
+                    return Result.Hit;
+                bool loadsOwner = (closure & (1 << ins.BaseReg)) != 0 && ins.Disp == ownerPtrOffset;
+                closure = Set(closure, ins.Reg, false);
+                owner = Set(owner, ins.Reg, loadsOwner);
+                if (loadsOwner) sawOwner = true;
                 continue;
             }
 
-            // MOV r64, [메모리]: 목적 레지스터가 새 값으로 덮인다
-            if (mod == 0)
-            {
-                closure = Set(closure, reg, false);
-                owner = Set(owner, reg, false);
-                i += 2 + AddressLength(code, i + 2, mod, modRm & 7);
-                continue;
-            }
-
-            int baseReg = rm;
-            int dispAt = i + 3;
-            if ((modRm & 7) == 4)
-            {
-                if (dispAt >= code.Length) break;
-                baseReg = (code[dispAt] & 7) | (rexB << 3); // SIB 기준 레지스터
-                dispAt++;
-            }
-            if (!TryReadDisp(code, dispAt, mod, out int disp)) break;
-
-            bool loadsOwner = (closure & (1 << baseReg)) != 0 && disp == ownerPtrOffset;
-            if ((owner & (1 << baseReg)) != 0 && disp == targetFieldOffset)
-                return Result.Hit;
-
-            closure = Set(closure, reg, false);
-            owner = Set(owner, reg, loadsOwner);
-            if (loadsOwner) sawOwner = true;
-            i = dispAt + (mod == 1 ? 1 : 4) - 1;
+            int clobbered = ins.Writes;
+            if (ins.Kind == X64Decoder.Kind.Call) clobbered |= X64Decoder.VolatileRegs;
+            closure &= ~clobbered;
+            owner &= ~clobbered;
         }
         return sawOwner ? Result.OwnerOnly : Result.Inconclusive;
     }
@@ -162,18 +138,4 @@ public static class NativeLambdaScan
         return true;
     }
 
-    /// <summary>ModRM 뒤에 오는 SIB·변위 바이트 수.</summary>
-    private static int AddressLength(ReadOnlySpan<byte> code, int modRmAt, int mod, int rmLow)
-    {
-        int len = 0;
-        if (rmLow == 4)
-        {
-            len++; // SIB
-            if (mod == 0 && modRmAt + 1 < code.Length && (code[modRmAt + 1] & 7) == 5) len += 4; // [index*s + disp32]
-        }
-        if (mod == 0 && rmLow == 5) len += 4; // [rip + disp32]
-        else if (mod == 1) len += 1;
-        else if (mod == 2) len += 4;
-        return len;
-    }
 }

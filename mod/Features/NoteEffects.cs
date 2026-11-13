@@ -143,6 +143,18 @@ public static class NoteEffects
                 }
                 return;
             }
+            // 게임 업데이트로 인터롭 멤버가 바뀌었으면 매 노트·매 프레임 트램펄린 오류가 나므로 붙이지 않음
+            string? broken = PatchPreflight.Check(typeof(NoteObject_SetHeadPosition_Patch))
+                             ?? PatchPreflight.Check(typeof(NoteObject_SetNoteLength_Patch));
+            if (broken != null)
+            {
+                if (!_unsafeWarned)
+                {
+                    _unsafeWarned = true;
+                    Melon<Core>.Logger.Error($"[NoteEffects] 사전 JIT 검사 실패로 속도 카오스/히든/페이드를 끔: {broken}");
+                }
+                return;
+            }
             harmony.Patch(head, prefix: new HarmonyMethod(typeof(NoteObject_SetHeadPosition_Patch), nameof(NoteObject_SetHeadPosition_Patch.Prefix)));
             harmony.Patch(length, prefix: new HarmonyMethod(typeof(NoteObject_SetNoteLength_Patch), nameof(NoteObject_SetNoteLength_Patch.Prefix)));
         }
