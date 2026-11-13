@@ -243,6 +243,7 @@ public static class PlayAssist
 
     // BlockSave: PlayRecordModule writes the local best-score / play-count files after the result screen.
     [HarmonyPatch(typeof(PlayRecordModule), nameof(PlayRecordModule.RecordPlayData))]
+    [CriticalPatch("커스텀/AllPerfect/어시스트 플레이 시 로컬·서버 기록 저장 차단")]
     public static class PlayRecordModule_RecordPlayData_Patch
     {
         public static bool Prefix(ref bool __result)

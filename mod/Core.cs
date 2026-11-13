@@ -109,6 +109,7 @@ public class Core : MelonMod
 
     // 1. CategorySelectController: Register "CUSTOM" category to category tabs list
     [HarmonyPatch(typeof(CategorySelectController), "LoadData")]
+    [CriticalPatch("곡 선택 상단 CUSTOM 카테고리 탭 생성")]
     public static class CategorySelectController_LoadData_Patch
     {
         public static void Postfix()
@@ -157,6 +158,7 @@ public class Core : MelonMod
 
     // 3. TrackSelectController.GetTracks: Feed custom tracks ONLY when category is "CUSTOM"
     [HarmonyPatch(typeof(TrackSelectController), nameof(TrackSelectController.GetTracks), new Type[] { typeof(string) })]
+    [CriticalPatch("CUSTOM 카테고리 커스텀 곡 목록 반환")]
     public static class TrackSelectController_GetTracks_Patch
     {
         private static Il2CppSystem.Collections.Generic.List<ITrack>? cachedCustomTracks = null;
@@ -330,6 +332,7 @@ public class Core : MelonMod
     }
 
     [HarmonyPatch(typeof(MikazukiConverter), nameof(MikazukiConverter.Parse), new Type[] { typeof(string) })]
+    [CriticalPatch("커스텀 차트 BMS 파싱 주입")]
     public static class MikazukiConverter_Parse_Patch
     {
         public static bool Prefix(ref Pattern __result)
@@ -383,6 +386,7 @@ public class Core : MelonMod
     {
         public static void Postfix(FinishProcessor __instance, IPatternPlayer player)
         {
+            FinishProcessor_UpdatePatternTime_Patch.InvalidateCache();
             if (IsCustomTrackActive)
             {
                 float customDuration = CustomSongLength();
@@ -416,29 +420,48 @@ public class Core : MelonMod
         public static void Postfix(ref float __result)
         {
             float length = CustomSongLength();
-            if (length > 0f) __result = length;
+            if (length > 0f)
+            {
+                __result = length;
+                FinishProcessor_UpdatePatternTime_Patch.InvalidateCache();
+            }
         }
     }
 
     [HarmonyPatch(typeof(FinishProcessor), "UpdatePatternTime")]
     public static class FinishProcessor_UpdatePatternTime_Patch
     {
+        private static IntPtr _verifiedInstance;
+        private static float _verifiedLength;
         private static IntPtr _loggedFor;
 
-        // Runs every frame of every play: bail out before touching the IL2CPP properties when not a custom song.
+        public static void InvalidateCache() => _verifiedInstance = IntPtr.Zero;
+
+        // Runs every frame of every play: bail out before touching the IL2CPP properties when not a custom song
+        // or once the current FinishProcessor instance has already been verified for this song length.
         public static void Prefix(FinishProcessor __instance)
         {
-            // Finish fires at TrackEndOffset + TrackEndTiming + _finishOffset: only the sum has to reach the song length.
+            if (!IsCustomTrackActive) return;
             float length = CustomSongLength();
             if (length <= 0f) return;
+
+            IntPtr ptr = __instance.Pointer;
+            if (ptr == _verifiedInstance && Math.Abs(length - _verifiedLength) < 0.01f) return;
+
+            // Finish fires at TrackEndOffset + TrackEndTiming + _finishOffset: only the sum has to reach the song length.
             float offset = __instance.TrackEndOffset;
-            if (offset + __instance.TrackEndTiming >= length - 0.05f) return;
-            if (_loggedFor != __instance.Pointer) // once per play (a new FinishProcessor per play)
+            float current = __instance.TrackEndTiming;
+            if (offset + current < length - 0.05f)
             {
-                _loggedFor = __instance.Pointer;
-                Melon<Core>.Logger.Msg($"[FinishProcessor] 종료 시점이 오프셋 {offset:F1}초 + {__instance.TrackEndTiming:F1}초라서 곡 길이 {length:F1}초로 연장");
+                if (_loggedFor != ptr) // once per play (a new FinishProcessor per play)
+                {
+                    _loggedFor = ptr;
+                    Melon<Core>.Logger.Msg($"[FinishProcessor] 종료 시점이 오프셋 {offset:F1}초 + {current:F1}초라서 곡 길이 {length:F1}초로 연장");
+                }
+                __instance.TrackEndTiming = Math.Max(0f, length - offset);
             }
-            __instance.TrackEndTiming = Math.Max(0f, length - offset);
+            _verifiedInstance = ptr;
+            _verifiedLength = length;
         }
     }
 
@@ -773,10 +796,13 @@ public class Core : MelonMod
     // MusicSelect.SoundController plays ISoundModule.Play("preview_" + trackID, BGM); no FMOD event exists
     // for "event:/preview_CUSTOM_...", so without this the preview is silent (or keeps the previous track).
     [HarmonyPatch(typeof(SoundModuleForFMOD), nameof(SoundModuleForFMOD.Play), new Type[] { typeof(string), typeof(ISoundModule.SoundChannel), typeof(float) })]
+    [CriticalPatch("커스텀 곡 FMOD 오디오 스트림 재생")]
     public static class SoundModuleForFMOD_Play_Patch
     {
         public static bool Prefix(SoundModuleForFMOD __instance, string audioName, ISoundModule.SoundChannel channel, float position)
         {
+            if (channel == ISoundModule.SoundChannel.Game)
+                FinishProcessor_UpdatePatternTime_Patch.InvalidateCache();
             if (!CustomAudioManager.TryResolve(audioName, out var album, out var filePath, out var isPreview))
             {
                 CustomAudioManager.StopLocal(channel);

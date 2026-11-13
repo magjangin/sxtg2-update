@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using MelonLoader;
 using UnityEngine;
 using Il2Cpp;
@@ -17,7 +16,7 @@ namespace SixtarGateMod.Managers;
 public static class CustomTrackManager
 {
     private const string LOG_PREFIX = "[CustomTrackManager]";
-    private static readonly string[] BMS_PATTERNS = { "*.bms", "*.bme", "*.bml" };
+    private static readonly string[] BMS_EXTENSIONS = { ".bms", ".bme", ".bml" };
     private static readonly string[] AUDIO_EXTENSIONS = { ".ogg", ".mp3", ".wav" };
     private static readonly string[] VIDEO_EXTENSIONS = { ".mp4" };
     private static readonly string[] IMAGE_EXTENSIONS = { ".png", ".jpg", ".jpeg" };
@@ -60,27 +59,21 @@ public static class CustomTrackManager
 
         Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더에서 커스텀 곡 검색 중...");
 
-        var albumFolders = new List<string>();
-        // Check if root hwa folder itself has bms
-        if (FindFirstFile(HwaFolderPath, BMS_PATTERNS) != null)
-            albumFolders.Add(HwaFolderPath);
-
-        // Subdirectories as albums
-        foreach (var dir in Directory.GetDirectories(HwaFolderPath))
-        {
-            albumFolders.Add(dir);
-        }
+        var albumFolders = new List<string> { HwaFolderPath };
+        albumFolders.AddRange(Directory.GetDirectories(HwaFolderPath));
 
         int scanCount = 0;
         foreach (var folder in albumFolders)
         {
-            string? bmsFile = FindFirstFile(folder, BMS_PATTERNS);
+            // 폴더당 1회만 디렉터리를 읽고 정렬된 파일 목록을 메모리에서 재사용(곡 정보·차트·미디어 탐색 공용).
+            string[] files = GetSortedFiles(folder);
+            string? bmsFile = FindFirstByExtension(files, BMS_EXTENSIONS);
             if (string.IsNullOrEmpty(bmsFile))
                 continue;
 
             try
             {
-                var album = BuildAlbumInfo(folder, bmsFile);
+                var album = BuildAlbumInfo(folder, bmsFile, files);
                 // "A B" and "A_B" folders map to the same ID; keep both by numbering the later one.
                 if (AlbumsByTrackId.ContainsKey(album.TrackId))
                 {
@@ -104,7 +97,7 @@ public static class CustomTrackManager
         Melon<Core>.Logger.Msg($"{LOG_PREFIX} 검색 완료: 커스텀 곡 {scanCount}곡 발견");
     }
 
-    private static CustomAlbumInfo BuildAlbumInfo(string folder, string bmsFile)
+    private static CustomAlbumInfo BuildAlbumInfo(string folder, string bmsFile, string[] files)
     {
         string albumName = Path.GetFileName(folder);
         string trackId = "CUSTOM_" + albumName.ToUpperInvariant().Replace(" ", "_");
@@ -119,7 +112,7 @@ public static class CustomTrackManager
         };
 
         // 1. Parse trackinfo.txt / info.txt
-        var info = TrackInfoParser.ParseTrackInfo(folder, Path.GetFileNameWithoutExtension(bmsFile));
+        var info = TrackInfoParser.ParseTrackInfo(folder, Path.GetFileNameWithoutExtension(bmsFile), files);
         if (!string.IsNullOrEmpty(info.Title))
             album.Title = info.Title;
         if (!string.IsNullOrEmpty(info.Artist))
@@ -142,11 +135,18 @@ public static class CustomTrackManager
                 album.Artist = bmsResult.Artist;
         }
 
-        // 3. Resolve Media files
-        album.BgmPath = FindNamedFile(folder, "music", AUDIO_EXTENSIONS) ?? FindFirstFile(folder, AUDIO_EXTENSIONS.Select(e => "*" + e).ToArray());
-        album.PreviewPath = FindNamedFile(folder, "demo", AUDIO_EXTENSIONS) ?? album.BgmPath;
-        album.BgaPath = FindNamedFile(folder, "bg", VIDEO_EXTENSIONS) ?? FindNamedFile(folder, "video", VIDEO_EXTENSIONS) ?? FindFirstFile(folder, VIDEO_EXTENSIONS.Select(e => "*" + e).ToArray());
-        album.JacketPath = FindNamedFile(folder, "thumbnail", IMAGE_EXTENSIONS) ?? FindNamedFile(folder, "thumb", IMAGE_EXTENSIONS) ?? FindNamedFile(folder, "jacket", IMAGE_EXTENSIONS) ?? FindFirstFile(folder, IMAGE_EXTENSIONS.Select(e => "*" + e).ToArray());
+        // 3. Resolve Media files from preloaded folder file list
+        album.BgmPath = FindNamedFile(files, "music", AUDIO_EXTENSIONS)
+            ?? FindFirstByExtension(files, AUDIO_EXTENSIONS);
+        album.PreviewPath = FindNamedFile(files, "demo", AUDIO_EXTENSIONS)
+            ?? album.BgmPath;
+        album.BgaPath = FindNamedFile(files, "bg", VIDEO_EXTENSIONS)
+            ?? FindNamedFile(files, "video", VIDEO_EXTENSIONS)
+            ?? FindFirstByExtension(files, VIDEO_EXTENSIONS);
+        album.JacketPath = FindNamedFile(files, "thumbnail", IMAGE_EXTENSIONS)
+            ?? FindNamedFile(files, "thumb", IMAGE_EXTENSIONS)
+            ?? FindNamedFile(files, "jacket", IMAGE_EXTENSIONS)
+            ?? FindFirstByExtension(files, IMAGE_EXTENSIONS);
 
         return album;
     }
@@ -180,36 +180,46 @@ public static class CustomTrackManager
     public static CustomAlbumInfo? FindAlbum(string? trackId)
         => !string.IsNullOrEmpty(trackId) && AlbumsByTrackId.TryGetValue(trackId, out var album) ? album : null;
 
-    private static string? FindNamedFile(string folder, string baseName, string[] extensions)
+    private static string[] GetSortedFiles(string folder)
+    {
+        try
+        {
+            string[] files = Directory.GetFiles(folder, "*", SearchOption.TopDirectoryOnly);
+            // Directory order is only alphabetical on NTFS (exFAT/FAT32 return creation order): sort once here.
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+            return files;
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static string? FindNamedFile(string[] files, string baseName, string[] extensions)
     {
         foreach (var ext in extensions)
         {
-            string candidate = Path.Combine(folder, baseName + ext);
-            if (File.Exists(candidate))
-                return candidate;
+            string targetName = baseName + ext;
+            foreach (var file in files)
+            {
+                if (string.Equals(Path.GetFileName(file), targetName, StringComparison.OrdinalIgnoreCase))
+                    return file;
+            }
         }
         return null;
     }
 
-    private static string? FindFirstFile(string folder, string[] patterns)
+    private static string? FindFirstByExtension(string[] files, string[] extensions)
     {
-        try
+        foreach (var ext in extensions)
         {
-            foreach (var pat in patterns)
+            foreach (var file in files)
             {
-                // Windows matches a 3-letter extension pattern against longer extensions too ("*.bms" also
-                // returns ".bmson", a JSON chart): keep exact extensions only.
-                string ext = pat.StartsWith("*", StringComparison.Ordinal) ? pat.Substring(1) : "";
-                var files = Array.FindAll(Directory.GetFiles(folder, pat, SearchOption.TopDirectoryOnly),
-                    f => ext.Length == 0 || string.Equals(Path.GetExtension(f), ext, StringComparison.OrdinalIgnoreCase));
-                if (files.Length == 0) continue;
-                // Directory order is only alphabetical on NTFS (exFAT/FAT32 return creation order): sort so the same
-                // folder always picks the same chart / audio / image.
-                Array.Sort(files, StringComparer.OrdinalIgnoreCase);
-                return files[0];
+                // Exact extension match only (Windows "*.bms" wildcards also match ".bmson").
+                if (string.Equals(Path.GetExtension(file), ext, StringComparison.OrdinalIgnoreCase))
+                    return file;
             }
         }
-        catch { }
         return null;
     }
 

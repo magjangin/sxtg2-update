@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -44,65 +43,114 @@ public static class SxtgBmsConverter
     public static string NormalizeValueWidth(string content, out bool changed)
     {
         changed = false;
-        var lines = content.Replace("\r", "").Split('\n');
-        if (!lines.Any(l => WavLine.IsMatch(l.Trim()))) return content;
+        if (!HasThreeCharWavHeader(content)) return content;
 
         changed = true;
-        var output = new StringBuilder();
-        foreach (var raw in lines)
+        var output = new StringBuilder(content.Length);
+        int pos = 0;
+        while (true)
         {
+            string raw = NextLine(content, ref pos, out bool hasMore);
             string line = raw.Trim();
             var wav = WavLine.Match(line);
             if (wav.Success)
             {
                 string key = wav.Groups[1].Value;
                 output.Append("#WAV").Append(key[0] == '0' ? key.Substring(1) : key).Append(wav.Groups[2].Value).Append('\n');
-                continue;
             }
-
-            var note = NoteLine.Match(line);
-            if (!note.Success)
+            else
             {
-                output.Append(raw).Append('\n');
-                continue;
-            }
-
-            string data = note.Groups[3].Value;
-            var pairs = new StringBuilder(data.Length * 2 / 3);
-            for (int i = 0; i + 3 <= data.Length; i += 3)
-            {
-                // sxtg2 drops the leading '0'; a value without one matches no note type there, so skip it here too.
-                if (data[i] == '0')
-                    pairs.Append(data[i + 1]).Append(data[i + 2]);
+                var note = NoteLine.Match(line);
+                if (!note.Success)
+                {
+                    output.Append(raw).Append('\n');
+                }
                 else
-                    pairs.Append("00");
+                {
+                    string data = note.Groups[3].Value;
+                    output.Append('#').Append(note.Groups[1].Value).Append(note.Groups[2].Value).Append(':');
+                    for (int i = 0; i + 3 <= data.Length; i += 3)
+                    {
+                        // sxtg2 drops the leading '0'; a value without one matches no note type there, so skip it here too.
+                        if (data[i] == '0')
+                            output.Append(data[i + 1]).Append(data[i + 2]);
+                        else
+                            output.Append("00");
+                    }
+                    output.Append('\n');
+                }
             }
-            output.Append('#').Append(note.Groups[1].Value).Append(note.Groups[2].Value).Append(':').Append(pairs).Append('\n');
+            if (!hasMore) break;
         }
         return output.ToString();
+    }
+
+    private static bool HasThreeCharWavHeader(string content)
+    {
+        int pos = 0;
+        while (true)
+        {
+            int nl = content.IndexOf('\n', pos);
+            int end = nl < 0 ? content.Length : nl;
+            var span = content.AsSpan(pos, end - pos).Trim();
+            if (span.Length >= 7 && span.StartsWith("#WAV", StringComparison.OrdinalIgnoreCase)
+                && IsAsciiAlphaNum(span[4]) && IsAsciiAlphaNum(span[5]) && IsAsciiAlphaNum(span[6])
+                && (span.Length == 7 || char.IsWhiteSpace(span[7])))
+                return true;
+            if (nl < 0) return false;
+            pos = nl + 1;
+        }
+    }
+
+    private static bool IsAsciiAlphaNum(char c)
+        => (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+
+    private static string NextLine(string content, ref int pos, out bool hasMore)
+    {
+        int nl = content.IndexOf('\n', pos);
+        int end = nl < 0 ? content.Length : nl;
+        int len = end - pos;
+        if (len > 0 && content[end - 1] == '\r') len--;
+        string raw = content.Substring(pos, len);
+        hasMore = nl >= 0;
+        pos = nl + 1;
+        return raw;
     }
 
     /// <summary>True when the chart uses the sxtg2 encoding rather than the game's own channel layout.</summary>
     public static bool IsSxtgFormat(string content)
     {
         bool usesSxtgOnly = false;
-        foreach (var raw in content.Split('\n'))
+        int pos = 0;
+        while (true)
         {
-            var m = NoteLine.Match(raw.Trim());
-            if (!m.Success) continue;
-            int ch = int.Parse(m.Groups[2].Value);
-            if (ch == 19 || (ch >= 50 && ch <= 59))
-                return false; // game-native channels present
-            if (ch == 16) usesSxtgOnly = true;
-            if (ch >= 11 && ch <= 18)
+            int nl = content.IndexOf('\n', pos);
+            int end = nl < 0 ? content.Length : nl;
+            int len = end - pos;
+            if (len > 0 && content[end - 1] == '\r') len--;
+            var span = content.AsSpan(pos, len).Trim();
+            if (span.Length >= 7 && span[0] == '#' && span.IndexOf(':') == 6)
             {
-                string data = m.Groups[3].Value;
-                for (int i = 0; i + 1 < data.Length; i += 2)
+                var m = NoteLine.Match(span.ToString());
+                if (m.Success)
                 {
-                    if (data[i] == '0' && (data[i + 1] == '2' || data[i + 1] == '3' || data[i + 1] == '5'))
-                        usesSxtgOnly = true;
+                    int ch = int.Parse(m.Groups[2].Value);
+                    if (ch == 19 || (ch >= 50 && ch <= 59))
+                        return false; // game-native channels present
+                    if (ch == 16) usesSxtgOnly = true;
+                    if (ch >= 11 && ch <= 18)
+                    {
+                        string data = m.Groups[3].Value;
+                        for (int i = 0; i + 1 < data.Length; i += 2)
+                        {
+                            if (data[i] == '0' && (data[i + 1] == '2' || data[i + 1] == '3' || data[i + 1] == '5'))
+                                usesSxtgOnly = true;
+                        }
+                    }
                 }
             }
+            if (nl < 0) break;
+            pos = nl + 1;
         }
         return usesSxtgOnly;
     }
@@ -110,48 +158,54 @@ public static class SxtgBmsConverter
     public static string Convert(string content, out int convertedNotes)
     {
         convertedNotes = 0;
-        var output = new StringBuilder();
+        var output = new StringBuilder(content.Length);
         // (measure, channel) -> list of (index, length) marker positions
         var groups = new SortedDictionary<(int measure, int channel), List<(int index, int length)>>();
 
-        foreach (var raw in content.Replace("\r", "").Split('\n'))
+        int pos = 0;
+        while (true)
         {
+            string raw = NextLine(content, ref pos, out bool hasMore);
             var m = NoteLine.Match(raw.Trim());
             if (!m.Success || !ChannelMap.TryGetValue(int.Parse(m.Groups[2].Value), out int shortCh))
             {
                 output.Append(raw).Append('\n');
-                continue;
             }
-
-            int measure = int.Parse(m.Groups[1].Value);
-            string data = m.Groups[3].Value;
-            int length = data.Length / 2;
-            for (int i = 0; i < length; i++)
+            else
             {
-                int o = i * 2;
-                int target = data[o] == '0' ? data[o + 1] switch
+                int measure = int.Parse(m.Groups[1].Value);
+                string data = m.Groups[3].Value;
+                int length = data.Length / 2;
+                for (int i = 0; i < length; i++)
                 {
-                    '1' => shortCh,
-                    '2' or '3' => shortCh + 40,
-                    '4' or '5' => OPEN_CHANNEL,
-                    _ => -1,
-                } : -1;
-                if (target < 0) continue;
+                    int o = i * 2;
+                    int target = data[o] == '0' ? data[o + 1] switch
+                    {
+                        '1' => shortCh,
+                        '2' or '3' => shortCh + 40,
+                        '4' or '5' => OPEN_CHANNEL,
+                        _ => -1,
+                    } : -1;
+                    if (target < 0) continue;
 
-                if (!groups.TryGetValue((measure, target), out var list))
-                    groups[(measure, target)] = list = new List<(int, int)>();
-                list.Add((i, length));
-                convertedNotes++;
+                    if (!groups.TryGetValue((measure, target), out var list))
+                        groups[(measure, target)] = list = new List<(int, int)>();
+                    list.Add((i, length));
+                    convertedNotes++;
+                }
             }
+            if (!hasMore) break;
         }
 
         foreach (var ((measure, channel), markers) in groups)
         {
-            int resolution = markers.Select(x => x.length).Aggregate(1, Lcm);
-            var slots = Enumerable.Repeat("00", resolution).ToArray();
+            int resolution = 1;
+            foreach (var (_, len) in markers) resolution = Lcm(resolution, len);
+            char[] slots = new char[resolution * 2];
+            Array.Fill(slots, '0');
             foreach (var (index, length) in markers)
-                slots[index * (resolution / length)] = "01";
-            output.Append($"#{measure:D3}{channel:D2}:{string.Concat(slots)}\n");
+                slots[index * (resolution / length) * 2 + 1] = '1';
+            output.Append('#').Append(measure.ToString("D3")).Append(channel.ToString("D2")).Append(':').Append(slots).Append('\n');
         }
 
         return output.ToString();

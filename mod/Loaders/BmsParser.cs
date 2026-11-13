@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using MelonLoader;
 
 namespace SixtarGateMod.Loaders;
@@ -20,7 +18,6 @@ public static class BmsParser
 
     private const float DefaultBpm = 150f;
     private const char Replacement = (char)0xFFFD; // undecodable byte marker
-    private static readonly HashSet<string> LaneChannels = new() { "16", "11", "12", "13", "14", "15", "18" };
 
     public static ParseResult? ParseBmsFile(string filePath)
     {
@@ -37,36 +34,55 @@ public static class BmsParser
 
     public static ParseResult Parse(string[] rawLines)
     {
-        var lines = rawLines.Select(l => l.Trim()).Where(l => l.Length > 1 && l[0] == '#').ToArray();
-        float bpm = lines.Select(BpmOf).FirstOrDefault(b => b > 0f, DefaultBpm);
-        int width = lines.Any(l => l.StartsWith("#WAV", StringComparison.OrdinalIgnoreCase) && l.Split(' ', '\t')[0].Length == 7) ? 3 : 2;
-
+        float bpm = 0f;
+        int width = 2;
         string title = "";
         string artist = "";
-        foreach (var l in lines)
+
+        foreach (var raw in rawLines)
         {
-            if (l.StartsWith("#TITLE", StringComparison.OrdinalIgnoreCase))
+            var line = raw.AsSpan().Trim();
+            if (line.Length <= 1 || line[0] != '#') continue;
+
+            if (bpm <= 0f && TryParseBpm(line, out float parsedBpm))
+                bpm = parsedBpm;
+            if (width == 2 && line.StartsWith("#WAV", StringComparison.OrdinalIgnoreCase) && FirstTokenLength(line) == 7)
+                width = 3;
+
+            if (title.Length == 0 && line.StartsWith("#TITLE", StringComparison.OrdinalIgnoreCase))
             {
-                var val = l.Substring(6).Trim();
-                if (val.Length > 0 && val.IndexOf(Replacement) < 0 && string.IsNullOrEmpty(title)) title = TrackInfoParser.NormalizeMetadataText(val);
+                var val = line.Slice(6).Trim();
+                if (val.Length > 0 && val.IndexOf(Replacement) < 0)
+                    title = TrackInfoParser.NormalizeMetadataText(val.ToString());
             }
-            else if (l.StartsWith("#ARTIST", StringComparison.OrdinalIgnoreCase))
+            else if (artist.Length == 0 && line.StartsWith("#ARTIST", StringComparison.OrdinalIgnoreCase))
             {
-                var val = l.Substring(7).Trim();
-                if (val.Length > 0 && val.IndexOf(Replacement) < 0 && string.IsNullOrEmpty(artist)) artist = TrackInfoParser.NormalizeMetadataText(val);
+                var val = line.Slice(7).Trim();
+                if (val.Length > 0 && val.IndexOf(Replacement) < 0)
+                    artist = TrackInfoParser.NormalizeMetadataText(val.ToString());
             }
         }
+        if (bpm <= 0f) bpm = DefaultBpm;
 
-        // (lane key, time, type): type 1 normal, 2/4 hold start, 3/5 hold end.
-        var notes = new List<(string Lane, float Time, int Type)>();
-        foreach (var line in lines)
+        // 레인 0..6: 16/11/12/13/14/15/18, 레인 7: OPEN. LINQ GroupBy/OrderBy 대신 배열 버킷 + 제자리 정렬.
+        // 각 항목은 (시각, 등장 순번, 타입): 타입 1 일반, 2/4 롱 시작, 3/5 롱 끝.
+        var notesByLane = new List<(float Time, int Seq, int Type)>?[8];
+        int seq = 0;
+        foreach (var raw in rawLines)
         {
+            var line = raw.AsSpan().Trim();
+            if (line.Length <= 1 || line[0] != '#') continue;
+
             int colon = line.IndexOf(':');
             if (colon <= 2) continue;
-            string channel = line.Substring(1, colon - 1), data = line.Substring(colon + 1);
-            string ch = channel.Substring(channel.Length - 2);
-            int.TryParse(channel.Substring(0, channel.Length - 2), out int measure);
 
+            var ch = line.Slice(colon - 2, 2);
+            int chLane = LaneIndexOf(ch);
+            bool isOpenCh = ch.Equals("04", StringComparison.Ordinal) || ch.Equals("05", StringComparison.Ordinal);
+            if (chLane < 0 && !isOpenCh) continue;
+
+            int.TryParse(line.Slice(1, colon - 3), NumberStyles.Integer, CultureInfo.InvariantCulture, out int measure);
+            var data = line.Slice(colon + 1);
             int count = data.Length / width;
             for (int i = 0; i < count; i++)
             {
@@ -78,33 +94,71 @@ public static class BmsParser
                 }
                 int type = data[o] == '0' ? (data[o + 1] - '0') : 0;
                 if (type < 1 || type > 5) continue;
-                string lane = type >= 4 ? "OPEN" : ch;
-                if (type < 4 && !LaneChannels.Contains(lane)) continue;
-                if (type >= 4 && ch != "04" && ch != "05" && !LaneChannels.Contains(ch)) continue;
-                notes.Add((lane, (measure + (float)i / count) * 240f / bpm, type));
+
+                int laneIdx;
+                if (type >= 4)
+                    laneIdx = 7;
+                else if (chLane >= 0)
+                    laneIdx = chLane;
+                else
+                    continue;
+
+                var list = notesByLane[laneIdx] ??= new List<(float, int, int)>();
+                list.Add(((measure + (float)i / count) * 240f / bpm, seq++, type));
             }
         }
 
         // A hold ends at its end marker; an end marker with no open start in its lane is ignored.
         float maxTime = 0f;
-        foreach (var lane in notes.GroupBy(n => n.Lane))
+        foreach (var lane in notesByLane)
         {
+            if (lane == null || lane.Count == 0) continue;
+            lane.Sort(static (a, b) =>
+            {
+                int c = a.Time.CompareTo(b.Time);
+                return c != 0 ? c : a.Seq.CompareTo(b.Seq);
+            });
             bool pending = false;
-            foreach (var n in lane.OrderBy(n => n.Time))
+            foreach (var n in lane)
             {
                 bool isEnd = n.Type == 3 || n.Type == 5;
                 if (isEnd && !pending) continue;
                 pending = n.Type == 2 || n.Type == 4 || (pending && !isEnd);
-                maxTime = Math.Max(maxTime, n.Time);
+                if (n.Time > maxTime) maxTime = n.Time;
             }
         }
         return new ParseResult(bpm, maxTime, title, artist);
     }
 
-    private static float BpmOf(string line)
+    private static int LaneIndexOf(ReadOnlySpan<char> ch)
     {
-        var parts = line.Substring(1).Split(new[] { ' ', '\t' }, 2);
-        return parts.Length == 2 && parts[0].Equals("BPM", StringComparison.OrdinalIgnoreCase)
-            && float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out float bpm) ? bpm : 0f;
+        if (ch.Length != 2 || ch[0] != '1') return -1;
+        return ch[1] switch
+        {
+            '6' => 0,
+            '1' => 1,
+            '2' => 2,
+            '3' => 3,
+            '4' => 4,
+            '5' => 5,
+            '8' => 6,
+            _ => -1,
+        };
+    }
+
+    private static int FirstTokenLength(ReadOnlySpan<char> line)
+    {
+        int sep = line.IndexOfAny(' ', '\t');
+        return sep < 0 ? line.Length : sep;
+    }
+
+    private static bool TryParseBpm(ReadOnlySpan<char> line, out float bpm)
+    {
+        bpm = 0f;
+        var rest = line.Slice(1);
+        int sep = rest.IndexOfAny(' ', '\t');
+        if (sep <= 0 || !rest.Slice(0, sep).Equals("BPM", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return float.TryParse(rest.Slice(sep + 1).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out bpm) && bpm > 0f;
     }
 }

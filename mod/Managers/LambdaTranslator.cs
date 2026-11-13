@@ -479,12 +479,13 @@ public static class LambdaTranslator
         _requestedKeys.Add(key);
         if (_resolvedMethods.TryGetValue(key, out var inMemory)) return inMemory;
 
+        Type outerType = closureType.DeclaringType ?? closureType;
         _stopwatch.Start();
         try
         {
             if (!_retranslating && _entries.TryGetValue(key, out var cached))
             {
-                var fast = TryBindCachedMethod(closureType, cached, paramTypes, out string? why);
+                var fast = TryBindMethodOnType(closureType, cached, paramTypes, out string? why);
                 if (fast != null)
                 {
                     _resolvedMethods[key] = fast;
@@ -518,7 +519,7 @@ public static class LambdaTranslator
                     $"{LOG_PREFIX} '{key}' {closureType.Name}에서 시그니처가 같은 메서드 {candidates.Count}개({Names(candidates)}) → 번호가 가장 작은 {chosen.Name} 선택");
             }
             _resolvedMethods[key] = chosen;
-            RecordTranslation(key, closureType, chosen, -1, how, candidates.Count);
+            RecordTranslation(key, outerType, chosen, -1, how, candidates.Count);
             return chosen;
         }
         finally { _stopwatch.Stop(); }
@@ -626,8 +627,7 @@ public static class LambdaTranslator
 
     private static MethodInfo? TryBindCachedMethod(Type outerType, LambdaEntry cached, Type[] paramTypes, out string? why)
     {
-        why = null;
-        if (string.IsNullOrEmpty(cached.ClosureTypeName) || string.IsNullOrEmpty(cached.MethodName))
+        if (string.IsNullOrEmpty(cached.ClosureTypeName))
         {
             why = "항목이 비어 있음";
             return null;
@@ -642,10 +642,22 @@ public static class LambdaTranslator
             return null;
         }
 
-        MethodInfo? method = nested.GetMethod(cached.MethodName, AllFlags, null, paramTypes, null);
+        return TryBindMethodOnType(nested, cached, paramTypes, out why);
+    }
+
+    private static MethodInfo? TryBindMethodOnType(Type targetType, LambdaEntry cached, Type[] paramTypes, out string? why)
+    {
+        why = null;
+        if (string.IsNullOrEmpty(cached.MethodName))
+        {
+            why = "항목이 비어 있음";
+            return null;
+        }
+
+        MethodInfo? method = targetType.GetMethod(cached.MethodName, AllFlags, null, paramTypes, null);
         if (method == null)
         {
-            foreach (var m in nested.GetMethods(AllFlags))
+            foreach (var m in targetType.GetMethods(AllFlags))
             {
                 if (string.Equals(m.Name, cached.MethodName, StringComparison.Ordinal) &&
                     ParametersCompatible(m.GetParameters(), paramTypes, out _))
@@ -831,8 +843,11 @@ public static class LambdaTranslator
         _dirty = true;
         _translatedCount++;
 
+        string targetPath = string.IsNullOrEmpty(closureName) || closureName == outerType.Name
+            ? $"{outerType.Name}.{chosen.Name}"
+            : $"{outerType.Name}.{closureName}.{chosen.Name}";
         Core.DebugLog(
-            $"{LOG_PREFIX} 번역됨 [{key}] -> {outerType.Name}.{closureName}.{chosen.Name} " +
+            $"{LOG_PREFIX} 번역됨 [{key}] -> {targetPath} " +
             $"(RVA={rvaHex}, how={how}, 후보 {candidateCount}개{(targetFieldOffset > 0 ? $", FieldOffset=0x{targetFieldOffset:X}" : "")})");
     }
 

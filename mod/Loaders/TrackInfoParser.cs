@@ -71,10 +71,13 @@ public static class TrackInfoParser
     }
 
     public static TrackInfo ParseTrackInfo(string albumFolder, string chartName)
+        => ParseTrackInfo(albumFolder, chartName, null);
+
+    public static TrackInfo ParseTrackInfo(string albumFolder, string chartName, string[]? preloadedFiles)
     {
         try
         {
-            string? file = FindTrackInfoFile(albumFolder, chartName);
+            string? file = FindTrackInfoFile(albumFolder, chartName, preloadedFiles);
             if (file == null) return new TrackInfo();
             return ParseLines(TextDecoder.ReadAllText(file, TextDecoder.InfoFallback).Split('\n'));
         }
@@ -133,10 +136,26 @@ public static class TrackInfoParser
             .Select(p => int.TryParse(p, out int d) ? (int?)d : null).OfType<int>().ToList();
     }
 
-    private static string? FindTrackInfoFile(string albumFolder, string chartName)
+    private static string? FindTrackInfoFile(string albumFolder, string chartName, string[]? preloadedFiles)
     {
-        var txtFiles = Directory.GetFiles(albumFolder, "*.txt", SearchOption.TopDirectoryOnly);
-        string? Named(string name) => txtFiles.FirstOrDefault(f => Path.GetFileName(f).Equals(name, StringComparison.OrdinalIgnoreCase));
-        return (chartName.Length > 0 ? Named(chartName + ".txt") : null) ?? Named("trackinfo.txt") ?? Named("info.txt") ?? txtFiles.FirstOrDefault();
+        string[] source = preloadedFiles ?? Directory.GetFiles(albumFolder, "*", SearchOption.TopDirectoryOnly);
+        if (preloadedFiles == null)
+            Array.Sort(source, StringComparer.OrdinalIgnoreCase);
+        string? chartTxt = null, trackInfoTxt = null, infoTxt = null, firstTxt = null;
+        string? chartTarget = chartName.Length > 0 ? chartName + ".txt" : null;
+
+        foreach (string f in source)
+        {
+            if (!Path.GetExtension(f).Equals(".txt", StringComparison.OrdinalIgnoreCase)) continue;
+            firstTxt ??= f;
+            string name = Path.GetFileName(f);
+            if (chartTarget != null && chartTxt == null && name.Equals(chartTarget, StringComparison.OrdinalIgnoreCase))
+                chartTxt = f;
+            else if (trackInfoTxt == null && name.Equals("trackinfo.txt", StringComparison.OrdinalIgnoreCase))
+                trackInfoTxt = f;
+            else if (infoTxt == null && name.Equals("info.txt", StringComparison.OrdinalIgnoreCase))
+                infoTxt = f;
+        }
+        return chartTxt ?? trackInfoTxt ?? infoTxt ?? firstTxt;
     }
 }

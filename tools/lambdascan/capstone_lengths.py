@@ -5,10 +5,12 @@ import sys, json
 import pefile, capstone
 dll, sj, out = sys.argv[1], sys.argv[2], sys.argv[3]
 limit = int(sys.argv[4]) if len(sys.argv) > 4 else 4000
-d = json.load(open(sj, encoding="utf-8"))
+with open(sj, encoding="utf-8") as sf:
+    d = json.load(sf)
 rvas = sorted({m["Address"] for m in d["ScriptMethod"] if "b__" in m["Name"] or "MoveNext" in m["Name"]})
 pe = pefile.PE(dll, fast_load=True)
 img = pe.get_memory_mapped_image()
+pe.close()
 md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 step = max(1, len(rvas) // limit)
 n = 0
