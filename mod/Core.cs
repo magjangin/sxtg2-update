@@ -64,7 +64,15 @@ public class Core : MelonMod
         NoteEffects.RegisterDynamicTargets();
 
         LoggerInstance.Msg("[Harmony] 패치 적용 중...");
-        PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance, gameRoot);
+        try
+        {
+            PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance, gameRoot);
+        }
+        finally
+        {
+            // hwa 스캔은 Harmony 적용(2~3초)과 겹쳐 작업 스레드에서 돌았다: 결과와 로그를 여기서 받는다.
+            CustomTrackManager.CompleteScan();
+        }
     }
 
     // sxtg2 overlays (judgment bar, key viewer). IMGUI drawing is stripped from this game build

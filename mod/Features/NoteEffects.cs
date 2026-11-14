@@ -37,6 +37,8 @@ public static class NoteEffects
         public static void Postfix(StartrailPatternRenderer __instance)
         {
             ModConfig.ReloadIfChanged();
+            // 플레이 준비 시점(노트가 나오기 전)을 함께 쓴다: 커스텀 노트 스프라이트를 이때 올림
+            CustomNoteSkin.PrepareForPlay();
             NoteFactor.Clear();
             LaneFactor.Clear();
             NoteLane.Clear();
@@ -207,12 +209,12 @@ public static class NoteEffects
                 if (ModConfig.Hidden > 0f)
                 {
                     float soft = ModConfig.LaneCoverSoftness / full * 100f;
-                    alpha = Math.Min(alpha, soft > 0.01f ? Clamp01((pct - ModConfig.Hidden) / soft + 0.5f) : (pct >= ModConfig.Hidden ? 1f : 0f));
+                    alpha = Math.Min(alpha, soft > 0.01f ? Overlay.Clamp01((pct - ModConfig.Hidden) / soft + 0.5f) : (pct >= ModConfig.Hidden ? 1f : 0f));
                 }
                 if (ModConfig.FadeIn)
-                    alpha = Math.Min(alpha, Clamp01((ModConfig.FadeInStart - pct) / ModConfig.FadeInLength));
+                    alpha = Math.Min(alpha, Overlay.Clamp01((ModConfig.FadeInStart - pct) / ModConfig.FadeInLength));
                 if (ModConfig.FadeOut)
-                    alpha = Math.Min(alpha, Clamp01((pct - (ModConfig.FadeOutStart - ModConfig.FadeOutLength)) / ModConfig.FadeOutLength));
+                    alpha = Math.Min(alpha, Overlay.Clamp01((pct - (ModConfig.FadeOutStart - ModConfig.FadeOutLength)) / ModConfig.FadeOutLength));
             }
         }
 
@@ -227,6 +229,4 @@ public static class NoteEffects
         cover.Group.alpha = alpha;
         cover.Alpha = alpha;
     }
-
-    private static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
 }

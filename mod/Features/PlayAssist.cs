@@ -34,6 +34,7 @@ public static class PlayAssist
         Array.Clear(LanePressed, 0, LanePressed.Length);
         Overlay.HideAll();
         NoteEffects.EndPlay();
+        RandomNoteSkin.EndPlay();
         JudgmentBar.Reset();
         KeyViewer.ResetBindings();
     }
@@ -85,6 +86,9 @@ public static class PlayAssist
 
     private static void OnNoteJudged(IJudgeProcessor.ISixtarJudgeData data)
     {
+        // 판정바를 끈 플레이: 전에는 그래도 판정마다 IL2CPP 속성 3~4개를 읽고 문자열을 만들어 HitHistory에 쌓았고,
+        // 그리지 않으니 오래된 틱도 지워지지 않아 곡 끝까지 판정 수만큼 늘어났다.
+        if (!ModConfig.EnableJudgmentBar) return;
         try
         {
             // Long notes report every tick; only the head tick carries a real input offset.

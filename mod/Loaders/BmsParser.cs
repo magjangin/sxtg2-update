@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using MelonLoader;
 
 namespace SixtarGateMod.Loaders;
 
@@ -27,7 +26,7 @@ public static class BmsParser
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"[BmsParser] BMS 파일 해석 실패 '{filePath}': {ex.Message}");
+            Managers.ModLog.Error($"[BmsParser] BMS 파일 해석 실패 '{filePath}': {ex.Message}");
             return null;
         }
     }

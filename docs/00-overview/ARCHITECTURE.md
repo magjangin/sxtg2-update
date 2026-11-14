@@ -18,7 +18,7 @@ mod/
 │   ├── CustomMusicSelect.cs  결과 → 목록 복귀 시 커서 위치
 │   └── AttendancePopup.cs    출석 보상 창 자동 표시 끄기
 ├── Managers/
-│   ├── CustomTrackManager.cs hwa 스캔, 앨범 정보, 차트 텍스트(캐시), TrackData 복제
+│   ├── CustomTrackManager.cs hwa 스캔(작업 스레드), 앨범 정보, 차트 텍스트(캐시), TrackData 복제
 │   ├── CustomAudioManager.cs FMOD Core 스트림 재생/일시정지/볼륨
 │   ├── MediaOverrideManager.cs 자켓 비동기 로드, BGA URL 교체
 │   ├── ModConfig.cs          SaveCustomKey\config.txt 읽기/마이그레이션
@@ -28,6 +28,7 @@ mod/
 │   ├── NativeLambdaScan.cs   람다 기계어에서 소유자 → 대상 필드 로드 찾기 (명령 단위 레지스터 추적, 순수 함수)
 │   ├── X64Decoder.cs         최소 x64 명령 길이 해독기 (NativeLambdaScan용, capstone 대조 시험)
 │   ├── PatchPreflight.cs     패치 적용 전 사전 JIT 검사 (업데이트로 사라진 인터롭 멤버를 쓰는 패치 건너뜀)
+│   ├── ModLog.cs             작업 스레드 로그 버퍼 (메인 스레드에서 출력)
 │   └── UpdateGuard.cs        Steam 빌드 ID 검증 및 Unity 내부 예외 포워딩
 ├── Loaders/
 │   ├── BmsParser.cs          BPM, 마지막 노트 끝 시각, #TITLE/#ARTIST
@@ -43,12 +44,14 @@ mod/
 ```text
 [assembly: HarmonyDontPatchAll]          ← MelonLoader 자동 PatchAll 끔 (켜 두면 모든 훅이 2번 돎)
 Core.OnInitializeMelon
-  └─ PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance, gameRoot)
+  ├─ CustomTrackManager.Initialize: hwa 스캔을 작업 스레드에서 시작 (CustomNoteSkin PNG 해독도 작업 스레드)
+  ├─ PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance, gameRoot)
        → 패치 클래스마다 대상 메서드와 네이티브 주소를 먼저 구함(+ NoteEffects 동적 대상)
        → IcfScanner.Prepare: 그 주소들을 공유하는 IL2CPP 메서드 수 (같은 빌드면 UserData 캐시)
        → 대상별로 빈 스텁(1~3바이트 ret/xor/mov)이거나 공유 수 > 허용([IcfShared], 기본 1)이면 건너뜀
        → 나머지는 CreateClassProcessor(type).Patch()
        → 하나가 실패해도 나머지는 적용, 로그 "[Harmony] 패치 N개 모두 적용 완료"
+  └─ (finally) CustomTrackManager.CompleteScan: 스캔 결과·로그를 메인 스레드에서 받음
 ```
 
 예외 두 가지:

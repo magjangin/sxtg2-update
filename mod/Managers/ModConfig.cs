@@ -265,8 +265,9 @@ public static class ModConfig
     private static int Int(Dictionary<string, string> m, string key, int def)
         => m.TryGetValue(key, out var v) && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int r) ? r : def;
 
+    // NaN/Infinity("nan", "∞")도 float.TryParse는 받아 주는데, Math.Clamp는 NaN을 그대로 돌려줘 노트 투명도 등이 NaN이 됨
     private static float Float(Dictionary<string, string> m, string key, float def)
-        => m.TryGetValue(key, out var v) && float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float r) ? r : def;
+        => m.TryGetValue(key, out var v) && float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float r) && float.IsFinite(r) ? r : def;
 
     private static Color ColorValue(Dictionary<string, string> m, string key, Color def)
     {

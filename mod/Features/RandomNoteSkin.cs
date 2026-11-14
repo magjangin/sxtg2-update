@@ -40,7 +40,8 @@ public static class RandomNoteSkin
         public Look[] Head = Array.Empty<Look>(), Body = Array.Empty<Look>(), Hold = Array.Empty<Look>(), Tail = Array.Empty<Look>();
     }
 
-    private static IntPtr _rendererPtr;
+    private static IntPtr _rendererPtr, _spawnRendererPtr;
+    private static IngameUIRenderer? _ui;
     private static readonly Dictionary<string, List<Skin>> SkinsBySuffix = new();
     private static readonly Dictionary<IntPtr, Parts> InstanceParts = new();
     private static readonly Dictionary<LaneIndex, string> LaneSuffix = new();
@@ -130,6 +131,17 @@ public static class RandomNoteSkin
         Melon<Core>.Logger.Msg($"{LOG_PREFIX} 노트 프리팹 {names.Count}개: {string.Join(", ", names)}");
     }
 
+    /// <summary>
+    /// 플레이 끝(PlayAssist.EndPlay): 다음 플레이의 렌더러가 GC로 비운 같은 주소에 생겨도 지난 플레이의 UI 렌더러·목록을
+    /// 쓰지 않게 기억을 지운다. 노트 Image 목록(InstanceParts)도 플레이마다 새 풀이므로 함께 비운다.
+    /// </summary>
+    public static void EndPlay()
+    {
+        _rendererPtr = _spawnRendererPtr = IntPtr.Zero;
+        _ui = null;
+        InstanceParts.Clear();
+    }
+
     private static void Copy(Look[] from, Image[] to)
     {
         int n = Math.Min(from.Length, to.Length);
@@ -154,7 +166,13 @@ public static class RandomNoteSkin
     {
         try
         {
-            var ui = renderer.UIRenderer;
+            // 렌더러·UI 렌더러는 플레이마다 하나: 노트마다 UIRenderer 속성(IL2CPP 호출)을 읽지 않게 렌더러 포인터로 기억
+            if (renderer.Pointer != _spawnRendererPtr)
+            {
+                _spawnRendererPtr = renderer.Pointer;
+                _ui = renderer.UIRenderer;
+            }
+            var ui = _ui;
             if (ui == null) return;
             EnsureCatalog(ui);
 
