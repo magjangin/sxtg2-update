@@ -49,7 +49,7 @@ head가 판정선까지 거리라서, head와 tail에 같은 배율을 곱하면
 
 - `IngameUIRenderer.notePackage.noteObjects`에 모든 스킨의 노트 프리팹이 `{skin}`(파랑), `{skin}_red`, `{skin}_gate`로 들어 있습니다(11종 + 기본 이펙터 3개 = 36개).
 - 레인별 프리팹은 `GetNoteReferance(lane)`가 정합니다. 그 접미사(`""`/`_red`/`_gate`)와 같은 무작위 스킨 프리팹의 head/body/hold/tail `Image`(sprite, type, color, material, preserveAspect)를 복사합니다.
-- `GetNoteObejct` Postfix(우선순위 Low)라 켜면 CustomNotes는 건너뜁니다.
+- `GetNoteObejct` Postfix 하나(`CustomNoteSkin`의 스폰 훅)를 커스텀 PNG와 함께 쓰며, 켜면 CustomNotes는 건너뜁니다. 프리팹 Image 값은 플레이마다 목록을 만들 때 한 번 읽어 둡니다(2026-11-14).
 - 스킨 목록과 레인별 접미사는 플레이당 한 번 만듭니다.
 
 ## 게임에 이미 있는 것

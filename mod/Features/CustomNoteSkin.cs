@@ -59,40 +59,51 @@ public static class CustomNoteSkin
     private static Sprite? HeadSprite(string color) => Get(color) ?? (color == "Gate" ? Get("Blue") : null);
     private static Sprite? PartSprite(string color, string part) => Get(color + part) ?? Get(part + color) ?? Get(part);
 
-    // Typo-tolerant: resolves "GetNoteObejct" or "GetNoteObject" if fixed in a future update.
+    /// <summary>
+    /// 노트 스폰 훅 하나로 커스텀 PNG 스킨과 랜덤 스킨을 함께 처리한다. 전에는 두 기능이 같은 대상
+    /// (GetNoteObejct)에 패치 클래스를 따로 붙여 Harmony 적용이 한 번 더 들고, 노트마다 Postfix 두 개가 불렸다.
+    /// 두 기능은 동시에 쓰이지 않는다(RandomNoteSkin을 켜면 CustomNotes는 쓰이지 않음).
+    /// Typo-tolerant: resolves "GetNoteObejct" or "GetNoteObject" if fixed in a future update.
+    /// </summary>
     [HarmonyPatch]
     public static class StartrailPatternRenderer_GetNoteObejct_Patch
     {
         public static MethodBase? TargetMethod()
             => PatchResilience.ResolveMethod(typeof(StartrailPatternRenderer), "GetNoteObejct", "GetNoteObject");
 
-        public static void Postfix(LaneIndex index, NoteObject __result)
+        public static void Postfix(StartrailPatternRenderer __instance, LaneIndex index, NoteObject __result)
         {
-            if (!ModConfig.CustomNotes || ModConfig.RandomNoteSkin || !HasSprites || __result == null) return;
-            if (!Skinned.Add(__result.Pointer)) return; // pooled object already skinned this play
-
-            try
-            {
-                string color = ColorOf((int)index);
-                Apply(__result.headImage, HeadSprite(color));
-                Apply(__result.tailImage, PartSprite(color, "Tail"));
-                var hold = PartSprite(color, "Hold");
-                Apply(__result.bodyImage, hold);
-                Apply(__result.holdImage, hold);
-                if (Skinned.Count == 1)
-                    Melon<Core>.Logger.Msg($"{LOG_PREFIX} 노트에 커스텀 스프라이트 적용 시작 (첫 노트: 레인 {index}, '{__result.gameObject.name}')");
-            }
-            catch (Exception ex)
-            {
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 적용 실패: {ex.Message}");
-            }
+            if (__result == null) return;
+            if (ModConfig.RandomNoteSkin) RandomNoteSkin.OnNoteSpawned(__instance, index, __result);
+            else if (ModConfig.CustomNotes && HasSprites) ApplyCustom(index, __result);
         }
+    }
 
-        private static void Apply(RectTransform? target, Sprite? sprite)
+    private static void ApplyCustom(LaneIndex index, NoteObject note)
+    {
+        if (!Skinned.Add(note.Pointer)) return; // pooled object already skinned this play
+
+        try
         {
-            if (target == null || sprite == null) return;
-            var img = target.GetComponent<Image>() ?? target.GetComponentInChildren<Image>(true);
-            if (img != null) img.sprite = sprite;
+            string color = ColorOf((int)index);
+            Apply(note.headImage, HeadSprite(color));
+            Apply(note.tailImage, PartSprite(color, "Tail"));
+            var hold = PartSprite(color, "Hold");
+            Apply(note.bodyImage, hold);
+            Apply(note.holdImage, hold);
+            if (Skinned.Count == 1)
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 노트에 커스텀 스프라이트 적용 시작 (첫 노트: 레인 {index}, '{note.gameObject.name}')");
         }
+        catch (Exception ex)
+        {
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 적용 실패: {ex.Message}");
+        }
+    }
+
+    private static void Apply(RectTransform? target, Sprite? sprite)
+    {
+        if (target == null || sprite == null) return;
+        var img = target.GetComponent<Image>() ?? target.GetComponentInChildren<Image>(true);
+        if (img != null) img.sprite = sprite;
     }
 }

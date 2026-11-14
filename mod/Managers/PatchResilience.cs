@@ -42,13 +42,14 @@ public static class PatchResilience
     private static readonly Dictionary<(Type TargetType, MethodInfo Method, Type ArgType), Delegate> ActionCache = new();
 
     /// <summary>
-    /// Applies all [HarmonyPatch] classes in the mod assembly one by one with runtime ICF trivial-stub protection.
-    /// </summary>
-    /// <summary>
     /// [HarmonyPatch]가 없어 실행 중에 붙였다 떼는 패치 대상(NoteEffects 등). 시작할 때 ICF 검사에 함께 넣는다.
     /// </summary>
     public static readonly List<Func<MethodBase?>> DynamicPatchTargets = new();
 
+    /// <summary>
+    /// Applies all [HarmonyPatch] classes in the mod assembly one by one: preflight JIT check, runtime ICF guard
+    /// (trivial stubs and shared native bodies), then Harmony.
+    /// </summary>
     public static void ApplyAllPatches(HarmonyLib.Harmony harmony, MelonLogger.Instance logger, string gameRoot)
     {
         int applied = 0, failed = 0, skippedIcf = 0, skippedPreflight = 0;

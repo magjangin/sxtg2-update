@@ -146,7 +146,7 @@ public static class Overlay
         Show(it, b, color);
     }
 
-    /// <summary>White sprite whose alpha follows a texture mask (capsule / diamond shapes).</summary>
+    /// <summary>Hides every pooled object at once (play ended, or no overlay feature is on).</summary>
     public static void HideAll()
     {
         if (_root == null) return;
@@ -155,6 +155,7 @@ public static class Overlay
         Drawn.Clear();
     }
 
+    /// <summary>Sprite over a whole texture (jackets, judgment-bar shape masks), kept across scene unloads.</summary>
     public static Sprite MakeSprite(Texture2D tex)
     {
         var s = Sprite.Create(tex, new UnityEngine.Rect { m_XMin = 0f, m_YMin = 0f, m_Width = tex.width, m_Height = tex.height }, new Vector2 { x = 0.5f, y = 0.5f });

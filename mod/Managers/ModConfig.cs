@@ -34,6 +34,9 @@ public static class ModConfig
     public static int JudgmentBarShape { get; private set; }
     public static int JudgmentBarRangeShape { get; private set; } = -1;
     public static string JudgmentBarSide { get; private set; } = "Center";
+    /// <summary>JudgmentBarSide를 읽을 때 한 번 판정(판정바가 매 프레임 문자열을 비교하지 않게).</summary>
+    public static bool JudgmentBarLeft { get; private set; }
+    public static bool JudgmentBarRight { get; private set; }
 
     // [키뷰어]
     public static bool EnableKeyViewer { get; private set; } = true;
@@ -179,6 +182,8 @@ public static class ModConfig
         JudgmentBarShape = Math.Clamp(Int(m, "JudgmentBarShape", 0), 0, 2);
         JudgmentBarRangeShape = Math.Clamp(Int(m, "JudgmentBarRangeShape", -1), -1, 2);
         JudgmentBarSide = m.TryGetValue("JudgmentBarSide", out var side) && side.Length > 0 ? side : "Center";
+        JudgmentBarLeft = JudgmentBarSide.Equals("Left", StringComparison.OrdinalIgnoreCase);
+        JudgmentBarRight = JudgmentBarSide.Equals("Right", StringComparison.OrdinalIgnoreCase);
 
         EnableKeyViewer = Bool(m, "EnableKeyViewer", true);
         KeyViewerPressedColor = ColorValue(m, "KeyViewerPressedColor", new Color { r = 0.15f, g = 0.75f, b = 0.85f, a = 0.85f });

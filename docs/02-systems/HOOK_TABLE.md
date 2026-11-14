@@ -1,9 +1,9 @@
 # 훅 전체 표
 
-`mod/` 소스의 `[HarmonyPatch]`를 읽어 만든 표입니다(2026-10-31, 2026-11-07 갱신: 정적 패치 클래스 120개 + `NoteEffects.cs` 동적 훅 2개). 빌드 `26455233`에서도 RVA 동일 확인. RVA는 `il2cpp_dump/script.json` 기준입니다.
+`mod/` 소스의 `[HarmonyPatch]`를 읽어 만든 표입니다(2026-10-31, 2026-11-07·2026-11-14 갱신: 정적 패치 클래스 118개 + `NoteEffects.cs` 동적 훅 2개. 11-14에 같은 대상을 두 번 패치하던 `GotoMusicSelect`(Core·PlayAssist)와 `GetNoteObejct`(CustomNoteSkin·RandomNoteSkin)를 하나씩으로 합침). 빌드 `26455233`에서도 RVA 동일 확인. RVA는 `il2cpp_dump/script.json` 기준입니다.
 `ICF×n`은 그 주소를 n개 함수가 공유한다는 뜻입니다([IL2CPP_PITFALLS.md](../03-development/IL2CPP_PITFALLS.md)).
 
-## 1. 코어·커스텀 곡·오디오·플레이 보조·오버레이 (54개 + 동적 2개)
+## 1. 코어·커스텀 곡·오디오·플레이 보조·오버레이 (52개 + 동적 2개)
 
 | 파일 | 대상 형식 | 메서드 | 종류 | RVA |
 | --- | --- | --- | --- | --- |
@@ -54,8 +54,6 @@
 | `Features/PlayAssist.cs` | `PlayRecordModule` | `RecordLicensePlayData` | Prefix | `0x7C1900` |
 | `Features/PlayAssist.cs` | `PlayRecordModule` | `RecordPlayData` | Prefix | `0x7C2E10` |
 | `Features/PlayAssist.cs` | `ScoreProcessor` | `UpdateScore` | Prefix/Postfix | `0x65F980` |
-| `Features/PlayAssist.cs` | `SixtarGlobal` | `GotoMusicSelect` | Postfix | `0x7DBC40` |
-| `Features/RandomNoteSkin.cs` | `StartrailPatternRenderer` | `GetNoteObejct` | Postfix | `0x688120` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `ChangeVolume` | Postfix | `0x7DF860` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `GetTimelinePosition` | Postfix | `0x7E05F0` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `Pause` | Prefix | `0x7E0E40` |
