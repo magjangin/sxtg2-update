@@ -19,7 +19,7 @@ using SixtarGateMod.Managers;
 namespace SixtarGateMod.Features;
 
 /// <summary>
-/// Full offline / server-shutdown bypass for Sixtar Gate: STARTRAIL (Build 26218612).
+/// Full offline / server-shutdown bypass for Sixtar Gate: STARTRAIL (Build 26218612, RVAs unchanged in 26455233).
 ///
 /// Covers both:
 /// 1. The active Renewal + BACKND pipeline (SixtarGate.Web.BackEnd*, TableLoader, TrackLoader,
@@ -995,23 +995,13 @@ public static class OfflineBypass
     [HarmonyPatch(typeof(ItemHelper), nameof(ItemHelper.CheckOwnedState), new Type[] { typeof(string) })]
     public static class ItemHelper_CheckOwnedState_String_Patch
     {
-        public static bool Prefix(ref bool __result)
-        {
-            if (!Core.UnlockAllTracks) return true;
-            __result = true;
-            return false;
-        }
+        public static bool Prefix(ref bool __result) => Core.Unlocked(ref __result);
     }
 
     // RVA 0x599DD0, ICF=1 — legacy ItemHelper ownership check
     [HarmonyPatch(typeof(ItemHelper), nameof(ItemHelper.CheckOwnedState), new Type[] { typeof(ICollectable) })]
     public static class ItemHelper_CheckOwnedState_Collectable_Patch
     {
-        public static bool Prefix(ref bool __result)
-        {
-            if (!Core.UnlockAllTracks) return true;
-            __result = true;
-            return false;
-        }
+        public static bool Prefix(ref bool __result) => Core.Unlocked(ref __result);
     }
 }

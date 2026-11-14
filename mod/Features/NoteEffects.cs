@@ -194,7 +194,8 @@ public static class NoteEffects
     private static void ApplyLaneCover(NoteObject note, float head)
     {
         bool active = ModConfig.AnyLaneCover;
-        if (!active && !Covers.ContainsKey(note.Pointer)) return; // never touched, nothing to restore
+        // 속도 카오스만 쓰는 플레이: 가린 노트가 하나도 없으면 노트·프레임마다 사전 조회도 하지 않음
+        if (!active && (Covers.Count == 0 || !Covers.ContainsKey(note.Pointer))) return; // never touched, nothing to restore
 
         float alpha = 1f;
         if (active)

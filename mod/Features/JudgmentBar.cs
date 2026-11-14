@@ -66,8 +66,8 @@ public static class JudgmentBar
         bool vertical = ModConfig.JudgmentBarVertical;
         int shape = ModConfig.JudgmentBarShape;
         int rangeShape = ModConfig.JudgmentBarRangeShape == -1 ? shape : ModConfig.JudgmentBarRangeShape;
-        bool left = ModConfig.JudgmentBarSide.Equals("Left", StringComparison.OrdinalIgnoreCase);
-        bool right = ModConfig.JudgmentBarSide.Equals("Right", StringComparison.OrdinalIgnoreCase);
+        bool left = ModConfig.JudgmentBarLeft;
+        bool right = ModConfig.JudgmentBarRight;
 
         float barW = vertical ? 24f : 300f;
         float barH = vertical ? 300f : 24f;

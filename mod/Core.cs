@@ -71,6 +71,7 @@ public class Core : MelonMod
     // ("Method unstripping failed"), so they draw on a pooled uGUI canvas once per frame instead of OnGUI.
     private bool _overlayErrorLogged;
     private bool _inRenewalPlay;
+    private bool _overlayIdle;
 
     // The overlays belong to the play scene only; leaving it (result screen, music select) ends the session.
     public override void OnSceneWasLoaded(int buildIndex, string sceneName)
@@ -89,6 +90,15 @@ public class Core : MelonMod
         try
         {
             NoteEffects.OnFrame();
+            // 판정바·키뷰어를 둘 다 끄고 마라톤 배너도 없으면 그릴 것이 없다: 캔버스 생성과 매 프레임
+            // 화면 크기·배율 조회(IL2CPP 호출 3번)를 건너뛰고, 전에 그린 것만 한 번 숨긴다.
+            bool playOverlay = PlayAssist.IsPlaying && (ModConfig.EnableJudgmentBar || ModConfig.EnableKeyViewer);
+            if (!playOverlay && !CustomMarathon.IsShowingResultBanner)
+            {
+                if (!_overlayIdle) { Overlay.HideAll(); _overlayIdle = true; }
+                return;
+            }
+            _overlayIdle = false;
             if (!Overlay.Begin()) return;
             float now = Time.time;
             CustomMarathon.Update(now);
@@ -324,6 +334,9 @@ public class Core : MelonMod
 
         public static void Postfix()
         {
+            // 플레이 세션 정리(오버레이·노트 효과·판정바·키뷰어). 전에는 PlayAssist에 같은 대상의 패치 클래스가
+            // 따로 있어 Harmony 적용이 한 번 더 들었음. 마라톤으로 다음 곡에 넘어갈 때도 원래처럼 정리한다.
+            PlayAssist.EndPlay();
             // Postfixes still run when the prefix skipped the original: keep the state GotoPlayScene just set.
             if (CustomMarathon.DivertingMusicSelect) { CustomMarathon.DivertingMusicSelect = false; return; }
             IsCustomTrackActive = false;
@@ -834,8 +847,8 @@ public class Core : MelonMod
 
     #region --- 1. All Songs & DLC Unlock Hooks ---
 
-    /// <summary>Shared prefix body: report "owned / unlocked" and skip the original check.</summary>
-    private static bool Unlocked(ref bool result)
+    /// <summary>Shared prefix body: report "owned / unlocked" and skip the original check (also OfflineBypass's ItemHelper).</summary>
+    internal static bool Unlocked(ref bool result)
     {
         if (!UnlockAllTracks) return true;
         result = true;

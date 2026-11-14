@@ -267,9 +267,5 @@ public static class PlayAssist
         public static bool Prefix() => !ModConfig.ShouldBlockRecord;
     }
 
-    [HarmonyPatch(typeof(SixtarGlobal), nameof(SixtarGlobal.GotoMusicSelect))]
-    public static class SixtarGlobal_GotoMusicSelect_EndPlay_Patch
-    {
-        public static void Postfix() => EndPlay();
-    }
+    // 곡 목록으로 돌아갈 때의 EndPlay는 Core.SixtarGlobal_GotoMusicSelect_Patch.Postfix에서 부른다(같은 대상 패치 통합).
 }
