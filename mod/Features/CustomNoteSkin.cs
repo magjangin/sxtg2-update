@@ -7,6 +7,7 @@ using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
 using Il2CppSixtarGate.Play;
+using SixtarGateMod.Loaders;
 using SixtarGateMod.Managers;
 
 namespace SixtarGateMod.Features;
@@ -25,28 +26,84 @@ public static class CustomNoteSkin
     private static readonly Dictionary<string, Sprite> Sprites = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<IntPtr> Skinned = new();
     public static string FolderPath { get; private set; } = "";
-    public static bool HasSprites => Sprites.Count > 0;
 
+    /// <summary>작업 스레드에서 해독한 PNG(실패하면 Rgba null → 메인 스레드에서 LoadImage로 다시).</summary>
+    private sealed record Decoded(string Name, string Path, int Width, int Height, byte[]? Rgba);
+    private static System.Threading.Tasks.Task<List<Decoded>>? _decode;
+    private static bool _loaded;
+
+    /// <summary>
+    /// PNG 해독은 부팅 때 작업 스레드에서 시작하고, 텍스처 올리기는 커스텀 노트를 쓰는 첫 플레이의 준비 때(<see cref="PrepareForPlay"/>) 한다.
+    /// 전에는 부팅 메인 스레드에서 LoadImage로 동기 해독해 2장에 약 0.27초가 들었고, CustomNotes=0이어도 했다.
+    /// </summary>
     public static void Initialize(string gameFolder)
     {
         FolderPath = Path.Combine(gameFolder, "CustomNotes");
         try
         {
             Directory.CreateDirectory(FolderPath);
-            foreach (var file in Directory.GetFiles(FolderPath, "*.png"))
-            {
-                var sprite = MediaOverrideManager.LoadSpriteFromFile(file);
-                if (sprite == null) continue;
-                sprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
-                sprite.texture.hideFlags = HideFlags.DontUnloadUnusedAsset;
-                Sprites[Path.GetFileNameWithoutExtension(file)] = sprite;
-            }
-            Melon<Core>.Logger.Msg($"{LOG_PREFIX} {FolderPath}에서 스프라이트 {Sprites.Count}개 로드: {string.Join(", ", Sprites.Keys)}");
+            string[] files = Directory.GetFiles(FolderPath, "*.png");
+            if (files.Length > 0)
+                _decode = System.Threading.Tasks.Task.Run(() => DecodeAll(files));
         }
         catch (Exception ex)
         {
             Melon<Core>.Logger.Error($"{LOG_PREFIX} CustomNotes 로드 실패: {ex.Message}");
         }
+    }
+
+    // 작업 스레드: 파일 읽기와 PngDecoder만(Unity 호출 없음). 해독 못 하는 PNG(16비트·인터레이스)는 Rgba를 비워 둔다.
+    private static List<Decoded> DecodeAll(string[] files)
+    {
+        var list = new List<Decoded>(files.Length);
+        foreach (var file in files)
+        {
+            byte[]? rgba = null;
+            int w = 0, h = 0;
+            try
+            {
+                if (PngDecoder.TryDecode(File.ReadAllBytes(file), 0, out w, out h, out var pixels)) rgba = pixels;
+            }
+            catch { }
+            list.Add(new Decoded(Path.GetFileNameWithoutExtension(file), file, w, h, rgba));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// 플레이 준비(StartrailPatternRenderer.Register, 노트가 나오기 전)에서 부른다: 커스텀 노트를 쓸 플레이면 스프라이트를
+    /// 미리 올려, 텍스처 첫 생성 비용이 첫 노트가 나오는 순간에 걸리지 않게 한다.
+    /// </summary>
+    public static void PrepareForPlay()
+    {
+        if (!_loaded && ModConfig.CustomNotes && !ModConfig.RandomNoteSkin) EnsureLoaded();
+    }
+
+    /// <summary>해독해 둔 PNG를 스프라이트로 올린다(처음 한 번, 메인 스레드). 스프라이트가 하나라도 있으면 true.</summary>
+    private static bool EnsureLoaded()
+    {
+        if (_loaded) return Sprites.Count > 0;
+        _loaded = true;
+        var decode = _decode;
+        _decode = null;
+        if (decode == null) return false;
+        try
+        {
+            foreach (var d in decode.Result)
+            {
+                Sprite? sprite = null;
+                if (d.Rgba != null && MediaOverrideManager.TextureFromRgba(d.Width, d.Height, d.Rgba) is { } tex)
+                    sprite = Overlay.MakeSprite(tex);
+                sprite ??= MediaOverrideManager.LoadSpriteFromFile(d.Path);
+                if (sprite != null) Sprites[d.Name] = sprite;
+            }
+            Melon<Core>.Logger.Msg($"{LOG_PREFIX} {FolderPath}에서 스프라이트 {Sprites.Count}개 로드: {string.Join(", ", Sprites.Keys)}");
+        }
+        catch (Exception ex)
+        {
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} CustomNotes 로드 실패: {ex.GetBaseException().Message}");
+        }
+        return Sprites.Count > 0;
     }
 
     public static void ResetForNewPlay() => Skinned.Clear();
@@ -75,7 +132,7 @@ public static class CustomNoteSkin
         {
             if (__result == null) return;
             if (ModConfig.RandomNoteSkin) RandomNoteSkin.OnNoteSpawned(__instance, index, __result);
-            else if (ModConfig.CustomNotes && HasSprites) ApplyCustom(index, __result);
+            else if (ModConfig.CustomNotes && EnsureLoaded()) ApplyCustom(index, __result);
         }
     }
 

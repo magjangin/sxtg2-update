@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using MelonLoader;
 
 namespace SixtarGateMod.Loaders;
 
@@ -83,7 +82,7 @@ public static class TrackInfoParser
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"[TrackInfoParser] '{albumFolder}'의 곡 정보 해석 오류: {ex.Message}");
+            Managers.ModLog.Error($"[TrackInfoParser] '{albumFolder}'의 곡 정보 해석 오류: {ex.Message}");
             return new TrackInfo();
         }
     }

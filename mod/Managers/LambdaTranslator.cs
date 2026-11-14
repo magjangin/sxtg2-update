@@ -102,6 +102,31 @@ public static class LambdaTranslator
     /// <summary>GameAssembly.dll이 올라간 주소(RVA 계산용). 못 찾으면 IntPtr.Zero.</summary>
     public static IntPtr GameAssemblyBase => _gameAssemblyBase;
 
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr GetModuleHandleW(string moduleName);
+
+    /// <summary>
+    /// GameAssembly.dll의 올라간 주소 = 모듈 핸들(이미 로드돼 있으므로 GetModuleHandle 한 번). 전에는
+    /// Process.GetCurrentProcess().Modules로 게임 프로세스의 모듈 수백 개를 모두 열거했다.
+    /// </summary>
+    private static IntPtr FindGameAssemblyBase()
+    {
+        try
+        {
+            IntPtr handle = GetModuleHandleW("GameAssembly.dll");
+            if (handle != IntPtr.Zero) return handle;
+        }
+        catch { }
+        try
+        {
+            foreach (ProcessModule mod in Process.GetCurrentProcess().Modules)
+                if (string.Equals(mod.ModuleName, "GameAssembly.dll", StringComparison.OrdinalIgnoreCase))
+                    return mod.BaseAddress;
+        }
+        catch { }
+        return IntPtr.Zero;
+    }
+
     public static void Initialize(string gameRoot)
     {
         // 번역에 쓴 시간만 잰다(전에는 Initialize부터 FlushSummary까지라 Harmony 패치 약 2초가 섞여 "3131ms"처럼 보였음).
@@ -124,18 +149,7 @@ public static class LambdaTranslator
                 ? $"{buildId}|{gaInfo.Length}|{gaInfo.LastWriteTimeUtc.Ticks}"
                 : $"{buildId}|missing";
 
-            try
-            {
-                foreach (ProcessModule mod in Process.GetCurrentProcess().Modules)
-                {
-                    if (string.Equals(mod.ModuleName, "GameAssembly.dll", StringComparison.OrdinalIgnoreCase))
-                    {
-                        _gameAssemblyBase = mod.BaseAddress;
-                        break;
-                    }
-                }
-            }
-            catch { }
+            _gameAssemblyBase = FindGameAssemblyBase();
         }
         catch (Exception ex)
         {

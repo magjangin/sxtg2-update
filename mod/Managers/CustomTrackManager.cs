@@ -22,11 +22,21 @@ public static class CustomTrackManager
     private static readonly string[] IMAGE_EXTENSIONS = { ".png", ".jpg", ".jpeg" };
 
     public static string HwaFolderPath { get; private set; } = "";
-    public static List<CustomAlbumInfo> LoadedAlbums { get; } = new();
-    public static Dictionary<string, CustomAlbumInfo> AlbumsByTrackId { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    // 스캔은 작업 스레드가 이 두 필드에 채운다. 메인 스레드는 아래 속성으로만 읽고, 속성은 스캔이 끝나기를 기다린다.
+    private static readonly List<CustomAlbumInfo> Albums = new();
+    private static readonly Dictionary<string, CustomAlbumInfo> ById = new(StringComparer.OrdinalIgnoreCase);
+    private static System.Threading.Tasks.Task<List<ModLog.Entry>>? _scan;
+
+    public static List<CustomAlbumInfo> LoadedAlbums { get { CompleteScan(); return Albums; } }
+    public static Dictionary<string, CustomAlbumInfo> AlbumsByTrackId { get { CompleteScan(); return ById; } }
 
     public static CustomAlbumInfo? CurrentSelectedAlbum { get; set; } = null;
 
+    /// <summary>
+    /// hwa 폴더를 만들고 스캔을 작업 스레드에서 시작한다. 15곡 기준 0.1~0.4초(디스크 캐시에 따라)가 부팅 메인 스레드에서
+    /// 빠지고 Harmony 적용(2~3초)과 겹친다. 결과는 <see cref="CompleteScan"/>(부팅 끝, 또는 첫 조회)에서 받는다.
+    /// </summary>
     public static void Initialize(string gameRoot)
     {
         try
@@ -41,7 +51,8 @@ public static class CustomTrackManager
                 Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더 생성: {HwaFolderPath}");
             }
 
-            ScanHwaFolder();
+            Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더에서 커스텀 곡 검색 시작 (작업 스레드)");
+            _scan = System.Threading.Tasks.Task.Run(() => ModLog.RunCaptured(ScanHwaFolder));
         }
         catch (Exception ex)
         {
@@ -49,16 +60,32 @@ public static class CustomTrackManager
         }
     }
 
-    public static void ScanHwaFolder()
+    /// <summary>스캔이 끝나기를 기다리고(보통 이미 끝남) 그동안 모은 로그를 출력한다. 메인 스레드에서만 부른다.</summary>
+    public static void CompleteScan()
     {
-        LoadedAlbums.Clear();
-        AlbumsByTrackId.Clear();
+        var scan = _scan;
+        if (scan == null) return;
+        _scan = null;
+        try
+        {
+            ModLog.Flush(scan.Result);
+        }
+        catch (Exception ex)
+        {
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} 커스텀 곡 검색 실패: {ex.GetBaseException()}");
+        }
+    }
+
+    // 작업 스레드에서 돈다: Unity/IL2CPP를 부르지 않고, 로그는 ModLog로(메인 스레드에서 출력), 공개 속성 대신 필드에 쓴다.
+    private static void ScanHwaFolder()
+    {
+        Albums.Clear();
+        ById.Clear();
 
         if (!Directory.Exists(HwaFolderPath))
             return;
 
-        Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더에서 커스텀 곡 검색 중...");
-
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         var albumFolders = new List<string> { HwaFolderPath };
         albumFolders.AddRange(Directory.GetDirectories(HwaFolderPath));
 
@@ -75,26 +102,26 @@ public static class CustomTrackManager
             {
                 var album = BuildAlbumInfo(folder, bmsFile, files);
                 // "A B" and "A_B" folders map to the same ID; keep both by numbering the later one.
-                if (AlbumsByTrackId.ContainsKey(album.TrackId))
+                if (ById.ContainsKey(album.TrackId))
                 {
                     string baseId = album.TrackId;
                     int n = 2;
-                    while (AlbumsByTrackId.ContainsKey($"{baseId}_{n}")) n++;
+                    while (ById.ContainsKey($"{baseId}_{n}")) n++;
                     album.TrackId = $"{baseId}_{n}";
-                    Melon<Core>.Logger.Warning($"{LOG_PREFIX} 곡 ID '{baseId}'가 겹쳐 '{Path.GetFileName(folder)}'는 '{album.TrackId}'로 등록");
+                    ModLog.Warning($"{LOG_PREFIX} 곡 ID '{baseId}'가 겹쳐 '{Path.GetFileName(folder)}'는 '{album.TrackId}'로 등록");
                 }
-                LoadedAlbums.Add(album);
-                AlbumsByTrackId[album.TrackId] = album;
+                Albums.Add(album);
+                ById[album.TrackId] = album;
                 scanCount++;
-                Core.DebugLog($"{LOG_PREFIX} 커스텀 곡 로드: '{album.Title}' - '{album.Artist}' (BPM: {album.Bpm}, 노트 길이: {album.Duration:F1}초, 자켓: {album.JacketPath}, BGA: {album.BgaPath}, 음원: {album.BgmPath}, 프리뷰: {album.PreviewPath})");
+                ModLog.Debug($"{LOG_PREFIX} 커스텀 곡 로드: '{album.Title}' - '{album.Artist}' (BPM: {album.Bpm}, 노트 길이: {album.Duration:F1}초, 자켓: {album.JacketPath}, BGA: {album.BgaPath}, 음원: {album.BgmPath}, 프리뷰: {album.PreviewPath})");
             }
             catch (Exception ex)
             {
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 곡 폴더 로드 실패 '{Path.GetFileName(folder)}': {ex.Message}");
+                ModLog.Warning($"{LOG_PREFIX} 곡 폴더 로드 실패 '{Path.GetFileName(folder)}': {ex.Message}");
             }
         }
 
-        Melon<Core>.Logger.Msg($"{LOG_PREFIX} 검색 완료: 커스텀 곡 {scanCount}곡 발견");
+        ModLog.Msg($"{LOG_PREFIX} 검색 완료: 커스텀 곡 {scanCount}곡 발견 ({sw.Elapsed.TotalMilliseconds:F0}ms, 작업 스레드)");
     }
 
     private static CustomAlbumInfo BuildAlbumInfo(string folder, string bmsFile, string[] files)
@@ -236,7 +263,7 @@ public static class CustomTrackManager
         if (LoadedAlbums.Count == 0)
             resultList.Add(CloneTrackData(template, templateData, "CUSTOM_1NOTE_DEFAULT", "Starting Point (Custom 1-Note)", "Starting Point Custom", "LucaProject", 160f, null).Cast<ITrack>());
 
-        foreach (var album in LoadedAlbums)
+        foreach (var album in Albums)
             resultList.Add(CloneTrackData(template, templateData, album.TrackId, album.Title, album.Title, album.Artist, album.Bpm, album.Difficulties).Cast<ITrack>());
 
         return resultList;

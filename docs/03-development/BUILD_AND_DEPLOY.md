@@ -54,4 +54,4 @@ Steam Build `26218612`에서 만들고 `26455233`에서 실기 검증했습니�
 4. **커스텀 곡 1곡을 결과 화면까지 플레이**하고, `Latest.log`의 `[UpdateGuard] 게임 내부 예외` 경고(원래 `Player.log`에만 찍히던 Unity 예외)를 확인합니다. 부팅·곡 선택만 보고 넘어가면 안 됩니다.
 5. 문제가 없으면 `mod/Managers/UpdateGuard.cs`의 `VerifiedBuilds`에 빌드 ID를, `VerifiedGameAssemblySizes`에 그 빌드의 `GameAssembly.dll` 크기(바이트)를 추가하고, `check_update.ps1 -UpdateBaseline`으로 기준을 교체합니다. 크기 기록은 `.acf`를 고쳐 업데이트를 막았거나 매니페스트 없이 설치한 경우에도 빌드를 맞게 판별하는 데 씁니다.
 
-함수 본문 확인은 `python -I tools\version_diff\dis.py <GameAssembly.dll> il2cpp_dump\script.json <이름 일부 또는 0xRVA>`(call 대상 이름 표시)로 할 수 있습니다.
+함수 본문 확인은 `python -I tools\version_diff\dis.py <GameAssembly.dll> il2cpp_dump\script.json <이름 일부 또는 0xRVA>`(call 대상 이름 표시)로 할 수 있습니다. 반대로 어떤 클래스를 누가 부르는지는 `python -I tools\version_diff\xrefs.py <GameAssembly.dll> il2cpp_dump\script.json <클래스 전체 이름>`(직접 call/jmp + TypeInfo/MethodInfo 참조. 가상·인터페이스 호출과 씬의 MonoBehaviour 메시지는 안 보임).
