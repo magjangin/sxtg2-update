@@ -44,8 +44,125 @@ public static class UpdateGuard
 
     public static void Initialize(string gameRoot)
     {
+        _gameRoot = gameRoot;
         ReportBuild(gameRoot);
+        CheckFingerprint(gameRoot);
         HookUnityLog();
+    }
+
+    // ---- 지난 실행과의 지문 비교 (2026-11-16) ----
+    // .acf buildid는 수정·DepotDownloader 설치로 실제 바이너리와 어긋날 수 있고, 검증 목록은 소스에 박혀 있어 새 빌드를
+    // 알 수 없다. 그래서 실제 파일(GameAssembly.dll, global-metadata.dat, UnityPlayer.dll)의 크기를 지난 실행과 비교해
+    // "게임이 바뀐 뒤 첫 실행"을 직접 알아챈다. global-metadata.dat이 바뀌면 인터롭 형식·필드 오프셋이 달라질 수 있어
+    // GameAssembly.dll만 바뀐 경우(11-06 업데이트)보다 위험하다.
+
+    private const string StateFileName = "SixtarGateMod.BuildState.txt";
+    private static string? _gameRoot;
+    private static bool _fingerprintChanged;
+    private static string _fingerprintChangeNote = "";
+    private static Dictionary<string, string> _current = new(StringComparer.Ordinal);
+
+    private static void CheckFingerprint(string gameRoot)
+    {
+        try
+        {
+            _current = ReadFingerprint(gameRoot);
+            var previous = BuildFingerprint.Parse(File.Exists(StatePath(gameRoot)) ? File.ReadAllLines(StatePath(gameRoot)) : null);
+            if (previous == null)
+            {
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 지문 기록 없음(첫 실행): 패치가 모두 붙으면 이번 실행의 파일 크기를 기록합니다.");
+                return;
+            }
+            var changes = BuildFingerprint.Diff(previous, _current, out bool risky);
+            if (changes.Count == 0) return;
+
+            _fingerprintChanged = true;
+            _fingerprintChangeNote = string.Join("; ", changes);
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 지난 실행과 달라진 것: {_fingerprintChangeNote}");
+            if (risky)
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 메타데이터/Unity 런타임이 바뀌었습니다: 인터롭 형식·필드 오프셋이 달라졌을 수 있습니다. " +
+                                           "패치 결과 요약과 [Harmony/Preflight]·[ICFGuard] 경고를 확인하고 tools/version_diff/check_update.ps1을 돌려 보세요.");
+        }
+        catch (Exception ex)
+        {
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 지문 비교 실패: {ex.Message}");
+        }
+    }
+
+    private static string StatePath(string gameRoot) => Path.Combine(gameRoot, "UserData", StateFileName);
+
+    private static Dictionary<string, string> ReadFingerprint(string gameRoot)
+    {
+        var d = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["buildId"] = CurrentBuildId ?? "?",
+            ["gameAssemblySize"] = SizeOf(Path.Combine(gameRoot, "GameAssembly.dll")),
+            ["unityPlayerSize"] = SizeOf(Path.Combine(gameRoot, "UnityPlayer.dll")),
+        };
+        // 메타데이터는 {게임}_Data\il2cpp_data\Metadata\global-metadata.dat. 폴더 이름이 실행 파일 이름에서 오므로 *_Data를 훑는다.
+        string meta = "?";
+        try
+        {
+            foreach (var dataDir in Directory.GetDirectories(gameRoot, "*_Data"))
+            {
+                string f = Path.Combine(dataDir, "il2cpp_data", "Metadata", "global-metadata.dat");
+                if (File.Exists(f)) { meta = SizeOf(f); break; }
+            }
+        }
+        catch { }
+        d["metadataSize"] = meta;
+        return d;
+    }
+
+    private static string SizeOf(string file)
+    {
+        try { var fi = new FileInfo(file); return fi.Exists ? fi.Length.ToString() : "?"; }
+        catch { return "?"; }
+    }
+
+    /// <summary>
+    /// 패치 적용이 끝난 뒤 판정 한 줄을 찍고 이번 지문을 저장한다(PatchResilience.ApplyAllPatches 끝에서 호출).
+    /// 지문은 패치가 모두 붙었을 때만 새로 기록한다: 일부가 빠진 상태를 기준으로 삼으면 다음 부팅에서 경고가 사라진다.
+    /// </summary>
+    public static void ReportPatchSummary(int applied, int skippedIcf, int skippedPreflight, int failed, int criticalMissing)
+    {
+        try
+        {
+            bool allApplied = skippedIcf == 0 && skippedPreflight == 0 && failed == 0;
+            bool verified = CurrentBuildId != null && VerifiedBuilds.Contains(CurrentBuildId);
+            string verdict;
+            if (criticalMissing > 0)
+                verdict = $"문제 있음: 필수 패치 {criticalMissing}개가 빠졌습니다. 게임 업데이트로 모드가 깨졌을 가능성이 큽니다 (모드 수정 필요)";
+            else if (!allApplied)
+                verdict = $"일부 패치 빠짐 (ICF {skippedIcf}, 사전 JIT {skippedPreflight}, 실패 {failed}): 해당 기능만 동작하지 않습니다";
+            else if (verified && !_fingerprintChanged)
+                verdict = "정상 (검증된 빌드, 패치 전부 적용)";
+            else
+                verdict = "패치는 전부 붙었지만 이 빌드의 동작은 검증되지 않았습니다: 커스텀 곡 1곡을 결과 화면까지 플레이해 확인하세요" +
+                          (_fingerprintChanged ? $" (달라진 것: {_fingerprintChangeNote})" : "");
+
+            if (criticalMissing > 0 || !allApplied || !verified || _fingerprintChanged)
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 업데이트 점검 결과: {verdict}");
+            else
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 업데이트 점검 결과: {verdict}");
+
+            if (_gameRoot != null && criticalMissing == 0 && allApplied && _current.Count > 0)
+                SaveState(_gameRoot, applied);
+        }
+        catch (Exception ex)
+        {
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 업데이트 점검 요약 실패: {ex.Message}");
+        }
+    }
+
+    private static void SaveState(string gameRoot, int applied)
+    {
+        string path = StatePath(gameRoot);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var lines = BuildFingerprint.Format(_current, applied, DateTime.Now);
+        string tmp = path + ".tmp";
+        File.WriteAllLines(tmp, lines);
+        File.Move(tmp, path, true);
     }
 
     private static void ReportBuild(string gameRoot)

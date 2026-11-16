@@ -46,7 +46,7 @@ Copy-Item -Path "H:\source\repos\Sixtar Gate STARTRAIL-unity-il2cpp\mod\bin\Debu
 Steam Build `26218612`에서 만들고 `26455233`에서 실기 검증했습니다. 게임이 업데이트되면 함수 주소와 구조가 바뀌어 일부 패치가 실패할 수 있습니다.
 
 업데이트 후 점검 순서:
-1. 게임을 한 번 실행합니다(MelonLoader가 interop과 Cpp2IL 출력을 다시 만듦). 시작 로그의 `[UpdateGuard]`가 검증되지 않은 빌드라고 경고합니다.
+1. 게임을 한 번 실행합니다(MelonLoader가 interop과 Cpp2IL 출력을 다시 만듦). 시작 로그의 `[UpdateGuard]`가 검증되지 않은 빌드라고 경고하고, `지난 실행과 달라진 것: … 크기 A → B`로 `GameAssembly.dll`·`global-metadata.dat`·`UnityPlayer.dll`의 변화를 알립니다(`UserData\SixtarGateMod.BuildState.txt`와 비교. 메타데이터·Unity 런타임이 바뀌면 인터롭 형식·필드 오프셋이 달라졌을 수 있으니 2~3단계를 특히 꼼꼼히). 패치 적용 뒤 `업데이트 점검 결과:` 한 줄이 정상/일부 빠짐/필수 빠짐/검증 안 됨을 요약합니다. 지문은 패치가 전부 붙었을 때만 갱신됩니다.
 2. `powershell -ExecutionPolicy Bypass -File tools\version_diff\check_update.ps1` — 기준 `cpp2il_out`과 새 출력의 형식·필드·시그니처·RVA 차이, 그중 모드가 훅하는 형식에 걸린 줄, `slices/` 함수 바이트 비교를 출력합니다.
 3. 모드를 다시 빌드하고(컴파일 오류 = 시그니처 변경), 로그의 `[Harmony] 패치 '...' 실패`, `[Harmony/Preflight] … 건너뜀`(인터롭에서 사라진 멤버 — 컴파일은 옛 interop으로 했거나 이름은 같고 형식이 바뀐 경우), `[Harmony/ICFGuard] … 건너뜀`, `[Harmony] 필수 패치 빠짐` 줄을 확인합니다. `[ICFScan]`이 새 빌드에서 공유 개수를 다시 세어 `UserData/SixtarGateMod.IcfCounts.txt`에 남깁니다(대상별 `0xRVA=개수|공유 메서드`). 메타데이터가 바뀌었으면 `il2cpp_dump`도 다시 만듭니다([REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md)).
    - **ICF 개수 재확인:** 새 `GameAssembly.dll`로 Il2CppDumper를 돌려 얻은 `script.json`을 `check_update.ps1 -ScriptJson <경로>`에 주면(또는 `python -I tools\version_diff\icf_check.py <script.json> docs\02-systems\HOOK_TABLE.md`) 훅 대상 120개의 주소 공유 개수를 다시 셉니다. `[ICF 증가]`가 나온 대상은 업데이트로 다른 함수와 접힌 것이라 패치하면 엉뚱한 `this`로 실행됩니다(실행 중 `IcfScanner`도 같은 것을 자동으로 잡아 건너뛰지만, 제네릭 인스턴스 코드는 세지 않으므로 이 스크립트를 보조로 씀). 2026-11-09 빌드 `26455233` 기준 결과: 증가 0, 못 찾음 0. 2026-11-10 `IcfScanner` 결과도 같음.
