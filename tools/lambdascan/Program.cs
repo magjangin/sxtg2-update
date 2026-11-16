@@ -3,6 +3,7 @@
 // (런타임 il2cpp_field_get_offset 값. dump.cs의 PlayLoadingManager.trackThumbnail 0x48은 틀림 — 실제 0x40).
 // 게임이 업데이트되면 RVA를 tools/version_diff/dis.py로 다시 찾아 고칠 것.
 using System;
+using System.Collections.Generic;
 using System.IO;
 using SixtarGateMod.Managers;
 
@@ -104,6 +105,36 @@ if (args.Length > 1)
     Console.WriteLine($"capstone 대조: 함수 {funcs}개, 명령 {insns}개, 길이 다름 {mismatch}, 미지원에서 멈춤 {unknownStops}, 끝까지 해독 {fullyDecoded}");
     if (mismatch > 0) fail++;
 }
+// ---- BuildFingerprint (업데이트 지문 비교, UpdateGuard) ----
+{
+    var prev = BuildFingerprint.Parse(new[] { "# c", "buildId=26455233", "gameAssemblySize=64716288", "metadataSize=14020648", "unityPlayerSize=100" })!;
+    var same = new Dictionary<string, string> { ["buildId"] = "26455233", ["gameAssemblySize"] = "64716288", ["metadataSize"] = "14020648", ["unityPlayerSize"] = "100" };
+    var d0 = BuildFingerprint.Diff(prev, same, out bool r0);
+    FP("같은 지문 → 변화 없음", d0.Count == 0 && !r0);
+
+    var gaOnly = new Dictionary<string, string>(same) { ["buildId"] = "26999999", ["gameAssemblySize"] = "64800000" };
+    var d1 = BuildFingerprint.Diff(prev, gaOnly, out bool r1);
+    FP("빌드ID·GameAssembly만 변경 → 2건, 위험 아님", d1.Count == 2 && !r1);
+
+    var meta = new Dictionary<string, string>(same) { ["metadataSize"] = "14100000" };
+    var d2 = BuildFingerprint.Diff(prev, meta, out bool r2);
+    FP("메타데이터 변경 → 위험", d2.Count == 1 && r2);
+
+    var unknown = new Dictionary<string, string>(same) { ["metadataSize"] = "?", ["unityPlayerSize"] = "?" };
+    var d3 = BuildFingerprint.Diff(prev, unknown, out bool r3);
+    FP("못 읽은 항목(?)은 비교 안 함", d3.Count == 0 && !r3);
+
+    FP("항목 없는 파일 → null", BuildFingerprint.Parse(new[] { "# only comment", "", "bad line" }) == null && BuildFingerprint.Parse(null) == null);
+
+    var back = BuildFingerprint.Parse(BuildFingerprint.Format(same, 118, new DateTime(2026, 11, 16, 1, 2, 3)))!;
+    FP("저장 → 읽기 왕복", back["buildId"] == "26455233" && back["metadataSize"] == "14020648" && back["patchesApplied"] == "118" && back["savedAt"] == "2026-11-16 01:02:03");
+
+    var oldNoMeta = BuildFingerprint.Parse(new[] { "buildId=26455233" })!;
+    var d4 = BuildFingerprint.Diff(oldNoMeta, same, out bool r4);
+    FP("옛 기록에 없는 항목은 비교 안 함", d4.Count == 0 && !r4);
+}
+void FP(string name, bool ok) { if (!ok) fail++; Console.WriteLine($"{(ok ? "OK  " : "FAIL")} {name}"); }
+
 Console.WriteLine(fail == 0 ? "ALL PASS" : $"{fail} FAIL");
 return fail;
 

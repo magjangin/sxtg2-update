@@ -155,6 +155,7 @@ public static class PatchResilience
         }
 
         LambdaTranslator.FlushSummary();
+        UpdateGuard.ReportPatchSummary(applied, skippedIcf, skippedPreflight, failed, criticalMissing.Count);
     }
 
     private static void NoteCritical(Type patchType, List<string> criticalMissing)
