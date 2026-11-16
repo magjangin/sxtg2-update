@@ -59,6 +59,7 @@ MonoBehaviour 원본 바이트
 | `mode_items.py` | 모드 선택 항목 (모드 이름, 이동 씬, 개발 중 여부) | `globalgamemanagers` + `level5~12` |
 | `result_animation_map.py` | 결과 연출 맵 (곡 ID → 연출) | `StreamingAssets\aa\StandaloneWindows64\contents_assets_all_*.bundle` |
 | `prefab_tree.py` | 프리팹 계층과 참조 스프라이트 | 번들 / assets |
+| `gear_animations.py` | 기어의 `GearObject.animationConnector` 항목 (상태·애니메이터 경로·애니메이션 이름·레인·판정) | `sharedassets0.assets` |
 | `dlc_ids.py` | DLC AppID가 들어 있는 파일 | `Sixtar Gate STARTRAIL_Data` |
 
 실행은 항상 `python -I`(현재 폴더의 파이썬 파일을 불러오지 않게).
