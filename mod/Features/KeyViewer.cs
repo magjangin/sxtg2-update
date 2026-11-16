@@ -23,7 +23,11 @@ public static class KeyViewer
     private static readonly string[] Labels = new string[7];
     private static bool _bound;
 
-    public static void ResetBindings() { _bound = false; _bindAttempts = 0; _frame = 0; }
+    public static void ResetBindings() { _bound = false; _bindAttempts = 0; _frame = 0; Array.Clear(_actions, 0, _actions.Length); }
+
+    // TryBindLabels가 레인 액션을 담아 두는 곳(바인딩 전체 로그용).
+    private static readonly InputAction?[] _actions = new InputAction?[7];
+    private static bool _bindingsLogged;
 
     private static readonly Color BorderUp = Overlay.Rgba(1f, 1f, 1f, 0.35f), BorderDown = Overlay.Rgba(1f, 1f, 1f, 0.95f);
     private static readonly Color TextUp = Overlay.Rgba(1f, 1f, 1f, 0.9f), TextDown = Overlay.Rgba(0.05f, 0.05f, 0.05f, 1f);
@@ -65,15 +69,17 @@ public static class KeyViewer
             var renewal = UnityEngine.Object.FindObjectOfType<Il2CppSixtarGate.InputListenerForUnityNewInputSystem>()?._sixtarInputAction;
             if (renewal != null)
             {
-                Labels[0] = Label(renewal.m_PlayAction_LaneLL);
-                Labels[1] = Label(renewal.m_PlayAction_LaneL);
-                Labels[2] = Label(renewal.m_PlayAction_LaneR);
-                Labels[3] = Label(renewal.m_PlayAction_LaneRR);
-                Labels[4] = Label(renewal.m_PlayAction_LaneGate);
-                Labels[5] = Label(renewal.m_PlayAction_LaneLT);
-                Labels[6] = Label(renewal.m_PlayAction_LaneRT);
+                _actions[0] = renewal.m_PlayAction_LaneLL;
+                _actions[1] = renewal.m_PlayAction_LaneL;
+                _actions[2] = renewal.m_PlayAction_LaneR;
+                _actions[3] = renewal.m_PlayAction_LaneRR;
+                _actions[4] = renewal.m_PlayAction_LaneGate;
+                _actions[5] = renewal.m_PlayAction_LaneLT;
+                _actions[6] = renewal.m_PlayAction_LaneRT;
+                for (int i = 0; i < _actions.Length; i++) Labels[i] = Label(_actions[i]);
                 _bound = true;
                 Melon<Core>.Logger.Msg($"[KeyViewer] 키 이름: {string.Join(" ", Labels)} (SixtarInputAction)");
+                LogBindingsOnce();
                 return;
             }
 
@@ -108,10 +114,28 @@ public static class KeyViewer
         }
     }
 
+    // 키뷰어는 첫 바인딩만 보여 주므로, 레인마다 걸린 바인딩 전체(" | "로 구분)를 게임 실행당 한 번 남긴다.
+    private static void LogBindingsOnce()
+    {
+        if (_bindingsLogged) return;
+        _bindingsLogged = true;
+        var parts = new string[_actions.Length];
+        for (int i = 0; i < _actions.Length; i++)
+            parts[i] = $"{LaneNames[i]}='{FullBinding(_actions[i])}'";
+        Melon<Core>.Logger.Msg($"[KeyViewer] 레인 바인딩 전체: {string.Join(", ", parts)}");
+    }
+
+    private static string FullBinding(InputAction? action)
+    {
+        if (action == null) return "-";
+        try { return InputActionRebindingExtensions.GetBindingDisplayString(action, (InputBinding.DisplayStringOptions)0, null) ?? ""; }
+        catch { return "?"; }
+    }
+
     private static string Label(InputAction? action)
     {
         if (action == null) return "-";
-        string s = InputActionRebindingExtensions.GetBindingDisplayString(action, (InputBinding.DisplayStringOptions)0, null) ?? "";
+        string s = FullBinding(action);
         int bar = s.IndexOf(" | ", StringComparison.Ordinal);
         if (bar >= 0) s = s.Substring(0, bar);
         s = s.Trim();

@@ -119,28 +119,45 @@ public static class PlayAssist
         public static void Prefix(JudgeProcessor __instance, JudgeResult result)
         {
             EnsureSession(__instance);
-            _convertedMiss = false;
+            _suppressFlash = false;
             if (ModConfig.AllPerfect && result != null)
             {
-                _convertedMiss = result.judgeID == (int)EJudge.RedStar;
+                // 원래 RedStar(놓침)였거나, 그 노트 레인이 지금 눌려 있지 않으면 불빛만 끈다. 진짜 친 노트는 판정 시점에
+                // 레인이 눌려 있다(SetPressedState는 판정보다 먼저 오고, 게임이 떼기를 DelayReleaseLane으로 늦춤).
+                bool miss = result.judgeID == (int)EJudge.RedStar;
                 result.judgeID = 0;
+                _suppressFlash = miss || !IsTickLanePressed(result);
             }
         }
 
-        public static void Postfix() => _convertedMiss = false;
+        public static void Postfix() => _suppressFlash = false;
     }
 
-    // Set while OnTickEvent broadcasts a RedStar that AllPerfect turned into BlueStar (an unpressed long-note tick from
-    // JudgeLongTick, or a missed head from CheckMissBreak/Missbreak). OnNoteJudged reaches the gear synchronously.
-    private static bool _convertedMiss;
+    private static bool IsTickLanePressed(JudgeResult result)
+    {
+        try
+        {
+            var tick = result.tick;
+            if (tick == null) return true; // 모르면 원래대로 불빛 재생
+            int lane = (int)tick.LaneIndex;
+            return lane < 0 || lane >= LanePressed.Length || LanePressed[lane];
+        }
+        catch { return true; }
+    }
+
+    // Set while OnTickEvent broadcasts a tick that AllPerfect turned into BlueStar but no key was pressed for:
+    // an unpressed long-note tick from JudgeLongTick, a missed head from CheckMissBreak/Missbreak, or any other
+    // judgement on a lane that is not held. OnNoteJudged reaches the gear synchronously.
+    private static bool _suppressFlash;
 
     // GearObject.PlayNoteEffect -> NoteEffectObject.Play(judge) skips RedStar (no effect entry), so vanilla shows no
-    // hit flash for those ticks. Converted to BlueStar they lit the lane on every body tick of a long note that was
-    // not held, as if the key were pressed. Keep the BlueStar for score/combo, drop only the flash.
+    // hit flash for missed ticks. Converted to BlueStar they lit the lane and the gear button as if the key were
+    // pressed. Keep the BlueStar for score/combo, drop only the flash.
+    // (2026-11-16: RedStar 조건만으로는 안 누른 레인 불빛이 계속 보고돼 "레인이 안 눌림" 조건을 추가.)
     [HarmonyPatch(typeof(GearObject), nameof(GearObject.PlayNoteEffect))]
     public static class GearObject_PlayNoteEffect_Patch
     {
-        public static bool Prefix() => !_convertedMiss;
+        public static bool Prefix() => !_suppressFlash;
     }
 
     // Key viewer feed: LaneComposer press/release events land here (lane = LaneIndex value).
