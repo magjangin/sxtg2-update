@@ -218,12 +218,8 @@ public static class UpdateGuard
 
     private static void SaveState(string gameRoot, int applied, string? verifiedPlay)
     {
-        string path = StatePath(gameRoot);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var lines = BuildFingerprint.Format(_current, applied, DateTime.Now, verifiedPlay);
-        string tmp = path + ".tmp";
-        File.WriteAllLines(tmp, lines);
-        File.Move(tmp, path, true);
+        AtomicFile.WriteAllLines(StatePath(gameRoot), lines);
     }
 
     /// <summary>빌드 ID를 정하고(매니페스트 + GameAssembly 크기 대조) 어긋남만 경고한다. 검증 여부 줄은 지문을 본 뒤
@@ -273,7 +269,7 @@ public static class UpdateGuard
 
     private static void LogBuildVerdict(string gaInfo)
     {
-        if (ListVerified)
+        if (ListVerified && !_fingerprintChanged)
             Melon<Core>.Logger.Msg($"{LOG_PREFIX} 게임 빌드 {CurrentBuildId} (실기 검증된 빌드, {gaInfo})");
         else if (_locallyVerified != null)
             Melon<Core>.Logger.Msg($"{LOG_PREFIX} 게임 빌드 {CurrentBuildId ?? "?"} ({gaInfo}): 검증 목록에는 없지만 이 PC에서 실기 플레이로 확인된 지문 ({_locallyVerified})");

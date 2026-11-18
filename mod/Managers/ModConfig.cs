@@ -85,8 +85,7 @@ public static class ModConfig
         {
             if (!File.Exists(ConfigPath))
             {
-                Directory.CreateDirectory(dir);
-                File.WriteAllText(ConfigPath, DefaultTemplate);
+                AtomicFile.WriteAllText(ConfigPath, DefaultTemplate);
                 Melon<Core>.Logger.Msg($"{LOG_PREFIX} 기본 설정 파일 생성: {ConfigPath}");
             }
             else
@@ -130,7 +129,7 @@ public static class ModConfig
         }
 
         File.Copy(ConfigPath, ConfigPath + ".bak", overwrite: true);
-        File.WriteAllText(ConfigPath, string.Join("\n", lines));
+        AtomicFile.WriteAllText(ConfigPath, string.Join("\n", lines));
         Melon<Core>.Logger.Msg($"{LOG_PREFIX} config.txt를 템플릿 v{TEMPLATE_VERSION}으로 갱신 (기존 값 {kept}개 유지, 이전 파일은 config.txt.bak으로 보존)");
     }
 
@@ -218,6 +217,8 @@ public static class ModConfig
     /// sxtg2 semantics: Sudden / Hidden / FadeIn / FadeOut return to 0 at every game launch (positions and lengths
     /// stay), so a challenge modifier left on in the file never surprises the next session.
     /// </summary>
+    private static readonly string[] ChallengeToggleKeys = { "Sudden", "Hidden", "FadeIn", "FadeOut" };
+
     private static void ResetChallengeTogglesOnLaunch()
     {
         try
@@ -230,7 +231,7 @@ public static class ModConfig
                 int eq = t.IndexOf('=');
                 if (eq <= 0) continue;
                 string k = t.Substring(0, eq).Trim();
-                foreach (var key in new[] { "Sudden", "Hidden", "FadeIn", "FadeOut" })
+                foreach (var key in ChallengeToggleKeys)
                 {
                     if (!string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) continue;
                     string v = t.Substring(eq + 1).Trim();
@@ -240,7 +241,7 @@ public static class ModConfig
             }
             if (changed)
             {
-                File.WriteAllLines(ConfigPath, lines);
+                AtomicFile.WriteAllLines(ConfigPath, lines);
                 Melon<Core>.Logger.Msg($"{LOG_PREFIX} 이번 실행을 위해 Sudden/Hidden/FadeIn/FadeOut을 0으로 초기화");
             }
         }

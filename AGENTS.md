@@ -21,8 +21,9 @@
 2. **독립 "CUSTOM" 카테고리 격리:** `CategorySelectController.Categories` 및 `RhythmGameUtils.GetSelectableCategoty`에 `"CUSTOM"`을 추가하고 `TrackSelectController.GetTracks("CUSTOM")`에서만 `hwa\` 앨범을 반환해 공식 카테고리를 오염시키지 않음.
 3. **오프라인 & 서버 종료 대비 (`Features/OfflineBypass.cs`, 66개 훅):** BACKND 초기화 실패 시 `HasInitialized = true`에 도달하지 못해 게임이 멈추는 문제와, BACKND 초기화 생략 시 `UnitySessionModule` 커넥터가 누락되어 곡 시작·종료가 멈추는 문제를 함께 차단(`BackEndChatServer.Initialize` 우회 포함 리뉴얼 42개 + 레거시 24개).
 4. **전곡 & DLC 해금 (`Features/Unlock.cs`):** `ItemUnlockChecker`, `ItemProvideModule`, `TrackData.IsOwned`를 일괄 `true`로 오버라이드.
-5. **업데이트 내성 (`Managers/PatchResilience.cs`, `LambdaTranslator.cs`, `IcfScanner.cs`, `PatchPreflight.cs`, `UpdateGuard.cs`):**
-   - `[assembly: HarmonyDontPatchAll]` + 부팅 시 4단계 검증: ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, `[IcfShared]`), ② `PatchPreflight`(패치 메서드·호출 그래프를 사전 JIT 및 필드/타입 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(8개 지문 키 비교 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
+5. **업데이트 내성 (`Managers/PatchResilience.cs`, `LambdaTranslator.cs`, `IcfScanner.cs`, `PatchPreflight.cs`, `UpdateGuard.cs`, `AtomicFile.cs`):**
+   - `[assembly: HarmonyDontPatchAll]` + 부팅 시 4단계 검증: ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, 미스캔 주소 `-1` 경고, `[IcfShared]` 2개), ② `PatchPreflight`(패치 메서드·호출 그래프 사전 JIT 및 필드/타입/어셈블리 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(8개 지문 키 비교 + `BinaryFingerprint`로 `BuildState.txt`·`LambdaMap.json`·`IcfCounts.txt` 캐시 무효화 통일 + `[CriticalPatch]` 16개 누락 감지 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
+   - `AtomicFile`로 모든 상태/캐시/설정 파일을 `.tmp` → `File.Move` 원자적 교체.
 6. **성능 원칙 (IL2CPP 네이티브 호출 최소화):**
    - `new Rect`, `new Color`, `Mathf.*` 등 Unity 값 형식 헬퍼는 전부 `il2cpp_runtime_invoke` + boxing을 유발하므로 `Overlay.Rgba`/`Box` 및 `MathF`/`Math`만 사용.
    - `Overlay`는 풀링된 uGUI `Image`/`Text` 값 캐싱 및 비플레이 씬 `OnLateUpdate` 조기 반환.
@@ -49,7 +50,9 @@
 - **`HarmonyInstance.PatchAll` + MelonLoader 자동 패치 중복:** 모든 훅 2회 실행 → `[assembly: HarmonyDontPatchAll]` 필수.
 - **BGA URL 상대 경로:** `"file://" + 상대경로`는 `*_Data/` 기준으로 탐색 실패 → `Path.GetFullPath` 절대 경로화.
 - **오프라인 우회 후 부팅만 확인:** `OfflineBypass`가 `UnitySession` 커넥터를 막아 플레이가 깨졌음 → 서버 훅 수정 후 반드시 커스텀 곡 1곡 결과 화면까지 플레이 + `Player.log` 예외 0 확인.
-- **기계어 바이트 단위 스캔 & `dump.cs` 오프셋 신뢰:** `dump.cs` 오프셋(`trackThumbnail` 0x48 vs 실제 0x40)이 틀릴 수 있고 바이트 스캔은 거짓 Hit 발생 → `il2cpp_field_get_offset` + `X64Decoder` 명령 단위 추적.
+- **기계어 바이트 단위 스캔 & `dump.cs` 오프셋/임의 폴백 신뢰:** `dump.cs` 오프셋(`trackThumbnail` 0x48 vs 실제 0x40)이 틀릴 수 있고 클로저 소유자 오프셋을 `0x18`로 임의 추측하면 거짓 Hit 발생 → `il2cpp_field_get_offset`(실패 시 `-1` → `Inconclusive`) + `X64Decoder` 명령 단위 추적.
+- **미스캔 ICF 주소 0 처리 & `JudgeProcessor` 포인터 재사용:** 부팅 ICF 스캔에 없던 동적 주소는 `-1`로 구분해 경고해야 하며, `PlayAssist.EnsureSession`의 `_currentJudgePtr`은 확정 씬 경계(`Result`/`MusicSelect`/`PlayLoading`)에서 초기화하지 않으면 다음 플레이에서 IL2CPP 포인터 재사용 시 판정바·설정이 누락됨.
+- **마라톤 씬 흐름(`Loading`) 누락 & 지연 BGA의 `IsPlaying` 체크:** 실제 씬 전환은 `PlayLoading → Renewal_Play → Loading → Result`이므로 마라톤 유지 조건에 `Loading`을 포함해야 하며, `CustomBga.PlayAfter`는 `EnsureSession` 이전에도 불릴 수 있으므로 `PlayAssist.IsPlaying` 대신 `player.isActiveAndEnabled && Core.IsCustomTrackActive`로 가드.
 - **판정/입력 경로 매 노트 신규 진단 훅 (`ISixtarJudgeData` 인자 등):** 네이티브 크래시 유발(원인 미확인) → 덤프 분석 없이 매 노트 훅 실험 금지.
 - **기타:** `pe_slice` 네임스페이스 필수(`SixtarGate.BMSConverter`), `Cpp2IL`은 `< NUL` 리디렉션 필수, `AllTracks` 직접 주입 금지, 게임 실행 중 `Mods\SixtarGateMod.dll` 잠금.
 
@@ -60,7 +63,7 @@
   dotnet build mod/SixtarGateMod.csproj
   ```
   - 빌드 후 `$(GameDir)\Mods\`가 있으면 `SixtarGateMod.dll`을 자동 복사함(게임 실행 중 잠겨 있으면 경고만 출력). 복사 생략 시 `-p:SkipDeploy=true`.
-- **순수 모듈 단위 테스트 (게임 DLL 불필요, GitHub Actions CI 연동):**
+- **순수 모듈 단위 테스트 (게임 DLL 불필요, 7개 파일 40건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동):**
   ```powershell
   dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
   ```

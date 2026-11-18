@@ -18,8 +18,16 @@ namespace SixtarGateMod.Features;
 /// </summary>
 public static class CustomJackets
 {
-    private static readonly Color White = Overlay.Rgba(1f, 1f, 1f, 1f);
     private static readonly float[] ReapplyDelays = { 0.1f, 0.4f, 1.0f };
+
+    private static void SetJacketImage(Image img, Sprite sprite)
+    {
+        img.sprite = sprite;
+        img.color = Overlay.White;
+        img.enabled = true;
+    }
+
+    public static void ClearRowCache() => _rowTrackIds.Clear();
 
     // MusicSelect Jacket Hook: Show Custom Jacket in Center TrackInfoViewer.
     // Jackets decode asynchronously (MediaOverrideManager.RequestAlbumSprite): a synchronous LoadImage of a 1080p PNG
@@ -49,9 +57,7 @@ public static class CustomJackets
             {
                 // The selection may have moved on while the PNG was decoding.
                 if (img == null || _shownTrackId != trackId) return;
-                img.sprite = sprite;
-                img.color = White;
-                img.enabled = true;
+                SetJacketImage(img, sprite);
                 Core.DebugLog($"[MusicSelect] 가운데 자켓 표시: '{album.Title}'");
             });
         }
@@ -75,9 +81,7 @@ public static class CustomJackets
         {
             if (owner == null || thumb == null) return;
             if (!_rowTrackIds.TryGetValue(ownerPtr, out var cur) || cur != trackId) return;
-            thumb.sprite = sprite;
-            thumb.color = White;
-            thumb.enabled = true;
+            SetJacketImage(thumb, sprite);
         });
     }
 
@@ -113,9 +117,7 @@ public static class CustomJackets
         if (album == null || !album.HasCustomJacket) return;
         var sprite = MediaOverrideManager.GetOrCreateAlbumSprite(album);
         if (sprite == null) return;
-        img.sprite = sprite;
-        img.color = White;
-        img.enabled = true;
+        SetJacketImage(img, sprite);
         Core.DebugLog($"[Jacket] 커스텀 자켓 적용: {where}");
     }
 
@@ -183,9 +185,7 @@ public static class CustomJackets
             var sprite = MediaOverrideManager.GetOrCreateAlbumSprite(album);
             if (sprite != null && img.sprite != sprite)
             {
-                img.sprite = sprite;
-                img.color = White;
-                img.enabled = true;
+                SetJacketImage(img, sprite);
                 Core.DebugLog($"[Jacket] 비동기 로드 후 커스텀 자켓 다시 적용: {where}");
             }
         }

@@ -26,7 +26,7 @@ public static class JudgmentBar
     private static readonly Color YellowRange = Overlay.Rgba(0.65f, 0.55f, 0.12f, 0.18f);
     private static readonly Color WhiteRange = Overlay.Rgba(0.75f, 0.75f, 0.75f, 0.2f);
     private static readonly Color BlueRange = Overlay.Rgba(0.2f, 0.5f, 0.85f, 0.32f);
-    private static readonly Color CenterLine = Overlay.Rgba(1f, 1f, 1f, 1f);
+    private static readonly Color CenterLine = Overlay.White;
 
     private static float _lastHitTime = -999f;
     private static Color _lastHitColor;

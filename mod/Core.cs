@@ -1,25 +1,17 @@
 using System;
-using System.IO;
 using System.Reflection;
 using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.Video;
 using Il2Cpp;
 using Il2CppRhythmGame;
-using Il2CppRhythmGame.MusicSelect;
-using Il2CppRhythmGame.SixtarServer;
 using Il2CppSixtarGate;
 using Il2CppSixtarGate.MusicSelect;
 using Il2CppSixtarGate.Play;
 using Il2CppSixtarithm;
-using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
-using SixtarGateMod.Loaders;
 using SixtarGateMod.Managers;
-using SixtarGateMod.Models;
 using SixtarGateMod.Features;
 
 [assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.0", "화영왕 (Hwa-young-wang)")]
@@ -47,6 +39,31 @@ public class Core : MelonMod
     }
     /// <summary>Chart for the CUSTOM tab's placeholder track (no album in hwa/): one blue note, ~128 s long.</summary>
     private const string DefaultBms = "#BPM 160\n#00211:01000000\n#08511:00000000\n";
+
+    private static string LoadCurrentAlbumBmsOrDefault(string errorContext, bool logSelection)
+    {
+        var album = CustomTrackManager.CurrentSelectedAlbum;
+        if (album != null && album.HasCustomBms)
+        {
+            try
+            {
+                string content = CustomTrackManager.LoadChartText(album);
+                if (!string.IsNullOrEmpty(content))
+                {
+                    if (logSelection)
+                        Melon<Core>.Logger.Msg($"[CustomChart] BMS 파일 주입: '{album.BmsPath}' ({content.Length}자)");
+                    return content;
+                }
+            }
+            catch (Exception ex)
+            {
+                Melon<Core>.Logger.Error($"[CustomChart] {errorContext}: {ex.Message}");
+            }
+        }
+        if (logSelection)
+            Melon<Core>.Logger.Msg("[CustomChart] 기본 1노트 BMS 사용");
+        return DefaultBms;
+    }
 
     public override void OnInitializeMelon()
     {
@@ -97,6 +114,8 @@ public class Core : MelonMod
                 || sceneName.IndexOf("PlayLoading", StringComparison.OrdinalIgnoreCase) >= 0;
             PlayAssist.EndPlay(resetSessionPointer: definiteBoundary);
         }
+        if (sceneName.IndexOf("MusicSelect", StringComparison.OrdinalIgnoreCase) < 0)
+            CustomJackets.ClearRowCache();
         CustomMarathon.OnSceneLoaded(sceneName);
         // 커스텀 곡 Renewal_Play → Result를 게임 내부 예외 없이 지나면 이 빌드를 실기 확인으로 기록
         // (IsCustomTrackActive는 결과 화면을 떠나는 GotoMusicSelect Postfix까지 유지됨)
@@ -326,13 +345,7 @@ public class Core : MelonMod
             var track = _getTrack(__instance);
             if (track == null) return true;
 
-            string bmsContent = DefaultBms;
-            var album = CustomTrackManager.CurrentSelectedAlbum;
-            if (album != null && album.HasCustomBms)
-            {
-                try { bmsContent = CustomTrackManager.LoadChartText(album); }
-                catch (Exception ex) { Melon<Core>.Logger.Error($"[CustomChart] 플레이 씬용 BMS 읽기 실패: {ex.Message}"); }
-            }
+            string bmsContent = LoadCurrentAlbumBmsOrDefault("플레이 씬용 BMS 읽기 실패", logSelection: false);
 
             try
             {
@@ -379,27 +392,7 @@ public class Core : MelonMod
             if (IsCustomTrackActive)
             {
                 var bms = new BMSConverter();
-                string bmsContent = "";
-
-                var album = CustomTrackManager.CurrentSelectedAlbum;
-                if (album != null && album.HasCustomBms)
-                {
-                    try
-                    {
-                        bmsContent = CustomTrackManager.LoadChartText(album);
-                        Melon<Core>.Logger.Msg($"[CustomChart] BMS 파일 주입: '{album.BmsPath}' ({bmsContent.Length}자)");
-                    }
-                    catch (Exception ex)
-                    {
-                        Melon<Core>.Logger.Error($"[CustomChart] BMS 파일 읽기 실패: {ex.Message}. 1노트 BMS로 대체");
-                    }
-                }
-
-                if (string.IsNullOrEmpty(bmsContent))
-                {
-                    bmsContent = DefaultBms;
-                    Melon<Core>.Logger.Msg("[CustomChart] 기본 1노트 BMS 사용");
-                }
+                string bmsContent = LoadCurrentAlbumBmsOrDefault("BMS 파일 읽기 실패 (1노트 BMS로 대체)", logSelection: true);
 
                 try
                 {

@@ -82,6 +82,7 @@ public static class CustomMarathon
         {
             _resultShownAt = -1f;
             bool inPlayFlow = string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(sceneName, "Loading", StringComparison.OrdinalIgnoreCase)
                 || sceneName.IndexOf("PlayLoading", StringComparison.OrdinalIgnoreCase) >= 0;
             if (!_startingNext && !inPlayFlow)
             {
