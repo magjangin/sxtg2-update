@@ -51,7 +51,7 @@ public class Core : MelonMod
     public override void OnInitializeMelon()
     {
         var ver = typeof(Core).Assembly.GetName().Version;
-        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "2.2.0";
+        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "2.3.0";
         LoggerInstance.Msg("==========================================================");
         LoggerInstance.Msg($" Sixtar Gate: STARTRAIL 커스텀 차트 & 미디어 로더 v{verText}");
         LoggerInstance.Msg(" 제작: 화영왕 (Hwa-young-wang)");
@@ -91,7 +91,12 @@ public class Core : MelonMod
         LoggerInstance.Msg($"[Scene] 씬 로드: '{sceneName}'");
         _inRenewalPlay = string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase);
         if (!_inRenewalPlay)
-            PlayAssist.EndPlay();
+        {
+            bool definiteBoundary = string.Equals(sceneName, "Result", StringComparison.OrdinalIgnoreCase)
+                || sceneName.IndexOf("MusicSelect", StringComparison.OrdinalIgnoreCase) >= 0
+                || sceneName.IndexOf("PlayLoading", StringComparison.OrdinalIgnoreCase) >= 0;
+            PlayAssist.EndPlay(resetSessionPointer: definiteBoundary);
+        }
         CustomMarathon.OnSceneLoaded(sceneName);
         // 커스텀 곡 Renewal_Play → Result를 게임 내부 예외 없이 지나면 이 빌드를 실기 확인으로 기록
         // (IsCustomTrackActive는 결과 화면을 떠나는 GotoMusicSelect Postfix까지 유지됨)
@@ -159,6 +164,7 @@ public class Core : MelonMod
     // 2. RhythmGameUtils: Also register "CUSTOM" to legacy/utility category dictionary and selectable array.
     // Typo-tolerant: resolves "GetSelectableCategoty" or "GetSelectableCategory" if fixed in a future update.
     [HarmonyPatch]
+    [CriticalPatch("선택 가능 카테고리 목록에 CUSTOM 탭 등록")]
     public static class RhythmGameUtils_GetSelectableCategoty_Patch
     {
         public static MethodBase? TargetMethod()
@@ -238,12 +244,13 @@ public class Core : MelonMod
 
     // 4. In-Game Play Trigger & Custom Chart Injection
     [HarmonyPatch(typeof(SixtarGlobal), nameof(SixtarGlobal.GotoPlayScene), new Type[] { typeof(ITrack), typeof(ELevels), typeof(EPlayStyle) })]
+    [CriticalPatch("커스텀 곡 플레이 활성화 및 앨범 선택 상태 설정")]
     public static class SixtarGlobal_GotoPlayScene_Patch
     {
         public static void Prefix(ITrack track, ELevels level, EPlayStyle playStyle)
         {
             CurrentPlayStyleIsLunar = playStyle == EPlayStyle.LIGHT;
-            KeyViewer.ResetBindings();
+            PlayAssist.EndPlay(resetSessionPointer: true);
             // Null-safe: an exception thrown from this prefix would abort GotoPlayScene itself (no song starts).
             if (track != null && (track.Category == CUSTOM_CATEGORY_NAME
                                   || (track.TrackID?.StartsWith("CUSTOM_", StringComparison.Ordinal) ?? false)))
@@ -345,6 +352,7 @@ public class Core : MelonMod
     }
 
     [HarmonyPatch(typeof(SixtarGlobal), nameof(SixtarGlobal.GotoMusicSelect))]
+    [CriticalPatch("곡 선택 복귀 시 커스텀 곡 활성 상태 및 플레이 세션 정리")]
     public static class SixtarGlobal_GotoMusicSelect_Patch
     {
         // Marathon: the result screen leaves through GotoMusicSelect; start the next queued custom song instead.
@@ -354,7 +362,7 @@ public class Core : MelonMod
         {
             // 플레이 세션 정리(오버레이·노트 효과·판정바·키뷰어). 전에는 PlayAssist에 같은 대상의 패치 클래스가
             // 따로 있어 Harmony 적용이 한 번 더 들었음. 마라톤으로 다음 곡에 넘어갈 때도 원래처럼 정리한다.
-            PlayAssist.EndPlay();
+            PlayAssist.EndPlay(resetSessionPointer: true);
             // Postfixes still run when the prefix skipped the original: keep the state GotoPlayScene just set.
             if (CustomMarathon.DivertingMusicSelect) { CustomMarathon.DivertingMusicSelect = false; return; }
             IsCustomTrackActive = false;

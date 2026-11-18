@@ -92,16 +92,25 @@ public static class CustomAudioManager
             return;
         }
 
-        float volume = module.GetVolume(channel) * module.CurrectionVolume;
-        ch.setVolume(volume);
-        uint lengthMs = 0;
-        if (sound.getLength(out uint len, TIMEUNIT.MS) == RESULT.OK) lengthMs = len;
-        if (position > 0f && lengthMs > 0)
-            ch.setPosition((uint)(lengthMs * Math.Clamp(position, 0f, 1f)), TIMEUNIT.MS);
-        ch.setPaused(false);
+        try
+        {
+            float volume = module.GetVolume(channel) * module.CurrectionVolume;
+            ch.setVolume(volume);
+            uint lengthMs = 0;
+            if (sound.getLength(out uint len, TIMEUNIT.MS) == RESULT.OK) lengthMs = len;
+            if (position > 0f && lengthMs > 0)
+                ch.setPosition((uint)(lengthMs * Math.Clamp(position, 0f, 1f)), TIMEUNIT.MS);
+            ch.setPaused(false);
 
-        Streams[channel] = new LocalStream { Sound = sound, Channel = ch, LengthSeconds = lengthMs / 1000f };
-        Core.DebugLog($"{LOG_PREFIX} 스트리밍 재생: '{Path.GetFileName(filePath)}', 채널 {channel}, 볼륨 {volume:F2}");
+            Streams[channel] = new LocalStream { Sound = sound, Channel = ch, LengthSeconds = lengthMs / 1000f };
+            Core.DebugLog($"{LOG_PREFIX} 스트리밍 재생: '{Path.GetFileName(filePath)}', 채널 {channel}, 볼륨 {volume:F2}");
+        }
+        catch
+        {
+            try { ch.stop(); } catch { }
+            try { sound.release(); } catch { }
+            throw;
+        }
     }
 
     private static void ApplyVolumes(SoundModuleForFMOD module)
@@ -113,8 +122,8 @@ public static class CustomAudioManager
     public static void StopLocal(ISoundModule.SoundChannel channel)
     {
         if (!Streams.Remove(channel, out var s)) return;
-        s.Channel.stop();
-        s.Sound.release();
+        try { s.Channel.stop(); }
+        finally { s.Sound.release(); }
     }
 
     public static void StopAll()
@@ -125,6 +134,7 @@ public static class CustomAudioManager
     }
 
     [HarmonyPatch(typeof(SoundModuleForFMOD), nameof(SoundModuleForFMOD.Stop))]
+    [CriticalPatch("커스텀 FMOD 스트림 정지 및 핸들 해제")]
     public static class SoundModuleForFMOD_Stop_Patch
     {
         public static void Prefix(ISoundModule.SoundChannel channel) => StopLocal(channel);

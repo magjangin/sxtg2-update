@@ -219,7 +219,11 @@ public static class BmsParser
                     curTime += deltaFrac * scale * 240.0 / curBpm;
                 mFracPos = ev.Frac;
                 curBpm = ev.Bpm;
-                segments.Add((mStartPos + ev.Frac * scale, curTime, curBpm));
+                double evPos = mStartPos + ev.Frac * scale;
+                if (segments.Count > 0 && segments[^1].Pos == evPos)
+                    segments[^1] = (evPos, curTime, curBpm);
+                else
+                    segments.Add((evPos, curTime, curBpm));
             }
 
             curTime += (1.0 - mFracPos) * scale * 240.0 / curBpm;

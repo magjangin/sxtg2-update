@@ -30,6 +30,11 @@ def il2cpp_type_name(interop: str) -> str:
     return ".".join(parts)
 
 
+def il2cpp_method_name(interop: str) -> str:
+    """Il2CppInterop 람다 메서드명(_LoadThumbnail_b__1)을 Il2CppDumper 이름(<LoadThumbnail>b__1)으로."""
+    return re.sub(r"^_(\w+?)_b__(.+)$", r"<\1>b__\2", interop)
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print(__doc__)
@@ -50,7 +55,7 @@ def main() -> int:
 
     worse = missing = moved = 0
     for type_name, method, old_rva, expected_icf in rows:
-        bare = re.sub(r"\(.*\)$", "", method)  # 오버로드 표기 "UpdateUserData(Users, Action)" → 이름만
+        bare = il2cpp_method_name(re.sub(r"\(.*\)$", "", method))  # 오버로드 표기 제거 + 람다명 변환
         suffix = f"{il2cpp_type_name(type_name)}$${bare}"
         addrs = sorted({a for n, al in by_name.items() if n == suffix or n.endswith("." + suffix) for a in al})
         if bare != method and old_rva in addrs:

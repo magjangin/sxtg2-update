@@ -4,9 +4,12 @@
 
 ```text
 mod/
-├── Core.cs                   진입점(MelonMod). CUSTOM 탭, 차트/미디어 주입, 곡 끝 시점, 해금
+├── Core.cs                   진입점(MelonMod). CUSTOM 탭, 차트 주입, 오디오 연결, 곡 끝 시점
 ├── Features/
-│   ├── OfflineBypass.cs      완전 오프라인 / 서버 종료 우회 (리뉴얼 BACKND 39개 + sxtg2 saver test 24개)
+│   ├── OfflineBypass.cs      완전 오프라인 / 서버 종료 우회 (리뉴얼 BACKND 42개 + sxtg2 saver test 24개, 총 66개)
+│   ├── Unlock.cs             전곡·DLC·아이템 보유 해금 오버라이드 (5개 훅)
+│   ├── CustomBga.cs          인게임 커스텀 BGA URL 교체 및 재생/일시정지 (5개 훅)
+│   ├── CustomJackets.cs      곡 선택/목록 행/로딩/일시정지/결과 자켓 비동기·지연 적용 (10개 훅)
 │   ├── PlayAssist.cs         판정 파이프라인: AutoPlay, AllPerfect, MaxScore, 점수 반전, 기록 차단
 │   ├── Overlay.cs            uGUI 즉시모드 그리기 (Box/Rgba, 값 캐시)
 │   ├── JudgmentBar.cs        판정바
@@ -18,7 +21,8 @@ mod/
 │   ├── CustomMusicSelect.cs  결과 → 목록 복귀 시 커서 위치
 │   └── AttendancePopup.cs    출석 보상 창 자동 표시 끄기
 ├── Managers/
-│   ├── CustomTrackManager.cs hwa 스캔(작업 스레드), 앨범 정보, 차트 텍스트(캐시), TrackData 복제
+│   ├── BuildFingerprint.cs   게임 파일 지문(크기·PE 타임스탬프·메타데이터 헤더) 비교 및 실기 확인 추적(순수 로직)
+│   ├── CustomTrackManager.cs hwa 스캔(작업 스레드)·변경 감지 재스캔, 앨범 정보, 차트 텍스트(캐시), TrackData 복제
 │   ├── CustomAudioManager.cs FMOD Core 스트림 재생/일시정지/볼륨
 │   ├── MediaOverrideManager.cs 자켓 비동기 로드, BGA URL 교체
 │   ├── ModConfig.cs          SaveCustomKey\config.txt 읽기/마이그레이션

@@ -143,11 +143,15 @@ public static class LambdaTranslator
             if (!Directory.Exists(userDataDir)) Directory.CreateDirectory(userDataDir);
             _cacheFilePath = Path.Combine(userDataDir, CacheFileName);
 
-            var gaInfo = new FileInfo(Path.Combine(gameRoot, "GameAssembly.dll"));
-            string buildId = UpdateGuard.CurrentBuildId ?? "unknown";
-            _currentBuildFingerprint = gaInfo.Exists
-                ? $"{buildId}|{gaInfo.Length}|{gaInfo.LastWriteTimeUtc.Ticks}"
-                : $"{buildId}|missing";
+            _currentBuildFingerprint = UpdateGuard.BinaryFingerprint;
+            if (_currentBuildFingerprint == "?|?|?|?")
+            {
+                var gaInfo = new FileInfo(Path.Combine(gameRoot, "GameAssembly.dll"));
+                string buildId = UpdateGuard.CurrentBuildId ?? "unknown";
+                _currentBuildFingerprint = gaInfo.Exists
+                    ? $"{buildId}|{gaInfo.Length}|{gaInfo.LastWriteTimeUtc.Ticks}"
+                    : $"{buildId}|missing";
+            }
 
             _gameAssemblyBase = FindGameAssemblyBase();
         }
@@ -380,7 +384,9 @@ public static class LambdaTranslator
         {
             var c = candidates[i];
             int ownerPtrOffset = c.OnOuter ? 0 : GetOwnerFieldOffsetOnClosure(c.Method.DeclaringType!, outerType);
-            var r = ScanNative(c.Method, ownerPtrOffset, targetFieldOffset, strict);
+            var r = ownerPtrOffset < 0
+                ? NativeLambdaScan.Result.Inconclusive
+                : ScanNative(c.Method, ownerPtrOffset, targetFieldOffset, strict);
             if (results != null) results[i] = r;
             if (r == NativeLambdaScan.Result.Hit) hits.Add(i);
         }
@@ -697,7 +703,8 @@ public static class LambdaTranslator
     /// </summary>
     private static string? RvaMismatch(MethodInfo method, LambdaEntry cached)
     {
-        if (string.IsNullOrEmpty(cached.RvaHex) || _gameAssemblyBase == IntPtr.Zero) return null;
+        if (_gameAssemblyBase == IntPtr.Zero) return null;
+        if (string.IsNullOrEmpty(cached.RvaHex)) return "저장된 RVA 없음";
         IntPtr code = PatchResilience.GetNativeCodePointer(method);
         if (code == IntPtr.Zero) return null;
         string now = $"0x{code.ToInt64() - _gameAssemblyBase.ToInt64():X}";
@@ -826,7 +833,7 @@ public static class LambdaTranslator
             offset = GetIl2CppFieldOffset(closureType, prop.Name);
             if (offset > 0) return offset;
         }
-        return 0x18; // IL2CPP 클로저의 기본 <>4__this 오프셋 폴백
+        return -1; // 소유자 필드 오프셋을 못 구하면 임의 추측(0x18 등) 대신 미확인(Inconclusive) 처리
     }
 
     private static void RecordTranslation(string key, Type outerType, MethodInfo chosen, int targetFieldOffset, string how, int candidateCount)

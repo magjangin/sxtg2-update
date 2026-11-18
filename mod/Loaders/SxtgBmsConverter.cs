@@ -61,7 +61,7 @@ public static class SxtgBmsConverter
             else
             {
                 var note = NoteLine.Match(line);
-                if (!note.Success)
+                if (!note.Success || note.Groups[2].Value == "02")
                 {
                     output.Append(raw).Append('\n');
                 }
@@ -213,7 +213,12 @@ public static class SxtgBmsConverter
             char[] slots = new char[resolution * 2];
             Array.Fill(slots, '0');
             foreach (var (index, length) in markers)
-                slots[index * (resolution / length) * 2 + 1] = '1';
+            {
+                int slot = (resolution % length == 0)
+                    ? index * (resolution / length)
+                    : Math.Clamp((int)Math.Round((double)index * resolution / length), 0, resolution - 1);
+                slots[slot * 2 + 1] = '1';
+            }
             output.Append('#').Append(measure.ToString("D3")).Append(channel.ToString("D2")).Append(':').Append(slots).Append('\n');
         }
 

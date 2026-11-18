@@ -13,7 +13,10 @@
 
 | 접두사 | 출처 |
 | --- | --- |
-| `[Harmony]` | 패치 적용 결과 |
+| `[Harmony]` | 패치 적용 결과 (`[Harmony/Preflight]`, `[Harmony/ICFGuard]` 포함) |
+| `[UpdateGuard]` | Steam 빌드 확인, 파일 지문 비교, Unity 예외 전달, 실기 확인 기록 |
+| `[LambdaTranslator]` | 람다/코루틴 번역 사전 적중 및 기계어 재번역 |
+| `[ICFScan]` | 실행 중 IL2CPP 주소 공유 개수 스캔 |
 | `[Scene]` | 씬 로드 |
 | `[CustomCategory]`, `[CustomChart]` | CUSTOM 탭, 차트 주입 |
 | `[CustomTrackManager]` | hwa 스캔 |

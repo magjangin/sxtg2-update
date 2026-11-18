@@ -65,4 +65,19 @@ public class BmsParserTests
 
         Assert.Equal(4.0f, result.MaxTime, 3);
     }
+
+    [Fact]
+    public void Parse_DuplicateBpmAtSamePositionUsesLastEffectiveBpm()
+    {
+        var result = BmsParser.Parse(new[]
+        {
+            "#BPM 120",
+            "#BPM01 240",
+            "#00103:78",   // 120 BPM at measure 1.0
+            "#00108:01",   // overwritten to 240 BPM at exact same measure 1.0
+            "#00216:0100", // measure 0 @ 120 (2.0s) + measure 1 @ 240 (1.0s) = 3.0s
+        });
+
+        Assert.Equal(3.0f, result.MaxTime, 3);
+    }
 }

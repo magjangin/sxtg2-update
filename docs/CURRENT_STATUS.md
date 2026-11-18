@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-18)
+# 현재 상태 (2026-11-19)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 118개(`[Harmony] 패치 118개 모두 적용 완료`, 2026-11-14 3차 정리 전 120개). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -25,7 +25,7 @@
 | 전곡·DLC 해금 | 실기 확인 | |
 | 출석 보상 창 자동 표시 끄기 | 실기 확인 | 로그 `[Attendance] Skipped ...` |
 
-## 최근 변경 (2026-10-30 ~ 2026-11-18, `#n` = PR 번호)
+## 최근 변경 (2026-10-30 ~ 2026-11-19, `#n` = PR 번호)
 
 1. **#1** AllPerfect가 안 누른 롱노트 틱에 레인 불빛을 켜던 문제 수정
 2. **#2** README, 성능 정리(오버레이 IL2CPP 호출 제거, 디스크 접근 제거, 차트 캐시), 죽은 훅 제거 (4,217 → 3,746줄)
@@ -59,6 +59,10 @@
 27. 크기가 같은 변경 감지·실기 확인 자동 기록 (2026-11-18): 지문에 `GameAssembly.dll`·`UnityPlayer.dll` PE 링크 시각, `global-metadata.dat` 버전·헤더(섹션 표) 해시 추가(파일 앞 4KB만 읽음). 커스텀 곡으로 `Renewal_Play` → `Result`를 게임 내부 예외 없이 지나면 그 지문을 `BuildState.txt`에 `verifiedPlay=`로 기록하고, 다음 부팅부터 지문이 완전히 같으면 "검증 안 됨" 대신 `정상 (이 PC에서 실기 플레이로 확인된 빌드 …)`. 소스의 검증 목록을 고치지 않아도 새 빌드를 확인할 수 있음. `lambdascan` 새 시험 21건 `ALL PASS`, 실기 부팅(지문 기록·`정상`·패치 118개·15곡)과 커스텀 곡 플레이 → 결과 화면(예외 0) 확인. 처음 판은 검증 목록에 있는 빌드면 기록을 로그 없이 건너뛰어 그 플레이가 기록되지 않았음 → 항상 기록·로그로 고침(수정판의 결과 화면 기록은 실기 미확인). [REVIEW_2026-11-18.md](03-development/REVIEW_2026-11-18.md)
 28. 구조·빌드·테스트·문서 개선 및 v2.3.0 릴리스 (2026-11-18): `AGENTS.md` 슬림화(상세 기록 `docs/03-development/HANDOVER_NOTES.md` 분리), `SixtarGateMod.csproj` `<GameDir>`(환경변수 `SIXTAR_GAME_DIR` / `Directory.Build.props.user`) 및 `PostBuild` `Mods\` 자동 복사, `Core.cs`에서 `Features/CustomBga.cs`·`CustomJackets.cs`·`Unlock.cs` 분리, `hwa\` 변경 감지 재스캔(`RefreshIfChanged`), `LoadChartText` `TextDecoder` 통일, 배너 버전 동적 조회, 자켓 디코딩 상한 1024 축소, `BmsParser` 변속(03/08)·변박(02)·데이터 줄 필터 보강, `OnDeinitializeMelon` `StopAll()`·`PlayAssist` 점수 래퍼 캐시 정리, xUnit 순수 모듈 테스트(`tests/SixtarGateMod.Tests/`, 18건 통과) 및 GitHub Actions CI(`.github/workflows/ci.yml`) 추가.
 29. 전 파일 점검·병목/안정성 개선·문서 최신화 (2026-11-19): `MediaOverrideManager.PreloadRoutine` `_preloading` 플래그 `finally` 해제 및 `RefreshIfChanged` 시 `ClearFailed()` 호출, `CustomTrackManager` 하위 폴더 이름순 정렬, `PatchPreflight.TrimStartupCaches()` 부팅 후 IL 캐시·옵코드 테이블 회수, `UpdateGuard` 예외 카운터 `Interlocked`/`Volatile` 적용, `CustomMarathon` 곡 선택 복귀 시 `IsActive` 누수 정리, `SxtgBmsConverter.IsSxtgFormat` 무할당 `Span` 파싱 및 `Lcm` 오버플로 방지, `README.md`·`PROJECT_OVERVIEW.md`·`CODE_STRUCTURE.md` v2.3.0 반영. xUnit 19건·Release/Debug 빌드(경고/오류 0)·`lambdascan` 통과(실기 미실행).
+30. 업데이트 내성·런타임 버그 수정·테스트 확충·문서 정합성 강화 (2026-11-19):
+    - **업데이트 내성:** `LambdaTranslator`·`IcfScanner` 캐시 지문을 `UpdateGuard.BinaryFingerprint`(PE 링크 시각 + `global-metadata.dat` 헤더 해시)로 통일, `IcfScanner` 원자적 캐시 저장 및 미스캔 주소 `-1` 구분 경고, `PatchResilience` 대상 탐색·동적 타깃 예외 로깅, `LambdaTranslator` 소유자 오프셋 `0x18` 임의 폴백 제거(`-1` → `Inconclusive`) 및 빈 RVA 캐시 무효화, `PatchPreflight` 어셈블리 로드 예외 포착, `X64Decoder` `REX.W`+`0x66` 및 VEX `map==1` imm8 수정, `[CriticalPatch]` 6개 추가(`GotoPlayScene`·`GotoMusicSelect`·`GetSelectableCategoty`·`RecordCoursePlayData`·`RecordLicensePlayData`·`SoundModuleForFMOD.Stop`), `tools/version_diff/check_update.ps1`·`icf_check.py` 개선.
+    - **버그·누수 수정:** `PlayAssist.EnsureSession` 포인터 재사용 충돌 방지 및 `ScoreProcessor` `Finalizer` 복원, `SxtgBmsConverter` 3자리 차트 채널 `02` 변박 보존·`Lcm` 상한 클램프, `BmsParser` 동일 위치 중복 BPM 덮어쓰기, `PngDecoder` 청크/크기/필터/컬러 타입 0·2 `tRNS` 경계 검증, `MediaOverrideManager.LoadAsync` `try/finally` `Pending` 누수 방지, `CustomJackets` 목록 행·재적용 코루틴 stale 가드, `CustomMarathon` 씬 이탈·연타 이중 진행 가드, `Overlay.Create()` 풀 초기화, `JudgmentBar.ShapeCache` GPU 텍스처/스프라이트 해제, `CustomNoteSkin.PrepareForPlay` 리셋, `CustomAudioManager` FMOD 핸들 누수 방지, `ModConfig` 공백 허용 초기화 및 색상 `IsFinite`/클램프.
+    - **테스트·문서:** xUnit 순수 테스트 19건 → 40건(`NativeLambdaScanTests`·`X64DecoderTests`·`BuildFingerprintTests`·회귀 테스트 추가), `HOOK_TABLE.md`·`ARCHITECTURE.md`·`OFFLINE_AND_UNLOCK.md`·`MEDIA_SYSTEM.md`·`INSTALL_AND_LAYOUT.md`·`TROUBLESHOOTING.md`·`CUSTOM_TRACKS.md`·`BUILD_AND_DEPLOY.md`·`DEBUGGING_GUIDE.md`·`docs/README.md` 현행화. Release/Debug 빌드(경고/오류 0)·xUnit 40건·`lambdascan` `ALL PASS`(실기 미실행).
 
 ## 알려진 한계
 

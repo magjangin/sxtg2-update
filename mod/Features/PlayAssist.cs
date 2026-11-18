@@ -26,14 +26,19 @@ public static class PlayAssist
     /// <summary>Pressed state per SixtarGate.Play.LaneIndex (LL, L, R, RR, Gate, LT, RT).</summary>
     public static readonly bool[] LanePressed = new bool[7];
 
-    public static void EndPlay()
+    public static void EndPlay(bool resetSessionPointer = false)
     {
-        // Keep _currentJudgePtr: if the same processor is still judging (e.g. an additive scene load ended the
-        // session by mistake) EnsureSession re-arms it without subscribing OnNoteJudged a second time.
+        // Keep _currentJudgePtr by default: if an additive scene load triggers EndPlay while the same
+        // processor is still judging, EnsureSession re-arms it without subscribing OnNoteJudged twice.
+        // On definite session boundaries (GotoPlayScene / MusicSelect / Result), reset it so IL2CPP
+        // native address reuse on the next play cannot skip EnsureSession.
+        if (resetSessionPointer)
+            _currentJudgePtr = IntPtr.Zero;
         CurrentJudge = null;
         Array.Clear(LanePressed, 0, LanePressed.Length);
         Overlay.HideAll();
         NoteEffects.EndPlay();
+        CustomNoteSkin.ResetForNewPlay();
         RandomNoteSkin.EndPlay();
         JudgmentBar.Reset();
         KeyViewer.ResetBindings();
@@ -206,12 +211,16 @@ public static class PlayAssist
                 __instance.OnReverseScoreUpdate = ModConfig.ScoreInvertCountdown ? NoOp() : ReverseWrapper(reverse);
         }
 
-        public static void Postfix(ScoreProcessor __instance, (Il2CppSystem.Action<int>? score, Il2CppSystem.Action<int>? reverse) __state)
+        public static void Postfix((Il2CppSystem.Action<int>? score, Il2CppSystem.Action<int>? reverse) __state)
+        {
+            if (ModConfig.ScoreInvertCountdown && __state.reverse != null && _scored)
+                __state.reverse.Invoke(Math.Max(0, MaxScoreTotal - _lastScore));
+        }
+
+        public static void Finalizer(ScoreProcessor __instance, (Il2CppSystem.Action<int>? score, Il2CppSystem.Action<int>? reverse) __state)
         {
             if (__state.score != null) __instance.OnScoreUpdate = __state.score;
             if (__state.reverse != null) __instance.OnReverseScoreUpdate = __state.reverse;
-            if (ModConfig.ScoreInvertCountdown && __state.reverse != null && _scored)
-                __state.reverse.Invoke(Math.Max(0, MaxScoreTotal - _lastScore));
         }
 
         private static Il2CppSystem.Action<int> ScoreWrapper(Il2CppSystem.Action<int> original)
@@ -288,12 +297,14 @@ public static class PlayAssist
     }
 
     [HarmonyPatch(typeof(PlayRecordModule), nameof(PlayRecordModule.RecordCoursePlayData))]
+    [CriticalPatch("커스텀/AllPerfect/어시스트 코스 플레이 기록 저장 차단")]
     public static class PlayRecordModule_RecordCoursePlayData_Patch
     {
         public static bool Prefix() => !ModConfig.ShouldBlockRecord;
     }
 
     [HarmonyPatch(typeof(PlayRecordModule), nameof(PlayRecordModule.RecordLicensePlayData))]
+    [CriticalPatch("커스텀/AllPerfect/어시스트 라이선스 플레이 기록 저장 차단")]
     public static class PlayRecordModule_RecordLicensePlayData_Patch
     {
         public static bool Prefix() => !ModConfig.ShouldBlockRecord;

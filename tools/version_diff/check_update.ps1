@@ -33,11 +33,16 @@ if (Test-Path $acf) {
     if ($m) { Write-Host "현재 Steam 빌드: $($m.Matches[0].Groups[1].Value)" }
 }
 Write-Host "GameAssembly.dll: $((Get-Item (Join-Path $Game 'GameAssembly.dll')).LastWriteTime)"
-Write-Host "global-metadata.dat: $((Get-Item (Join-Path $Game 'Sixtar Gate STARTRAIL_Data\il2cpp_data\Metadata\global-metadata.dat')).LastWriteTime)"
+$metaFile = Get-ChildItem -Path $Game -Directory -Filter "*_Data" -ErrorAction SilentlyContinue |
+    ForEach-Object { Join-Path $_.FullName "il2cpp_data\Metadata\global-metadata.dat" } |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($metaFile) { Write-Host "global-metadata.dat: $((Get-Item $metaFile).LastWriteTime)" }
 
 if (-not (Test-Path $tool)) {
     Write-Host "dumpdiff 빌드 중..."
-    & "C:\Program Files\dotnet\dotnet.EXE" build (Join-Path $PSScriptRoot "dumpdiff.csproj") -o (Join-Path $PSScriptRoot "bin") -v q | Out-Null
+    $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
+    if (-not $dotnet) { $dotnet = "C:\Program Files\dotnet\dotnet.EXE" }
+    & $dotnet build (Join-Path $PSScriptRoot "dumpdiff.csproj") -o (Join-Path $PSScriptRoot "bin") -v q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "dumpdiff 빌드 실패" }
 }
 

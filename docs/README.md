@@ -3,7 +3,7 @@
 Sixtar Gate: STARTRAIL(Unity IL2CPP)용 MelonLoader 모드 **SixtarGateMod** 문서 모음입니다.
 Mono 시절 모드 `sxtg2`의 문서 구성(`sxtg2 커스텀 리드미`)을 따라 나눴습니다.
 
-기준 시점: 2026-11-07, Steam Build `26455233`, 모드 소스 `mod/`.
+기준 시점: 2026-11-19, Steam Build `26455233`, 모드 소스 `mod/`.
 
 ## 먼저 볼 문서
 
@@ -63,6 +63,7 @@ docs/
 - [IL2CPP_PITFALLS.md](03-development/IL2CPP_PITFALLS.md)
 - [REVERSE_ENGINEERING.md](03-development/REVERSE_ENGINEERING.md)
 - [DEBUGGING_GUIDE.md](03-development/DEBUGGING_GUIDE.md)
+- [HANDOVER_NOTES.md](03-development/HANDOVER_NOTES.md): 상세 기술 조사·오프셋·실패 이력 아카이브
 - [AUDIT_2026-11-09.md](03-development/AUDIT_2026-11-09.md): 감사 기록 — 중국어 메타데이터 제약, 업데이트 내성의 남은 구멍, 문서 정정 목록
 - [REVIEW_2026-11-10.md](03-development/REVIEW_2026-11-10.md): 코드 리뷰 — 실행 중 ICF 검사(`IcfScanner`), 버그 7건, 병목, 실기 검증 결과
 - [REVIEW_2026-11-12.md](03-development/REVIEW_2026-11-12.md): 코드 리뷰 — 람다 찾기 강화(바깥 형식 람다, 레지스터 추적 기계어 대조 `NativeLambdaScan`, 사전 검증), 오프라인 시험 `tools/lambdascan`, 실기 부팅 3회

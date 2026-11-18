@@ -1,15 +1,15 @@
 # 오프라인·서버 종료 우회, 전곡 해금, 출석 창
 
-코드: `Features/OfflineBypass.cs`, `Core.cs` 1번 영역(해금), `Features/AttendancePopup.cs`
+코드: `Features/OfflineBypass.cs`, `Features/Unlock.cs`, `Features/AttendancePopup.cs`
 
 ## 1. 완전 오프라인 / 서버 종료 우회 (`Features/OfflineBypass.cs`)
 
-빌드 `26218612`는 두 갈래의 네트워크 계층을 동시에 갖고 있습니다.
+빌드 `26218612`/`26455233`은 두 갈래의 네트워크 계층을 동시에 갖고 있습니다.
 1. **리뉴얼 + 뒤끝(BACKND) 파이프라인 (`SixtarGate.Web.BackEnd*`, `SixtarGate`)** — 현재 빌드에서 실제로 부팅·테이블·모드 선택·결과 화면을 구동하는 핵심 경로.
 2. **레거시 자체 HTTP 파이프라인 (`ManagerWebRequest`, `UpdateChecker`, `UserAccountModule`, `ItemHelper`)** — `sxtg2 saver test`에서 검증된 구버전 오프라인 우회 경로.
 
 기존에는 점검 팝업과 점수 업로드 4개만 막고 있어서, **뒤끝(BACKND) 서버나 게임 서버가 완전히 내려가거나 오프라인인 상태**에서는 부팅 코루틴(`DefaultBootLoader` → `SixtarGlobal.Initialize`)이 `WaitUntil(() => Web.HasInitialized)`에서 무한 대기하거나 `BackEndWebRequest.Exit()`로 클라이언트를 종료시켰습니다.
-`Features/OfflineBypass.cs`는 리뉴얼 39개 훅 + 레거시(`sxtg2 saver test` 이식) 24개 훅(총 63개, 전부 `il2cpp_dump/script.json` 기준 `ICF=1` 고유 주소 검증 완료)으로 서버가 완전히 꺼진 상태에서도 부팅 → 타이틀 → 모드 선택 → 곡 선택 → 플레이 → 결과창(Arkk 보상 계산 포함) 전 구간이 동작하도록 우회합니다.
+`Features/OfflineBypass.cs`는 리뉴얼 42개 훅(UnitySession 3개 포함) + 레거시(`sxtg2 saver test` 이식) 24개 훅(총 66개, 전부 `il2cpp_dump/script.json` 기준 `ICF=1` 고유 주소 검증 완료)으로 서버가 완전히 꺼진 상태에서도 부팅 → 타이틀 → 모드 선택 → 곡 선택 → 플레이 → 결과창(Arkk 보상 계산 포함) 전 구간이 동작하도록 우회합니다.
 
 ### 1-1. 리뉴얼 부팅 & 테이블·아이템 초기화 체인
 
@@ -34,7 +34,7 @@ DefaultBootLoader.Start (Renewal_Boot)
             └─ Steam 미실행 시에도 Finalizer가 예외를 삼키고 HasInitialized = true 보장
 ```
 
-### 1-2. 리뉴얼 `SixtarGate.Web` / 모드 선택 / 결과 화면 훅 요약 (39개, 모두 `ICF=1`)
+### 1-2. 리뉴얼 `SixtarGate.Web` / 모드 선택 / 결과 화면 훅 요약 (42개, 모두 `ICF=1`)
 
 | 분류 | 대상 메서드 | RVA | 동작 요약 |
 | --- | --- | --- | --- |
@@ -55,6 +55,7 @@ DefaultBootLoader.Start (Renewal_Boot)
 | 모드 선택·팝업 | `UpdateCheckController.Initialize` / `UpdateCheckPopup.OpenPopup` | `0x53F1A0` / `0x49A830` | 모드 선택 진입 시 서버 버전 체크 팝업을 띄우지 않고 `VersionCheckPass = true` 설정 |
 | 모드 선택·팝업 | `ServerMaintenanceNotice.Show` | `0x491C10` | 점검 공지 팝업(→ 종료) 차단 |
 | 멀티 세션 | `UnitySessionLegacyConnector.Connect` / `ReqeustSessionPlayingCount` | `0x579BA0` / `0x57A510` | 레거시 멀티 세션 서버 연결 스킵(`false`, `0`명) |
+| 멀티 세션 | `BackEndChatServer.Initialize` / `UnitySessionModule.get_IsConnect` / `UnitySessionProcessor.InitailizeViewItem` | `0x55C9D0` / `0x601820` / `0x622780` | 오프라인 시 채팅 서버 초기화 NRE 차단 및 세션 미연결 반환(`false`)으로 플레이·결과 진입 보장 |
 | Steam 폴백 | `ClientDataProvider.InitializeModule` / `AchievementModule.InitializeModule`·`ContainsAchievement`·`UnlockReqeustAchievement` | `0x79B930` / `0x7995A0` / `0x798930` / `0x799870` | Finalizer로 Steam 미실행 시 `InitializeUnityEditor()` 폴백 및 예외 무시 |
 
 > **주의 (ICF 함정):** `NeedClientUpdatePopup.OpenPopup`과 `ServerDisconnectedPopup.OpenPopup`은 둘 다 빈 가상 메서드 주소 `0x450BA0`(`ICF=5192`)으로 접혀 있으므로 절대 패치하지 않습니다. 상위 호출자인 `UpdateCheckController.Initialize`(`0x53F1A0`)와 `UpdateCheckPopup.OpenPopup`(`0x49A830`)에서 차단합니다.
@@ -76,7 +77,7 @@ DefaultBootLoader.Start (Renewal_Boot)
 
 ---
 
-## 2. 전곡 & DLC 해금 (`Core.cs` + `Features/OfflineBypass.cs`)
+## 2. 전곡 & DLC 해금 (`Features/Unlock.cs` + `Features/OfflineBypass.cs`)
 
 곡·DLC·아이템 해금 확인은 모두 로컬에서 `true`를 돌려줍니다.
 

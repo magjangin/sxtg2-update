@@ -43,7 +43,7 @@ hwa\
 | 자켓 | `thumbnail`, `thumb`, `jacket` (`.png` `.jpg` `.jpeg`) | 첫 이미지 |
 | 곡 정보 | `{차트 이름}.txt`, `trackinfo.txt`, `info.txt` | 첫 `.txt` |
 
-파일 존재 여부는 게임을 켤 때 한 번만 확인합니다. 게임 중에 파일을 추가했다면 게임을 다시 켜세요.
+`hwa\` 폴더에 새 곡 폴더를 추가·삭제한 뒤 다른 탭에서 `CUSTOM` 탭으로 다시 진입하면 자동으로 변경을 감지해 재스캔합니다(`RefreshIfChanged`). 기존 폴더 안의 파일을 직접 덮어쓴 경우 등 반영이 안 되면 게임을 다시 켜세요.
 
 ### info.txt
 

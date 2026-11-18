@@ -65,8 +65,11 @@ public static class CustomMarathon
             Melon<Core>.Logger.Msg($"[Marathon] '{track.DisplayName}'부터 시작: 커스텀 곡 {_total}곡");
     }
 
+    private static bool _transitioning;
+
     public static void OnSceneLoaded(string sceneName)
     {
+        _transitioning = false;
         if (!IsActive) return;
         if (string.Equals(sceneName, "Result", StringComparison.OrdinalIgnoreCase))
         {
@@ -75,11 +78,16 @@ public static class CustomMarathon
             _bannerSecond = -1;
             _banner = "";
         }
-        else if (!_startingNext && sceneName.IndexOf("MusicSelect", StringComparison.OrdinalIgnoreCase) >= 0)
+        else
         {
-            IsActive = false;
             _resultShownAt = -1f;
-            Queue.Clear();
+            bool inPlayFlow = string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase)
+                || sceneName.IndexOf("PlayLoading", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!_startingNext && !inPlayFlow)
+            {
+                IsActive = false;
+                Queue.Clear();
+            }
         }
     }
 
@@ -87,6 +95,7 @@ public static class CustomMarathon
     public static bool TryContinue()
     {
         if (!IsActive) return false;
+        if (_transitioning) return true;
         if (Queue.Count == 0)
         {
             Melon<Core>.Logger.Msg("[Marathon] 커스텀 곡을 모두 플레이함, 곡 목록으로 돌아감");
@@ -98,10 +107,22 @@ public static class CustomMarathon
         Queue.RemoveAt(0);
         _played++;
         Melon<Core>.Logger.Msg($"[Marathon] 다음 곡 ({_played}/{_total}): '{next.DisplayName}'");
+        _transitioning = true;
         _startingNext = true;
         DivertingMusicSelect = true;
-        SixtarGlobal.GotoPlayScene(next, _level, _style);
-        return true;
+        try
+        {
+            SixtarGlobal.GotoPlayScene(next, _level, _style);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _transitioning = false;
+            _startingNext = false;
+            DivertingMusicSelect = false;
+            Melon<Core>.Logger.Warning($"[Marathon] 다음 곡 시작 실패: {ex.Message}");
+            return false;
+        }
     }
 
     public static void Update(float now)

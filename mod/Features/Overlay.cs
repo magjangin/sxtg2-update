@@ -190,6 +190,10 @@ public static class Overlay
 
     private static void Create()
     {
+        Images.Clear();
+        Texts.Clear();
+        Drawn.Clear();
+        LastOrder.Clear();
         _root = new GameObject("SixtarGateModOverlay");
         UnityEngine.Object.DontDestroyOnLoad(_root);
         _root.hideFlags = HideFlags.DontUnloadUnusedAsset;
