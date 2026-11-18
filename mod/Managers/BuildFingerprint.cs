@@ -124,3 +124,41 @@ public static class BuildFingerprint
         return h;
     }
 }
+
+/// <summary>커스텀 곡 플레이 확인 판정 결과.</summary>
+public enum PlayCheck
+{
+    /// <summary>판정할 것 없음(플레이 시작, 로딩 씬, 공식 곡, 중간에 그만둠 등).</summary>
+    None,
+    /// <summary>커스텀 곡으로 Renewal_Play → Result를 게임 내부 예외 0건으로 지남.</summary>
+    Passed,
+    /// <summary>Result에 닿았지만 그 사이 게임 내부 예외가 있었음.</summary>
+    ExceptionsDuring,
+}
+
+/// <summary>
+/// 씬 순서로 "커스텀 곡을 결과 화면까지 예외 없이 플레이"를 판정하는 순수 상태 기계(<see cref="UpdateGuard"/>가 사용,
+/// <c>tools/lambdascan</c>에서 실측 씬 순서로 시험). 실측 흐름: PlayLoading → Renewal_Play → Loading → Result,
+/// 중간에 그만두면 Renewal_Play → Loading → MusicSelect.
+/// </summary>
+public sealed class VerifiedPlayTracker
+{
+    private int _start = -1; // Renewal_Play 진입 때의 예외 개수, -1 = 진행 중인 커스텀 플레이 없음
+
+    public PlayCheck OnScene(string sceneName, bool customTrackActive, int exceptionCount, out int exceptionsDuring)
+    {
+        exceptionsDuring = 0;
+        if (string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase))
+        {
+            _start = customTrackActive ? exceptionCount : -1;
+            return PlayCheck.None;
+        }
+        if (string.Equals(sceneName, "Loading", StringComparison.OrdinalIgnoreCase)) return PlayCheck.None; // 플레이 → 결과 사이
+        int start = _start;
+        _start = -1;
+        if (start < 0 || !customTrackActive || !string.Equals(sceneName, "Result", StringComparison.OrdinalIgnoreCase))
+            return PlayCheck.None;
+        exceptionsDuring = exceptionCount - start;
+        return exceptionsDuring > 0 ? PlayCheck.ExceptionsDuring : PlayCheck.Passed;
+    }
+}
