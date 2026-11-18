@@ -1,0 +1,32 @@
+using SixtarGateMod.Loaders;
+using Xunit;
+
+namespace SixtarGateMod.Tests;
+
+public class TrackInfoParserTests
+{
+    [Fact]
+    public void ParseLines_SupportsCjkKeysAndFullwidthColon()
+    {
+        var info = TrackInfoParser.ParseLines(new[]
+        {
+            "曲名：測試曲",
+            "副标题：ignore me",
+            "曲师：作曲家",
+            "难度：3，7，12"
+        });
+
+        Assert.Equal("測試曲", info.Title);
+        Assert.Equal("作曲家", info.Artist);
+        Assert.Equal(new[] { 3, 7, 12 }, info.Difficulties);
+    }
+
+    [Fact]
+    public void NormalizeMetadataText_FixesBrokenContractionsWithoutTouchingValidApostrophes()
+    {
+        Assert.Equal("you're", TrackInfoParser.NormalizeMetadataText("you'  re"));
+        Assert.Equal("don't", TrackInfoParser.NormalizeMetadataText("don ' t"));
+        Assert.Equal("rock 'n' roll", TrackInfoParser.NormalizeMetadataText("rock '  n '  roll"));
+        Assert.Equal("Guns N' Roses", TrackInfoParser.NormalizeMetadataText("Guns N' Roses"));
+    }
+}

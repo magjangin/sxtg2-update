@@ -5,28 +5,30 @@
 - .NET SDK 6.0 이상
 - 게임에 MelonLoader 0.7.3을 설치하고 한 번 실행 (`MelonLoader\Il2CppAssemblies` 생성)
 
-`mod/SixtarGateMod.csproj`는 다음 DLL을 `HintPath`로 참조합니다. 게임 경로가 다르면 csproj에서 바꾸세요.
+`mod/SixtarGateMod.csproj`는 `$(GameDir)` 아래에서 MelonLoader·Interop DLL을 참조합니다(기본값 `H:\steam\steamapps\common\Sixtar Gate STARTRAIL`). 경로가 다르면 환경변수 `SIXTAR_GAME_DIR`을 설정하거나 `mod/Directory.Build.props.user`(Git 무시)에서 `<GameDir>`을 덮어쓰세요.
 
 ```text
-H:\steam\steamapps\common\Sixtar Gate STARTRAIL\MelonLoader\net6\MelonLoader.dll, 0Harmony.dll, Il2CppInterop.*.dll
-H:\steam\steamapps\common\Sixtar Gate STARTRAIL\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll 외
+$(GameDir)\MelonLoader\net6\MelonLoader.dll, 0Harmony.dll, Il2CppInterop.*.dll
+$(GameDir)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll 외
 ```
 
 ## 빌드
 
 ```powershell
-& "C:\Program Files\dotnet\dotnet.EXE" build "H:\source\repos\Sixtar Gate STARTRAIL-unity-il2cpp\mod\SixtarGateMod.csproj"
+dotnet build mod/SixtarGateMod.csproj
 ```
 
 결과: `mod\bin\Debug\net6.0\SixtarGateMod.dll`. 경고 0 / 오류 0이 정상입니다.
 
-## 배포
-
-**게임을 끈 상태에서** 복사합니다(켜져 있으면 DLL이 잠겨 `Device or resource busy`).
+## 테스트 (게임 DLL 불필요)
 
 ```powershell
-Copy-Item -Path "H:\source\repos\Sixtar Gate STARTRAIL-unity-il2cpp\mod\bin\Debug\net6.0\SixtarGateMod.dll" -Destination "H:\steam\steamapps\common\Sixtar Gate STARTRAIL\Mods\SixtarGateMod.dll" -Force
+dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
 ```
+
+## 배포
+
+`$(GameDir)\Mods` 폴더가 존재하면 빌드 후 자동으로 `SixtarGateMod.dll`을 복사합니다(게임 실행 중 DLL이 잠겨 있으면 경고만 출력하고 빌드는 성공). 자동 복사를 건너뛰려면 `-p:SkipDeploy=true`를 넘기세요.
 
 ## 확인
 

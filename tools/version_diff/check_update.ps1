@@ -14,7 +14,7 @@
 #>
 param(
     [string]$Repo = (Resolve-Path "$PSScriptRoot\..\..").Path,
-    [string]$Game = "H:\steam\steamapps\common\Sixtar Gate STARTRAIL",
+    [string]$Game = $(if ($env:SIXTAR_GAME_DIR) { $env:SIXTAR_GAME_DIR } else { "H:\steam\steamapps\common\Sixtar Gate STARTRAIL" }),
     [string]$ScriptJson = "",
     [switch]$UpdateBaseline
 )

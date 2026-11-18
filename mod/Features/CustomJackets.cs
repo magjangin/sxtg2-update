@@ -1,0 +1,236 @@
+using System;
+using System.Reflection;
+using HarmonyLib;
+using Il2CppRhythmGame;
+using Il2CppSixtarGate;
+using Il2CppSixtarGate.MusicSelect;
+using Il2CppInterop.Runtime.InteropTypes;
+using MelonLoader;
+using SixtarGateMod.Managers;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace SixtarGateMod.Features;
+
+/// <summary>
+/// Custom jacket and thumbnail overrides across MusicSelect (center viewer + list rows),
+/// PlayLoading, Pause popup, Play background, and Result screen.
+/// </summary>
+public static class CustomJackets
+{
+    private static readonly Color White = Overlay.Rgba(1f, 1f, 1f, 1f);
+    private static readonly float[] ReapplyDelays = { 0.1f, 0.4f, 1.0f };
+
+    // MusicSelect Jacket Hook: Show Custom Jacket in Center TrackInfoViewer.
+    // Jackets decode asynchronously (MediaOverrideManager.RequestAlbumSprite): a synchronous LoadImage of a 1080p PNG
+    // costs ~50-100 ms of main thread per song, which stuttered every selection change.
+    [HarmonyPatch(typeof(TrackInfoViewer), nameof(TrackInfoViewer.Set), new Type[] { typeof(ITrack), typeof(TrackSelectArgs) })]
+    public static class TrackInfoViewer_Set_Patch
+    {
+        private static string? _shownTrackId;
+
+        public static void Postfix(TrackInfoViewer __instance, ITrack track, TrackSelectArgs args)
+        {
+            if (track == null) return;
+            _shownTrackId = track.TrackID;
+
+            var album = CustomTrackManager.FindAlbum(track.TrackID);
+            if (album == null || !album.HasCustomJacket) return;
+
+            var img = __instance.jacket;
+            if (img == null)
+            {
+                Melon<Core>.Logger.Warning("[MusicSelect] TrackInfoViewer에서 자켓 Image 컴포넌트를 찾지 못함");
+                return;
+            }
+
+            string trackId = track.TrackID;
+            MediaOverrideManager.RequestAlbumSprite(album, sprite =>
+            {
+                // The selection may have moved on while the PNG was decoding.
+                if (img == null || _shownTrackId != trackId) return;
+                img.sprite = sprite;
+                img.color = White;
+                img.enabled = true;
+                Core.DebugLog($"[MusicSelect] 가운데 자켓 표시: '{album.Title}'");
+            });
+        }
+    }
+
+    // Renewal list rows (TrackObject.thumbnail, the square left of each title). TrackObject.LoadThumbnail is inlined
+    // into SetTrack; its async bundle callback <LoadThumbnail>b__1 assigns the bundle sprite (null for a custom ID,
+    // leaving an empty box), so re-apply after both. Each row costs one dictionary lookup for official songs.
+    private static void ApplyListThumbnail(TrackObject? owner, ITrack? track)
+    {
+        var thumb = owner?.thumbnail;
+        if (thumb == null || track == null) return;
+        var album = CustomTrackManager.FindAlbum(track.TrackID);
+        if (album == null || !album.HasCustomJacket) return;
+        MediaOverrideManager.RequestAlbumSprite(album, sprite =>
+        {
+            if (thumb == null) return;
+            thumb.sprite = sprite;
+            thumb.color = White;
+            thumb.enabled = true;
+        });
+    }
+
+    [HarmonyPatch]
+    public static class TrackObject_LoadThumbnailCallback_Patch
+    {
+        private static Func<Il2CppObjectBase, TrackObject?>? _getOwner;
+        private static Func<Il2CppObjectBase, ITrack?>? _getTrack;
+
+        public static MethodBase? TargetMethod()
+        {
+            var m = PatchResilience.FindClosureCallback(typeof(TrackObject), "_LoadThumbnail_b__", typeof(Sprite), out _getOwner,
+                requiredClosureMembers: new[] { "track" });
+            if (m?.DeclaringType is Type closureType)
+                _getTrack = PatchResilience.CreateGetter<ITrack>(closureType, "track");
+            return m;
+        }
+
+        public static void Postfix(Il2CppObjectBase __instance)
+            => ApplyListThumbnail(_getOwner?.Invoke(__instance), _getTrack?.Invoke(__instance));
+    }
+
+    [HarmonyPatch(typeof(TrackObject), nameof(TrackObject.SetTrack), new Type[] { typeof(ITrack) })]
+    public static class TrackObject_SetTrack_Patch
+    {
+        public static void Postfix(TrackObject __instance, ITrack track) => ApplyListThumbnail(__instance, track);
+    }
+
+    private static void ApplyCurrentAlbumJacket(Image? img, string where)
+    {
+        if (img == null || !Core.IsCustomTrackActive) return;
+        var album = CustomTrackManager.CurrentSelectedAlbum;
+        if (album == null || !album.HasCustomJacket) return;
+        var sprite = MediaOverrideManager.GetOrCreateAlbumSprite(album);
+        if (sprite == null) return;
+        img.sprite = sprite;
+        img.color = White;
+        img.enabled = true;
+        Core.DebugLog($"[Jacket] 커스텀 자켓 적용: {where}");
+    }
+
+    [HarmonyPatch(typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "OnLoadResource_Travel")]
+    public static class PlayLoading_OnLoadResource_Patch
+    {
+        public static void Postfix(Il2CppSixtarGate.PlayLoading.PlayLoadingManager __instance)
+        {
+            ApplyCurrentAlbumJacketDeferred(__instance.jacketFull, "PlayLoading.jacketFull");
+            ApplyCurrentAlbumJacketDeferred(__instance.trackThumbnail, "PlayLoading.trackThumbnail");
+        }
+    }
+
+    [HarmonyPatch]
+    [IcfShared(2, "Outer Space 판 DisplayClass35_0의 같은 람다와 공유. 두 클로저의 <>4__this 위치가 같아 어느 쪽 this로 실행돼도 안전")]
+    public static class PlayLoading_JacketCallback_Patch
+    {
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.PlayLoading.PlayLoadingManager?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 0, accessedOwnerFieldName: "jacketFull");
+
+        public static void Postfix(Il2CppObjectBase __instance)
+            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.jacketFull, "PlayLoading.jacketFull (callback)");
+    }
+
+    [HarmonyPatch]
+    [IcfShared(2, "Outer Space 판 DisplayClass35_0의 같은 람다와 공유. 두 클로저의 <>4__this 위치가 같아 어느 쪽 this로 실행돼도 안전")]
+    public static class PlayLoading_ThumbnailCallback_Patch
+    {
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.PlayLoading.PlayLoadingManager?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 1, accessedOwnerFieldName: "trackThumbnail");
+
+        public static void Postfix(Il2CppObjectBase __instance)
+            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.trackThumbnail, "PlayLoading.trackThumbnail (callback)");
+    }
+
+    // Identical-code folding: TrackInfoViewerModule._Set_b__3_1 shares its native body with 11 other sprite
+    // callbacks (profile icon, unlock list, ...), and BackgroundUIProcessor's <Initialize>b__1 with 2 inventory
+    // thumbnail callbacks, so patching them would run our Postfix with a foreign `this`. Instead re-apply the
+    // jacket a few times after the async bundle callback has had a chance to assign null.
+    internal static void ApplyCurrentAlbumJacketDeferred(Image? img, string where)
+    {
+        if (img == null || !Core.IsCustomTrackActive) return;
+        ApplyCurrentAlbumJacket(img, where);
+        MelonCoroutines.Start(ReapplyJacket(img, where));
+    }
+
+    private static System.Collections.IEnumerator ReapplyJacket(Image img, string where)
+    {
+        foreach (float delay in ReapplyDelays)
+        {
+            yield return new WaitForSecondsRealtime(delay);
+            if (img == null || !Core.IsCustomTrackActive) yield break;
+            var sprite = CustomTrackManager.CurrentSelectedAlbum is { HasCustomJacket: true } album ? MediaOverrideManager.GetOrCreateAlbumSprite(album) : null;
+            if (sprite != null && img.sprite != sprite)
+            {
+                img.sprite = sprite;
+                img.color = White;
+                img.enabled = true;
+                Core.DebugLog($"[Jacket] 비동기 로드 후 커스텀 자켓 다시 적용: {where}");
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(Il2CppSixtarGate.Play.Pause.TrackInfoViewerModule), nameof(Il2CppSixtarGate.Play.Pause.TrackInfoViewerModule.Set))]
+    public static class PauseTrackInfo_Set_Patch
+    {
+        public static void Postfix(Il2CppSixtarGate.Play.Pause.TrackInfoViewerModule __instance)
+            => ApplyCurrentAlbumJacketDeferred(__instance.jacket, "Pause.jacket");
+    }
+
+    private static void ApplyResultJackets(Il2CppSixtarGate.Result.TrackInfoModule? module)
+    {
+        ApplyCurrentAlbumJacket(module?.jacket, "Result.jacket");
+        ApplyCurrentAlbumJacket(module?.thumbnail, "Result.thumbnail");
+    }
+
+    [HarmonyPatch]
+    public static class ResultTrackInfo_Callback3_Patch
+    {
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TrackInfoModule?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 0, accessedOwnerFieldName: "jacket");
+
+        public static void Postfix(Il2CppObjectBase __instance) => ApplyResultJackets(_getOwner?.Invoke(__instance));
+    }
+
+    [HarmonyPatch]
+    public static class ResultTrackInfo_Callback4_Patch
+    {
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TrackInfoModule?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 1, accessedOwnerFieldName: "thumbnail");
+
+        public static void Postfix(Il2CppObjectBase __instance) => ApplyResultJackets(_getOwner?.Invoke(__instance));
+    }
+
+    [HarmonyPatch]
+    public static class ResultBackground_JacketCallback_Patch
+    {
+        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TravelBackgroundModule?>? _getOwner;
+
+        public static MethodBase? TargetMethod()
+            => PatchResilience.FindClosureCallback(
+                typeof(Il2CppSixtarGate.Result.TravelBackgroundModule), "_InitializeModule_b__", typeof(Sprite), out _getOwner,
+                matchIndex: 0, accessedOwnerFieldName: "jacket");
+
+        public static void Postfix(Il2CppObjectBase __instance)
+            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.jacket, "Result.background jacket");
+    }
+}

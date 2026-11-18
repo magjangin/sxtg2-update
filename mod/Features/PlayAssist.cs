@@ -37,6 +37,7 @@ public static class PlayAssist
         RandomNoteSkin.EndPlay();
         JudgmentBar.Reset();
         KeyViewer.ResetBindings();
+        ScoreProcessor_UpdateScore_Patch.ResetCache();
     }
 
     // A new JudgeProcessor is built for every play (and restart). A Harmony patch on its constructor never fires in
@@ -96,7 +97,7 @@ public static class PlayAssist
             if (data == null || ticks == null || ticks.Count != 1) return;
             JudgmentBar.RegisterHit(data.DeltaTime, (int)data.Taken);
         }
-        catch { }
+        catch (Exception ex) { Core.DebugLog($"[PlayAssist] OnNoteJudged 처리 실패: {ex.Message}"); }
     }
 
     // AutoPlay: the renewal JudgeProcessor already has an auto-judge path (ProcessAutoJudge, judgeID 0, delta 0).
@@ -244,6 +245,16 @@ public static class PlayAssist
                 _noOp = nothing;
             }
             return _noOp;
+        }
+
+        public static void ResetCache()
+        {
+            _cachedScoreWrapper = null;
+            _cachedScorePtr = IntPtr.Zero;
+            _cachedReverseWrapper = null;
+            _cachedReversePtr = IntPtr.Zero;
+            _lastScore = 0;
+            _scored = false;
         }
     }
 

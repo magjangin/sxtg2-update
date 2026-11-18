@@ -720,7 +720,7 @@ public static class OfflineBypass
                     popup.CloseAllPopup();
                 }
             }
-            catch { }
+            catch (Exception ex) { Core.DebugLog($"[OfflineBypass] 팝업 정리 건너뜀: {ex.Message}"); }
             __result = new Il2CppSystem.Collections.ArrayList().GetEnumerator();
             return false;
         }
@@ -751,7 +751,7 @@ public static class OfflineBypass
                 if (helper != null)
                     helper.InitializeUnlockData(new Il2CppSystem.Collections.Generic.List<string>());
             }
-            catch { }
+            catch (Exception ex) { Core.DebugLog($"[OfflineBypass] 팝업 정리 건너뜀: {ex.Message}"); }
             return false;
         }
     }
@@ -939,7 +939,7 @@ public static class OfflineBypass
                 if (ua != null)
                     ua.runtimeCheck = new RuntimeCheck { isUpdateChecked = true };
             }
-            catch { }
+            catch (Exception ex) { Core.DebugLog($"[OfflineBypass] 팝업 정리 건너뜀: {ex.Message}"); }
             onLatestVersion?.Invoke();
             return false;
         }
@@ -995,13 +995,13 @@ public static class OfflineBypass
     [HarmonyPatch(typeof(ItemHelper), nameof(ItemHelper.CheckOwnedState), new Type[] { typeof(string) })]
     public static class ItemHelper_CheckOwnedState_String_Patch
     {
-        public static bool Prefix(ref bool __result) => Core.Unlocked(ref __result);
+        public static bool Prefix(ref bool __result) => Unlock.Unlocked(ref __result);
     }
 
     // RVA 0x599DD0, ICF=1 — legacy ItemHelper ownership check
     [HarmonyPatch(typeof(ItemHelper), nameof(ItemHelper.CheckOwnedState), new Type[] { typeof(ICollectable) })]
     public static class ItemHelper_CheckOwnedState_Collectable_Patch
     {
-        public static bool Prefix(ref bool __result) => Core.Unlocked(ref __result);
+        public static bool Prefix(ref bool __result) => Unlock.Unlocked(ref __result);
     }
 }

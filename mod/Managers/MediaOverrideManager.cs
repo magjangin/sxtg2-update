@@ -84,7 +84,7 @@ public static class MediaOverrideManager
             RequestAlbumSprite(album, _ => done = true);
             float waitUntil = Time.realtimeSinceStartup + 10f;
             while (!done && Pending.ContainsKey(album.TrackId) && Time.realtimeSinceStartup < waitUntil) yield return null;
-            loaded++;
+            if (SpriteCache.ContainsKey(album.TrackId)) loaded++;
         }
         Core.DebugLog($"{LOG_PREFIX} 자켓 {loaded}장 미리 로드 ({(DateTime.Now - started).TotalSeconds:F1}초)");
     }
@@ -127,7 +127,7 @@ public static class MediaOverrideManager
         var decode = System.Threading.Tasks.Task.Run(() =>
         {
             byte[] file = File.ReadAllBytes(path);
-            bool ok = PngDecoder.TryDecode(file, 2048, out int w, out int h, out byte[] rgba);
+            bool ok = PngDecoder.TryDecode(file, 1024, out int w, out int h, out byte[] rgba);
             return (ok, w, h, rgba);
         });
         while (!decode.IsCompleted) yield return null;
@@ -210,7 +210,7 @@ public static class MediaOverrideManager
             {
                 videoPlayer.Prepare();
             }
-            catch { }
+            catch (Exception ex) { Core.DebugLog($"{LOG_PREFIX} BGA Prepare() 예외 (무시): {ex.Message}"); }
 
             Core.DebugLog($"{LOG_PREFIX} 인게임 BGA를 '{Path.GetFileName(album.BgaPath)}'로 교체");
             return true;
