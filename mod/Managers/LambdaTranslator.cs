@@ -116,14 +116,14 @@ public static class LambdaTranslator
             IntPtr handle = GetModuleHandleW("GameAssembly.dll");
             if (handle != IntPtr.Zero) return handle;
         }
-        catch { }
+        catch (Exception ex) { Core.DebugLog($"[LambdaTranslator] GetModuleHandleW 실패: {ex.Message}"); }
         try
         {
             foreach (ProcessModule mod in Process.GetCurrentProcess().Modules)
                 if (string.Equals(mod.ModuleName, "GameAssembly.dll", StringComparison.OrdinalIgnoreCase))
                     return mod.BaseAddress;
         }
-        catch { }
+        catch (Exception ex) { Core.DebugLog($"[LambdaTranslator] Process.Modules 열거 실패: {ex.Message}"); }
         return IntPtr.Zero;
     }
 

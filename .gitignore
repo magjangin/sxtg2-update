@@ -1,6 +1,9 @@
 # Build output
 mod/bin/
 mod/obj/
+tests/*/bin/
+tests/*/obj/
+Directory.Build.props.user
 
 # Game-derived material: dumps, decompiled sources, binary slices, disassembly. Never publish.
 il2cpp_dump/

@@ -27,6 +27,7 @@ public static class CustomTrackManager
     private static readonly List<CustomAlbumInfo> Albums = new();
     private static readonly Dictionary<string, CustomAlbumInfo> ById = new(StringComparer.OrdinalIgnoreCase);
     private static System.Threading.Tasks.Task<List<ModLog.Entry>>? _scan;
+    private static long _lastHwaStamp;
 
     public static List<CustomAlbumInfo> LoadedAlbums { get { CompleteScan(); return Albums; } }
     public static Dictionary<string, CustomAlbumInfo> AlbumsByTrackId { get { CompleteScan(); return ById; } }
@@ -76,11 +77,56 @@ public static class CustomTrackManager
         }
     }
 
+    /// <summary>
+    /// hwa 폴더나 직계 하위 폴더가 변경되었으면 다시 스캔하고 true를 반환한다.
+    /// CUSTOM 탭 진입 시 호출되어 게임 재시작 없이 새 커스텀 곡을 인식한다.
+    /// </summary>
+    public static bool RefreshIfChanged()
+    {
+        CompleteScan();
+        if (string.IsNullOrEmpty(HwaFolderPath) || !Directory.Exists(HwaFolderPath))
+            return false;
+
+        long current = ComputeHwaStamp();
+        if (current == _lastHwaStamp)
+            return false;
+
+        _chart = null;
+        _chartPath = null;
+        var entries = ModLog.RunCaptured(ScanHwaFolder);
+        ModLog.Flush(entries);
+        Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더 변경 감지 → 커스텀 곡 다시 스캔 ({Albums.Count}곡)");
+        return true;
+    }
+
+    private static long ComputeHwaStamp()
+    {
+        try
+        {
+            long hash = 17;
+            hash = hash * 31 + Directory.GetLastWriteTimeUtc(HwaFolderPath).Ticks;
+            var dirs = Directory.GetDirectories(HwaFolderPath);
+            Array.Sort(dirs, StringComparer.OrdinalIgnoreCase);
+            hash = hash * 31 + dirs.Length;
+            foreach (var dir in dirs)
+            {
+                hash = hash * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(dir);
+                hash = hash * 31 + Directory.GetLastWriteTimeUtc(dir).Ticks;
+            }
+            return hash;
+        }
+        catch
+        {
+            return _lastHwaStamp;
+        }
+    }
+
     // 작업 스레드에서 돈다: Unity/IL2CPP를 부르지 않고, 로그는 ModLog로(메인 스레드에서 출력), 공개 속성 대신 필드에 쓴다.
     private static void ScanHwaFolder()
     {
         Albums.Clear();
         ById.Clear();
+        _lastHwaStamp = ComputeHwaStamp();
 
         if (!Directory.Exists(HwaFolderPath))
             return;
@@ -192,7 +238,8 @@ public static class CustomTrackManager
         var write = File.GetLastWriteTimeUtc(path);
         if (_chart != null && _chartPath == path && _chartWrite == write) return _chart;
 
-        string content = SxtgBmsConverter.NormalizeValueWidth(File.ReadAllText(path), out bool widened);
+        string rawText = TextDecoder.ReadAllText(path, TextDecoder.BmsFallback);
+        string content = SxtgBmsConverter.NormalizeValueWidth(rawText, out bool widened);
         if (widened)
             Core.DebugLog($"{LOG_PREFIX} '{Path.GetFileName(path)}'는 3자리 값(#WAV001) 차트라 2자리 값으로 변환해 읽음");
         if (SxtgBmsConverter.IsSxtgFormat(content))

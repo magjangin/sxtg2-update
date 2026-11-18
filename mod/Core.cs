@@ -22,7 +22,7 @@ using SixtarGateMod.Managers;
 using SixtarGateMod.Models;
 using SixtarGateMod.Features;
 
-[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.2.0", "화영왕 (Hwa-young-wang)")]
+[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.0", "화영왕 (Hwa-young-wang)")]
 [assembly: MelonGame("Lyrebird Studio", "Sixtar Gate STARTRAIL")]
 // OnInitializeMelon calls PatchAll itself; without this MelonLoader auto-patches too and every hook runs twice.
 [assembly: HarmonyDontPatchAll]
@@ -50,8 +50,10 @@ public class Core : MelonMod
 
     public override void OnInitializeMelon()
     {
+        var ver = typeof(Core).Assembly.GetName().Version;
+        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "2.2.0";
         LoggerInstance.Msg("==========================================================");
-        LoggerInstance.Msg(" Sixtar Gate: STARTRAIL 커스텀 차트 & 미디어 로더 v2.2.0");
+        LoggerInstance.Msg($" Sixtar Gate: STARTRAIL 커스텀 차트 & 미디어 로더 v{verText}");
         LoggerInstance.Msg(" 제작: 화영왕 (Hwa-young-wang)");
         LoggerInstance.Msg("==========================================================");
 
@@ -74,6 +76,8 @@ public class Core : MelonMod
             CustomTrackManager.CompleteScan();
         }
     }
+
+    public override void OnDeinitializeMelon() => CustomAudioManager.StopAll();
 
     // sxtg2 overlays (judgment bar, key viewer). IMGUI drawing is stripped from this game build
     // ("Method unstripping failed"), so they draw on a pooled uGUI canvas once per frame instead of OnGUI.
@@ -190,6 +194,9 @@ public class Core : MelonMod
         {
             if (string.Equals(category, CUSTOM_CATEGORY_NAME, StringComparison.OrdinalIgnoreCase))
             {
+                if (CustomTrackManager.RefreshIfChanged())
+                    cachedCustomTracks = null;
+
                 if (cachedCustomTracks == null)
                 {
                     var allTracks = __instance.GetAllTracks();
@@ -239,8 +246,7 @@ public class Core : MelonMod
             KeyViewer.ResetBindings();
             // Null-safe: an exception thrown from this prefix would abort GotoPlayScene itself (no song starts).
             if (track != null && (track.Category == CUSTOM_CATEGORY_NAME
-                                  || (track.TrackID?.StartsWith("CUSTOM_", StringComparison.Ordinal) ?? false)
-                                  || (track.DisplayName?.Contains("(Custom 1-Note)", StringComparison.Ordinal) ?? false)))
+                                  || (track.TrackID?.StartsWith("CUSTOM_", StringComparison.Ordinal) ?? false)))
             {
                 IsCustomTrackActive = true;
                 if (CustomTrackManager.FindAlbum(track.TrackID) is { } album)
@@ -490,332 +496,7 @@ public class Core : MelonMod
         }
     }
 
-    // 6. BackgroundUIProcessor Hook: Override BGA and Jacket with custom album media.
-    // The game's BGA path is VideoClip-only: <Initialize>b__2(VideoClip) assigns bgaPlayer.clip (null for a custom ID,
-    // which also flips the player back to clip mode), and PlayBGA/PauseBGA/IsVideoPlayable all bail out when clip == null.
-    // So for a custom BGA re-apply the URL after that callback and run PlayBGA/PauseBGA ourselves.
-    private static bool IsCustomBga(BackgroundUIProcessor p)
-    {
-        var album = CustomTrackManager.CurrentSelectedAlbum;
-        return IsCustomTrackActive && album != null && album.HasCustomBga && p != null && p.bgaPlayer != null;
-    }
-
-    [HarmonyPatch(typeof(BackgroundUIProcessor), nameof(BackgroundUIProcessor.Initialize))]
-    public static class BackgroundUIProcessor_Initialize_Patch
-    {
-        public static void Postfix(BackgroundUIProcessor __instance)
-        {
-            ApplyCurrentAlbumJacketDeferred(__instance.jacket, "Play.background jacket");
-            if (IsCustomBga(__instance))
-                MediaOverrideManager.OverrideBGA(__instance.bgaPlayer, CustomTrackManager.CurrentSelectedAlbum!);
-        }
-    }
-
-    [HarmonyPatch]
-    public static class BackgroundUIProcessor_VideoCallback_Patch
-    {
-        private static Func<Il2CppObjectBase, BackgroundUIProcessor?>? _getOwner;
-
-        public static MethodBase? TargetMethod()
-            => PatchResilience.FindClosureCallback(
-                typeof(BackgroundUIProcessor), "_Initialize_b__", typeof(VideoClip), out _getOwner,
-                accessedOwnerFieldName: "bgaPlayer");
-
-        public static void Postfix(Il2CppObjectBase __instance)
-        {
-            var p = _getOwner?.Invoke(__instance);
-            if (p != null && IsCustomBga(p))
-                MediaOverrideManager.OverrideBGA(p.bgaPlayer, CustomTrackManager.CurrentSelectedAlbum!);
-        }
-    }
-
-    [HarmonyPatch(typeof(BackgroundUIProcessor), nameof(BackgroundUIProcessor.IsVideoPlayable), MethodType.Getter)]
-    public static class BackgroundUIProcessor_IsVideoPlayable_Patch
-    {
-        public static void Postfix(BackgroundUIProcessor __instance, ref bool __result)
-        {
-            if (!__result && IsCustomBga(__instance)) __result = true;
-        }
-    }
-
-    [HarmonyPatch(typeof(BackgroundUIProcessor), nameof(BackgroundUIProcessor.PlayBGA))]
-    public static class BackgroundUIProcessor_PlayBGA_Patch
-    {
-        public static bool Prefix(BackgroundUIProcessor __instance)
-        {
-            if (!IsCustomBga(__instance)) return true;
-
-            // Same as the original body minus the clip == null early return.
-            __instance._isPlayStarted = true;
-            if (__instance._isReservedPause)
-            {
-                __instance._isReservedPause = false;
-                __instance._reservedDelayTime = Time.time - __instance._reservedPauseTime;
-                return false;
-            }
-
-            if (__instance.jacket != null)
-                __instance.jacket.gameObject.SetActive(false);
-
-            float delay = __instance._reservedDelayTime;
-            var player = __instance.bgaPlayer;
-            if (delay > 0f)
-            {
-                __instance._reservedDelayTime = 0f;
-                MelonCoroutines.Start(PlayAfter(player, delay));
-            }
-            else
-            {
-                player.Play();
-            }
-            DebugLog($"[MediaOverride] 커스텀 BGA 재생: 준비됨={player.isPrepared}, 지연={delay:F2}초");
-            return false;
-        }
-
-        private static System.Collections.IEnumerator PlayAfter(VideoPlayer player, float delay)
-        {
-            yield return new WaitForSeconds(delay);
-            if (player != null) player.Play();
-        }
-    }
-
-    [HarmonyPatch(typeof(BackgroundUIProcessor), nameof(BackgroundUIProcessor.PauseBGA))]
-    public static class BackgroundUIProcessor_PauseBGA_Patch
-    {
-        public static bool Prefix(BackgroundUIProcessor __instance)
-        {
-            if (!IsCustomBga(__instance)) return true;
-
-            if (!__instance._isPlayStarted)
-            {
-                __instance._isReservedPause = true;
-                __instance._reservedPauseTime = Time.time;
-                return false;
-            }
-            __instance.bgaPlayer.Pause();
-            return false;
-        }
-    }
-
-    // 7. MusicSelect Jacket Hook: Show Custom Jacket in Center TrackInfoViewer.
-    // Jackets decode asynchronously (MediaOverrideManager.RequestAlbumSprite): a synchronous LoadImage of a 1080p PNG
-    // costs ~50-100 ms of main thread per song, which stuttered every selection change.
-    [HarmonyPatch(typeof(TrackInfoViewer), nameof(TrackInfoViewer.Set), new Type[] { typeof(ITrack), typeof(TrackSelectArgs) })]
-    public static class TrackInfoViewer_Set_Patch
-    {
-        private static string? _shownTrackId;
-
-        public static void Postfix(TrackInfoViewer __instance, ITrack track, TrackSelectArgs args)
-        {
-            if (track == null) return;
-            _shownTrackId = track.TrackID;
-
-            var album = CustomTrackManager.FindAlbum(track.TrackID);
-            if (album == null || !album.HasCustomJacket) return;
-
-            var img = __instance.jacket;
-            if (img == null)
-            {
-                Melon<Core>.Logger.Warning("[MusicSelect] TrackInfoViewer에서 자켓 Image 컴포넌트를 찾지 못함");
-                return;
-            }
-
-            string trackId = track.TrackID;
-            MediaOverrideManager.RequestAlbumSprite(album, sprite =>
-            {
-                // The selection may have moved on while the PNG was decoding.
-                if (img == null || _shownTrackId != trackId) return;
-                img.sprite = sprite;
-                img.color = White;
-                img.enabled = true;
-                DebugLog($"[MusicSelect] 가운데 자켓 표시: '{album.Title}'");
-            });
-        }
-    }
-
-    // 8. Renewal list rows (TrackObject.thumbnail, the square left of each title). TrackObject.LoadThumbnail is inlined
-    // into SetTrack; its async bundle callback <LoadThumbnail>b__1 assigns the bundle sprite (null for a custom ID,
-    // leaving an empty box), so re-apply after both. Each row costs one dictionary lookup for official songs.
-    private static void ApplyListThumbnail(TrackObject? owner, ITrack? track)
-    {
-        var thumb = owner?.thumbnail;
-        if (thumb == null || track == null) return;
-        var album = CustomTrackManager.FindAlbum(track.TrackID);
-        if (album == null || !album.HasCustomJacket) return;
-        MediaOverrideManager.RequestAlbumSprite(album, sprite =>
-        {
-            if (thumb == null) return;
-            thumb.sprite = sprite;
-            thumb.color = White;
-            thumb.enabled = true;
-        });
-    }
-
-    [HarmonyPatch]
-    public static class TrackObject_LoadThumbnailCallback_Patch
-    {
-        private static Func<Il2CppObjectBase, TrackObject?>? _getOwner;
-        private static Func<Il2CppObjectBase, ITrack?>? _getTrack;
-
-        public static MethodBase? TargetMethod()
-        {
-            var m = PatchResilience.FindClosureCallback(typeof(TrackObject), "_LoadThumbnail_b__", typeof(Sprite), out _getOwner,
-                requiredClosureMembers: new[] { "track" });
-            if (m?.DeclaringType is Type closureType)
-                _getTrack = PatchResilience.CreateGetter<ITrack>(closureType, "track");
-            return m;
-        }
-
-        public static void Postfix(Il2CppObjectBase __instance)
-            => ApplyListThumbnail(_getOwner?.Invoke(__instance), _getTrack?.Invoke(__instance));
-    }
-
-    [HarmonyPatch(typeof(TrackObject), nameof(TrackObject.SetTrack), new Type[] { typeof(ITrack) })]
-    public static class TrackObject_SetTrack_Patch
-    {
-        public static void Postfix(TrackObject __instance, ITrack track) => ApplyListThumbnail(__instance, track);
-    }
-
-    // 10. Play-flow jackets (loading screen, pause popup, result screen).
-    // Each screen loads "{trackID}_jacket" / "Thumbnail" sprites from the track's asset bundle and assigns them in an
-    // async callback; for a custom trackID the bundle hands back null, leaving a white box. Re-apply after each callback.
-    private static readonly Color White = Overlay.Rgba(1f, 1f, 1f, 1f);
-
-    private static void ApplyCurrentAlbumJacket(Image? img, string where)
-    {
-        if (img == null || !IsCustomTrackActive) return;
-        var album = CustomTrackManager.CurrentSelectedAlbum;
-        if (album == null || !album.HasCustomJacket) return;
-        var sprite = MediaOverrideManager.GetOrCreateAlbumSprite(album);
-        if (sprite == null) return;
-        img.sprite = sprite;
-        img.color = White;
-        img.enabled = true;
-        DebugLog($"[Jacket] 커스텀 자켓 적용: {where}");
-    }
-
-    [HarmonyPatch(typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "OnLoadResource_Travel")]
-    public static class PlayLoading_OnLoadResource_Patch
-    {
-        public static void Postfix(Il2CppSixtarGate.PlayLoading.PlayLoadingManager __instance)
-        {
-            ApplyCurrentAlbumJacketDeferred(__instance.jacketFull, "PlayLoading.jacketFull");
-            ApplyCurrentAlbumJacketDeferred(__instance.trackThumbnail, "PlayLoading.trackThumbnail");
-        }
-    }
-
-    [HarmonyPatch]
-    [IcfShared(2, "Outer Space 판 DisplayClass35_0의 같은 람다와 공유. 두 클로저의 <>4__this 위치가 같아 어느 쪽 this로 실행돼도 안전")]
-    public static class PlayLoading_JacketCallback_Patch
-    {
-        private static Func<Il2CppObjectBase, Il2CppSixtarGate.PlayLoading.PlayLoadingManager?>? _getOwner;
-
-        public static MethodBase? TargetMethod()
-            => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner,
-                matchIndex: 0, accessedOwnerFieldName: "jacketFull");
-
-        public static void Postfix(Il2CppObjectBase __instance)
-            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.jacketFull, "PlayLoading.jacketFull (callback)");
-    }
-
-    [HarmonyPatch]
-    [IcfShared(2, "Outer Space 판 DisplayClass35_0의 같은 람다와 공유. 두 클로저의 <>4__this 위치가 같아 어느 쪽 this로 실행돼도 안전")]
-    public static class PlayLoading_ThumbnailCallback_Patch
-    {
-        private static Func<Il2CppObjectBase, Il2CppSixtarGate.PlayLoading.PlayLoadingManager?>? _getOwner;
-
-        public static MethodBase? TargetMethod()
-            => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "_OnLoadResource_Travel_b__", typeof(Sprite), out _getOwner,
-                matchIndex: 1, accessedOwnerFieldName: "trackThumbnail");
-
-        public static void Postfix(Il2CppObjectBase __instance)
-            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.trackThumbnail, "PlayLoading.trackThumbnail (callback)");
-    }
-
-    // Identical-code folding: TrackInfoViewerModule._Set_b__3_1 shares its native body with 11 other sprite
-    // callbacks (profile icon, unlock list, ...), and BackgroundUIProcessor's <Initialize>b__1 with 2 inventory
-    // thumbnail callbacks, so patching them would run our Postfix with a foreign `this`. Instead re-apply the
-    // jacket a few times after the async bundle callback has had a chance to assign null.
-    private static void ApplyCurrentAlbumJacketDeferred(Image? img, string where)
-    {
-        if (img == null || !IsCustomTrackActive) return;
-        ApplyCurrentAlbumJacket(img, where);
-        MelonCoroutines.Start(ReapplyJacket(img, where));
-    }
-
-    private static readonly float[] ReapplyDelays = { 0.1f, 0.4f, 1.0f };
-
-    private static System.Collections.IEnumerator ReapplyJacket(Image img, string where)
-    {
-        foreach (float delay in ReapplyDelays)
-        {
-            yield return new WaitForSecondsRealtime(delay);
-            if (img == null || !IsCustomTrackActive) yield break;
-            var sprite = CustomTrackManager.CurrentSelectedAlbum is { HasCustomJacket: true } album ? MediaOverrideManager.GetOrCreateAlbumSprite(album) : null;
-            if (sprite != null && img.sprite != sprite)
-            {
-                img.sprite = sprite;
-                img.color = White;
-                img.enabled = true;
-                DebugLog($"[Jacket] 비동기 로드 후 커스텀 자켓 다시 적용: {where}");
-            }
-        }
-    }
-
-    [HarmonyPatch(typeof(Il2CppSixtarGate.Play.Pause.TrackInfoViewerModule), nameof(Il2CppSixtarGate.Play.Pause.TrackInfoViewerModule.Set))]
-    public static class PauseTrackInfo_Set_Patch
-    {
-        public static void Postfix(Il2CppSixtarGate.Play.Pause.TrackInfoViewerModule __instance)
-            => ApplyCurrentAlbumJacketDeferred(__instance.jacket, "Pause.jacket");
-    }
-
-    private static void ApplyResultJackets(Il2CppSixtarGate.Result.TrackInfoModule? module)
-    {
-        ApplyCurrentAlbumJacket(module?.jacket, "Result.jacket");
-        ApplyCurrentAlbumJacket(module?.thumbnail, "Result.thumbnail");
-    }
-
-    [HarmonyPatch]
-    public static class ResultTrackInfo_Callback3_Patch
-    {
-        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TrackInfoModule?>? _getOwner;
-
-        public static MethodBase? TargetMethod()
-            => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner,
-                matchIndex: 0, accessedOwnerFieldName: "jacket");
-
-        public static void Postfix(Il2CppObjectBase __instance) => ApplyResultJackets(_getOwner?.Invoke(__instance));
-    }
-
-    [HarmonyPatch]
-    public static class ResultTrackInfo_Callback4_Patch
-    {
-        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TrackInfoModule?>? _getOwner;
-
-        public static MethodBase? TargetMethod()
-            => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.Result.TrackInfoModule), "_Show_b__", typeof(Sprite), out _getOwner,
-                matchIndex: 1, accessedOwnerFieldName: "thumbnail");
-
-        public static void Postfix(Il2CppObjectBase __instance) => ApplyResultJackets(_getOwner?.Invoke(__instance));
-    }
-
-    [HarmonyPatch]
-    public static class ResultBackground_JacketCallback_Patch
-    {
-        private static Func<Il2CppObjectBase, Il2CppSixtarGate.Result.TravelBackgroundModule?>? _getOwner;
-
-        public static MethodBase? TargetMethod()
-            => PatchResilience.FindClosureCallback(
-                typeof(Il2CppSixtarGate.Result.TravelBackgroundModule), "_InitializeModule_b__", typeof(Sprite), out _getOwner,
-                matchIndex: 0, accessedOwnerFieldName: "jacket");
-
-        public static void Postfix(Il2CppObjectBase __instance)
-            => ApplyCurrentAlbumJacket(_getOwner?.Invoke(__instance)?.jacket, "Result.background jacket");
-    }
+    // BGA patches live in Features/CustomBga.cs, jacket/thumbnail patches in Features/CustomJackets.cs.
 
     // 9. Preview & In-Game BGM: route custom track audio names to the album's local audio file.
     // MusicSelect.SoundController plays ISoundModule.Play("preview_" + trackID, BGM); no FMOD event exists
@@ -857,35 +538,6 @@ public class Core : MelonMod
 
     #endregion
 
-    #region --- 1. All Songs & DLC Unlock Hooks ---
-
-    /// <summary>Shared prefix body: report "owned / unlocked" and skip the original check (also OfflineBypass's ItemHelper).</summary>
-    internal static bool Unlocked(ref bool result)
-    {
-        if (!UnlockAllTracks) return true;
-        result = true;
-        return false;
-    }
-
-    [HarmonyPatch(typeof(ItemUnlockChecker), nameof(ItemUnlockChecker.IsUnlocked), new Type[] { typeof(string) })]
-    public static class ItemUnlockChecker_IsUnlocked_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
-
-    // Skips the Steam DLC ownership check.
-    [HarmonyPatch(typeof(ItemUnlockChecker), nameof(ItemUnlockChecker.IsDLCUnlocked), new Type[] { typeof(string) })]
-    public static class ItemUnlockChecker_IsDLCUnlocked_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
-
-    [HarmonyPatch(typeof(ItemProvideModule), nameof(ItemProvideModule.IsOwned), new Type[] { typeof(string) })]
-    public static class ItemProvideModule_IsOwned_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
-
-    [HarmonyPatch(typeof(Il2Cpp.TrackData), nameof(Il2Cpp.TrackData.IsOwned))]
-    public static class Global_TrackData_IsOwned_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
-
-    // Typed targets, not AccessTools.TypeByName: that scans every assembly and logs a yellow ReflectionTypeLoadException
-    // warning for UnityEngine.CoreModule (LightProbesQueryDisposeJob) each time.
-    [HarmonyPatch(typeof(TrackLoader.TrackData), nameof(TrackLoader.TrackData.IsOwned), MethodType.Getter)]
-    public static class TrackLoader_TrackData_IsOwned_Patch { public static bool Prefix(ref bool __result) => Unlocked(ref __result); }
-
-    #endregion
-
+    // All Songs & DLC Unlock hooks are in Features/Unlock.cs.
     // Offline Guard & Server Sync Block patches are consolidated in Features/OfflineBypass.cs.
 }
