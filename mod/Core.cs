@@ -89,6 +89,10 @@ public class Core : MelonMod
         if (!_inRenewalPlay)
             PlayAssist.EndPlay();
         CustomMarathon.OnSceneLoaded(sceneName);
+        // 커스텀 곡 Renewal_Play → Result를 게임 내부 예외 없이 지나면 이 빌드를 실기 확인으로 기록
+        // (IsCustomTrackActive는 결과 화면을 떠나는 GotoMusicSelect Postfix까지 유지됨)
+        UpdateGuard.OnSceneLoaded(sceneName, IsCustomTrackActive,
+            CustomTrackManager.CurrentSelectedAlbum?.Title ?? (IsCustomTrackActive ? "기본 1노트 곡" : null));
     }
 
     public override void OnLateUpdate()

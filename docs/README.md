@@ -69,6 +69,7 @@ docs/
 - [REVIEW_2026-11-14.md](03-development/REVIEW_2026-11-14.md): 코드 리뷰 — 부팅 병목 실측, 람다 기계어 대조를 명령 단위로(`X64Decoder`, capstone 대조), `FindMethodInType` 사전 편입, 사전 JIT 검사(`PatchPreflight`), 실기 부팅 2회
 - [REVIEW_2026-11-15.md](03-development/REVIEW_2026-11-15.md): 코드 리뷰 — 부팅 메인 스레드 비용(모듈 열거, hwa 스캔·노트 스킨 해독을 작업 스레드로), 판정바 끈 플레이의 누적, 레거시 훅 정적 호출 분석(`xrefs.py`, 유지 결정)
 - [REVIEW_2026-11-16.md](03-development/REVIEW_2026-11-16.md): 코드 리뷰 — 업데이트 지문 비교(메타데이터·UnityPlayer 크기), 부팅 끝 점검 결과 한 줄, `BuildFingerprint` 오프라인 시험
+- [REVIEW_2026-11-18.md](03-development/REVIEW_2026-11-18.md): 코드 리뷰 — 크기가 같은 변경 감지(PE 링크 시각, 메타데이터 버전·헤더 해시), 커스텀 곡 결과 화면 도달 시 실기 확인 자동 기록(`verifiedPlay`)
 
 **04-game-reference**
 - [MODE_SELECT.md](04-game-reference/MODE_SELECT.md): 모드 7종과 테마 8종

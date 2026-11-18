@@ -13,6 +13,9 @@ namespace SixtarGateMod.Managers;
 /// 2. Unity 내부 예외(Debug.LogException, 코루틴 예외 등)를 MelonLoader 로그로 전달.
 ///    게임 내부 NRE는 원래 Player.log에만 찍혀서, 오프라인 우회가 세션 모듈 초기화를 깨뜨린
 ///    BackndChat NRE를 1주일 동안 놓쳤음(2026-10-31 ~ 11-07).
+/// 3. 게임 파일 지문을 지난 실행과 비교(2026-11-16)하고, 커스텀 곡을 결과 화면까지 게임 내부 예외 없이 플레이하면
+///    그 지문을 "이 PC에서 실기 확인됨"으로 기록(2026-11-18). 소스의 <see cref="VerifiedBuilds"/>를 고치지 않아도
+///    새 빌드를 실기로 확인한 뒤에는 "검증 안 됨" 경고가 사라진다. 게임 파일이 하나라도 바뀌면 기록은 버려진다.
 /// </summary>
 public static class UpdateGuard
 {
@@ -42,11 +45,18 @@ public static class UpdateGuard
 
     public static string? CurrentBuildId { get; private set; }
 
+    /// <summary>소스의 검증 목록에 있는 빌드인지(지문 변경과 무관).</summary>
+    private static bool ListVerified => CurrentBuildId != null && VerifiedBuilds.Contains(CurrentBuildId);
+
+    /// <summary>검증 목록에 있고 지문이 그대로이거나, 지난 실행과 지문이 완전히 같고 그 지문에 실기 확인 기록이 있음.</summary>
+    private static bool IsVerified => (ListVerified && !_fingerprintChanged) || _locallyVerified != null;
+
     public static void Initialize(string gameRoot)
     {
         _gameRoot = gameRoot;
-        ReportBuild(gameRoot);
+        string gaInfo = ReportBuild(gameRoot);
         CheckFingerprint(gameRoot);
+        LogBuildVerdict(gaInfo);
         HookUnityLog();
     }
 
@@ -61,6 +71,11 @@ public static class UpdateGuard
     private static bool _fingerprintChanged;
     private static string _fingerprintChangeNote = "";
     private static Dictionary<string, string> _current = new(StringComparer.Ordinal);
+    /// <summary>지난 기록과 지문이 완전히 같을 때 그 기록의 실기 확인 값("날짜 곡"), 아니면 null.</summary>
+    private static string? _locallyVerified;
+    /// <summary>이번 실행에서 지문을 저장했는지(= 패치가 전부 붙고 필수 패치가 안 빠짐). 실기 확인 기록의 전제.</summary>
+    private static bool _stateSaved;
+    private static int _appliedPatches;
 
     private static void CheckFingerprint(string gameRoot)
     {
@@ -70,9 +85,12 @@ public static class UpdateGuard
             var previous = BuildFingerprint.Parse(File.Exists(StatePath(gameRoot)) ? File.ReadAllLines(StatePath(gameRoot)) : null);
             if (previous == null)
             {
-                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 지문 기록 없음(첫 실행): 패치가 모두 붙으면 이번 실행의 파일 크기를 기록합니다.");
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 지문 기록 없음(첫 실행): 패치가 모두 붙으면 이번 실행의 게임 파일 지문을 기록합니다.");
                 return;
             }
+            if (previous.TryGetValue(BuildFingerprint.VerifiedPlayKey, out var vp) && vp.Length > 0
+                && BuildFingerprint.SameBuild(previous, _current))
+                _locallyVerified = vp;
             var changes = BuildFingerprint.Diff(previous, _current, out bool risky);
             if (changes.Count == 0) return;
 
@@ -100,17 +118,22 @@ public static class UpdateGuard
             ["unityPlayerSize"] = SizeOf(Path.Combine(gameRoot, "UnityPlayer.dll")),
         };
         // 메타데이터는 {게임}_Data\il2cpp_data\Metadata\global-metadata.dat. 폴더 이름이 실행 파일 이름에서 오므로 *_Data를 훑는다.
-        string meta = "?";
+        string? meta = null;
         try
         {
             foreach (var dataDir in Directory.GetDirectories(gameRoot, "*_Data"))
             {
                 string f = Path.Combine(dataDir, "il2cpp_data", "Metadata", "global-metadata.dat");
-                if (File.Exists(f)) { meta = SizeOf(f); break; }
+                if (File.Exists(f)) { meta = f; break; }
             }
         }
         catch { }
-        d["metadataSize"] = meta;
+        d["metadataSize"] = meta == null ? "?" : SizeOf(meta);
+        BuildFingerprint.MetadataHeader(meta == null ? Array.Empty<byte>() : ReadHead(meta, 0x1000), out string metaVersion, out string metaHeader);
+        d["metadataVersion"] = metaVersion;
+        d["metadataHeader"] = metaHeader;
+        d["gameAssemblyStamp"] = BuildFingerprint.PeTimestamp(ReadHead(Path.Combine(gameRoot, "GameAssembly.dll"), 0x1000));
+        d["unityPlayerStamp"] = BuildFingerprint.PeTimestamp(ReadHead(Path.Combine(gameRoot, "UnityPlayer.dll"), 0x1000));
         return d;
     }
 
@@ -118,6 +141,20 @@ public static class UpdateGuard
     {
         try { var fi = new FileInfo(file); return fi.Exists ? fi.Length.ToString() : "?"; }
         catch { return "?"; }
+    }
+
+    /// <summary>파일 앞 <paramref name="max"/>바이트(헤더만, 수 KB라 부팅 비용 무시 가능). 못 읽으면 빈 배열.</summary>
+    private static byte[] ReadHead(string file, int max)
+    {
+        try
+        {
+            using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var buf = new byte[(int)Math.Min(max, fs.Length)];
+            int n = 0;
+            while (n < buf.Length) { int r = fs.Read(buf, n, buf.Length - n); if (r <= 0) break; n += r; }
+            return n == buf.Length ? buf : buf.AsSpan(0, n).ToArray();
+        }
+        catch { return Array.Empty<byte>(); }
     }
 
     /// <summary>
@@ -129,25 +166,32 @@ public static class UpdateGuard
         try
         {
             bool allApplied = skippedIcf == 0 && skippedPreflight == 0 && failed == 0;
-            bool verified = CurrentBuildId != null && VerifiedBuilds.Contains(CurrentBuildId);
+            bool verified = IsVerified;
             string verdict;
             if (criticalMissing > 0)
                 verdict = $"문제 있음: 필수 패치 {criticalMissing}개가 빠졌습니다. 게임 업데이트로 모드가 깨졌을 가능성이 큽니다 (모드 수정 필요)";
             else if (!allApplied)
                 verdict = $"일부 패치 빠짐 (ICF {skippedIcf}, 사전 JIT {skippedPreflight}, 실패 {failed}): 해당 기능만 동작하지 않습니다";
-            else if (verified && !_fingerprintChanged)
+            else if (ListVerified && !_fingerprintChanged)
                 verdict = "정상 (검증된 빌드, 패치 전부 적용)";
+            else if (_locallyVerified != null)
+                verdict = $"정상 (이 PC에서 실기 플레이로 확인된 빌드: {_locallyVerified}, 패치 전부 적용)";
             else
                 verdict = "패치는 전부 붙었지만 이 빌드의 동작은 검증되지 않았습니다: 커스텀 곡 1곡을 결과 화면까지 플레이해 확인하세요" +
                           (_fingerprintChanged ? $" (달라진 것: {_fingerprintChangeNote})" : "");
 
-            if (criticalMissing > 0 || !allApplied || !verified || _fingerprintChanged)
+            if (criticalMissing > 0 || !allApplied || !verified)
                 Melon<Core>.Logger.Warning($"{LOG_PREFIX} 업데이트 점검 결과: {verdict}");
             else
                 Melon<Core>.Logger.Msg($"{LOG_PREFIX} 업데이트 점검 결과: {verdict}");
 
+            _appliedPatches = applied;
             if (_gameRoot != null && criticalMissing == 0 && allApplied && _current.Count > 0)
-                SaveState(_gameRoot, applied);
+            {
+                // 지문이 그대로면 실기 확인 기록을 이어받고, 바뀌었으면(_locallyVerified == null) 버린다.
+                SaveState(_gameRoot, applied, _locallyVerified);
+                _stateSaved = true;
+            }
         }
         catch (Exception ex)
         {
@@ -155,25 +199,28 @@ public static class UpdateGuard
         }
     }
 
-    private static void SaveState(string gameRoot, int applied)
+    private static void SaveState(string gameRoot, int applied, string? verifiedPlay)
     {
         string path = StatePath(gameRoot);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var lines = BuildFingerprint.Format(_current, applied, DateTime.Now);
+        var lines = BuildFingerprint.Format(_current, applied, DateTime.Now, verifiedPlay);
         string tmp = path + ".tmp";
         File.WriteAllLines(tmp, lines);
         File.Move(tmp, path, true);
     }
 
-    private static void ReportBuild(string gameRoot)
+    /// <summary>빌드 ID를 정하고(매니페스트 + GameAssembly 크기 대조) 어긋남만 경고한다. 검증 여부 줄은 지문을 본 뒤
+    /// <see cref="LogBuildVerdict"/>가 찍는다(이 PC의 실기 확인 기록이 있으면 "검증 안 됨" 경고를 내지 않으려고).</summary>
+    private static string ReportBuild(string gameRoot)
     {
+        string gaInfo = "";
         try
         {
             // {steamapps}\common\{게임} → {steamapps}\appmanifest_1802720.acf
             string? steamapps = Directory.GetParent(gameRoot)?.Parent?.FullName;
             string acf = steamapps == null ? "" : Path.Combine(steamapps, $"appmanifest_{SteamAppId}.acf");
             var ga = new FileInfo(Path.Combine(gameRoot, "GameAssembly.dll"));
-            string gaInfo = ga.Exists ? $"GameAssembly {ga.Length:N0}바이트, {ga.LastWriteTime:yyyy-MM-dd HH:mm}" : "GameAssembly 없음";
+            gaInfo = ga.Exists ? $"GameAssembly {ga.Length:N0}바이트, {ga.LastWriteTime:yyyy-MM-dd HH:mm}" : "GameAssembly 없음";
             string? sizeMatch = null;
             if (ga.Exists)
                 foreach (var kv in VerifiedGameAssemblySizes)
@@ -183,11 +230,8 @@ public static class UpdateGuard
             {
                 // DepotDownloader 등 매니페스트 없는 설치: 바이너리 크기로만 판별
                 CurrentBuildId = sizeMatch;
-                if (sizeMatch != null)
-                    Melon<Core>.Logger.Msg($"{LOG_PREFIX} Steam 매니페스트 없음, GameAssembly 크기로 빌드 {sizeMatch} 확인 (실기 검증된 빌드, {gaInfo})");
-                else
-                    Melon<Core>.Logger.Warning($"{LOG_PREFIX} Steam 매니페스트({acf})가 없고 GameAssembly 크기도 검증된 빌드와 다름 ({gaInfo}). 검증되지 않은 빌드로 봅니다.");
-                return;
+                gaInfo = $"Steam 매니페스트 없음 → GameAssembly 크기로 판별, {gaInfo}";
+                return gaInfo;
             }
 
             var m = Regex.Match(File.ReadAllText(acf), "\"buildid\"\\s+\"(\\d+)\"");
@@ -202,22 +246,76 @@ public static class UpdateGuard
                     "매니페스트를 고쳤거나 게임 파일이 바뀐 것입니다.");
                 CurrentBuildId = sizeMatch ?? CurrentBuildId + "?"; // "?"를 붙여 검증 목록과 안 맞게 함
             }
-
-            if (CurrentBuildId != null && VerifiedBuilds.Contains(CurrentBuildId))
-            {
-                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 게임 빌드 {CurrentBuildId} (실기 검증된 빌드, {gaInfo})");
-            }
-            else
-            {
-                Melon<Core>.Logger.Warning(
-                    $"{LOG_PREFIX} 검증되지 않은 게임 빌드 {CurrentBuildId ?? "?"} ({gaInfo}). " +
-                    $"검증된 빌드: {string.Join(", ", VerifiedBuilds)}. " +
-                    "커스텀 곡 1곡을 결과 화면까지 플레이해 보고, 개발 중이면 tools/version_diff/check_update.ps1로 변경점을 확인하세요.");
-            }
         }
         catch (Exception ex)
         {
             Melon<Core>.Logger.Warning($"{LOG_PREFIX} 빌드 확인 실패: {ex.Message}");
+        }
+        return gaInfo;
+    }
+
+    private static void LogBuildVerdict(string gaInfo)
+    {
+        if (ListVerified)
+            Melon<Core>.Logger.Msg($"{LOG_PREFIX} 게임 빌드 {CurrentBuildId} (실기 검증된 빌드, {gaInfo})");
+        else if (_locallyVerified != null)
+            Melon<Core>.Logger.Msg($"{LOG_PREFIX} 게임 빌드 {CurrentBuildId ?? "?"} ({gaInfo}): 검증 목록에는 없지만 이 PC에서 실기 플레이로 확인된 지문 ({_locallyVerified})");
+        else
+            Melon<Core>.Logger.Warning(
+                $"{LOG_PREFIX} 검증되지 않은 게임 빌드 {CurrentBuildId ?? "?"} ({gaInfo}). " +
+                $"검증된 빌드: {string.Join(", ", VerifiedBuilds)}. " +
+                "커스텀 곡 1곡을 결과 화면까지 플레이하면(게임 내부 예외 없이) 이 PC에 확인으로 기록됩니다. 개발 중이면 tools/version_diff/check_update.ps1로 변경점을 확인하세요.");
+    }
+
+    // ---- 실기 플레이 확인 기록 (2026-11-18) ----
+    // 씬 흐름(실측): PlayLoading → Renewal_Play → Loading → Result. 플레이 중 그만두면 Renewal_Play → Loading → MusicSelect.
+    // 커스텀 곡으로 Renewal_Play에 들어간 뒤 Result에 닿을 때까지 게임 내부 예외(Exception/Assert 로그)가 0건이면
+    // 문서의 "커스텀 곡 1곡을 결과 화면까지 플레이" 확인과 같은 것으로 보고 지문 파일에 기록한다.
+
+    private static int _unityExceptionCount;
+    private static int _playStartExceptions = -1; // -1 = 진행 중인 커스텀 플레이 없음
+    private static bool _recordedThisRun;
+
+    /// <summary>Core.OnSceneWasLoaded에서 매 씬마다 호출.</summary>
+    public static void OnSceneLoaded(string sceneName, bool customTrackActive, string? trackTitle)
+    {
+        try
+        {
+            if (string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase))
+            {
+                _playStartExceptions = customTrackActive ? _unityExceptionCount : -1;
+                return;
+            }
+            if (string.Equals(sceneName, "Loading", StringComparison.OrdinalIgnoreCase)) return; // 플레이 → 결과 사이의 로딩 씬
+            int start = _playStartExceptions;
+            _playStartExceptions = -1;
+            if (start < 0 || !customTrackActive || !string.Equals(sceneName, "Result", StringComparison.OrdinalIgnoreCase)) return;
+
+            int during = _unityExceptionCount - start;
+            if (during > 0)
+            {
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 커스텀 곡 플레이 중 게임 내부 예외 {during}건: 이 빌드를 실기 확인으로 기록하지 않습니다 (위의 '게임 내부 예외' 줄 참조).");
+                return;
+            }
+            if (!_stateSaved || _gameRoot == null)
+            {
+                Core.DebugLog($"{LOG_PREFIX} 패치가 일부 빠진 실행이라 실기 확인으로 기록하지 않음");
+                return;
+            }
+            if (_recordedThisRun || (ListVerified && !_fingerprintChanged)) return; // 이미 확인된 빌드: 파일을 다시 쓸 이유 없음
+
+            string note = $"{DateTime.Now:yyyy-MM-dd HH:mm} {(string.IsNullOrWhiteSpace(trackTitle) ? "(제목 없음)" : trackTitle)}";
+            SaveState(_gameRoot, _appliedPatches, note);
+            _recordedThisRun = true;
+            bool first = _locallyVerified == null;
+            _locallyVerified = note;
+            if (first)
+                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 커스텀 곡을 결과 화면까지 예외 없이 플레이: 이 빌드({CurrentBuildId ?? "?"})를 이 PC에서 실기 확인된 지문으로 기록했습니다. " +
+                                       "개발 중이면 UpdateGuard.VerifiedBuilds와 AGENTS.md에도 적으세요.");
+        }
+        catch (Exception ex)
+        {
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} 실기 확인 기록 실패: {ex.Message}");
         }
     }
 
@@ -237,6 +335,7 @@ public static class UpdateGuard
     private static void OnUnityLog(string condition, string stackTrace, LogType type)
     {
         if (type != LogType.Exception && type != LogType.Assert) return;
+        _unityExceptionCount++; // 같은 예외 반복·상한 초과로 출력을 생략해도 세기는 한다(실기 확인 기록 판정용)
         try
         {
             string firstFrame = FirstLine(stackTrace);
@@ -252,7 +351,7 @@ public static class UpdateGuard
             _seen.Add(key);
             Melon<Core>.Logger.Warning($"{LOG_PREFIX} 게임 내부 예외: {condition}" +
                                         (firstFrame.Length > 0 ? $"\n    위치: {firstFrame}" : "") +
-                                        (CurrentBuildId != null && !VerifiedBuilds.Contains(CurrentBuildId) ? "\n    (검증되지 않은 빌드에서 발생)" : ""));
+                                        (!IsVerified ? "\n    (검증되지 않은 빌드에서 발생)" : ""));
         }
         catch
         {

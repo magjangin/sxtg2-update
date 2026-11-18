@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using SixtarGateMod.Managers;
 
 var dll = File.ReadAllBytes(args[0]);
@@ -132,6 +133,54 @@ if (args.Length > 1)
     var oldNoMeta = BuildFingerprint.Parse(new[] { "buildId=26455233" })!;
     var d4 = BuildFingerprint.Diff(oldNoMeta, same, out bool r4);
     FP("옛 기록에 없는 항목은 비교 안 함", d4.Count == 0 && !r4);
+
+    // ---- 2026-11-18: PE 링크 시각·메타데이터 헤더·실기 확인 기록 ----
+    string stamp = BuildFingerprint.PeTimestamp(dll.AsSpan(0, 0x1000));
+    Console.WriteLine($"     GameAssembly.dll PE TimeDateStamp = {stamp}");
+    FP("실제 GameAssembly.dll → PE 링크 시각 읽힘", stamp != "?" && stamp.Length == 8);
+    FP("PE가 아닌 바이트 → ?", BuildFingerprint.PeTimestamp(new byte[0x200]) == "?" && BuildFingerprint.PeTimestamp(default) == "?");
+    var badPe = (byte[])dll[..0x200].Clone(); BitConverter.GetBytes(0x7FFFFFF0).CopyTo(badPe, 0x3C);
+    FP("e_lfanew가 범위 밖 → ?", BuildFingerprint.PeTimestamp(badPe) == "?");
+
+    var hdr = new byte[0x100];
+    BitConverter.GetBytes(0xFAB11BAFu).CopyTo(hdr, 0); BitConverter.GetBytes(31).CopyTo(hdr, 4); BitConverter.GetBytes(0x100).CopyTo(hdr, 8);
+    BuildFingerprint.MetadataHeader(hdr, out var mv, out var mh);
+    var hdr2 = (byte[])hdr.Clone(); hdr2[0x20] ^= 1; // 섹션 크기 하나가 바뀜
+    BuildFingerprint.MetadataHeader(hdr2, out var mv2, out var mh2);
+    FP("메타데이터 헤더: 버전 31, 섹션 표가 바뀌면 해시가 바뀜", mv == "31" && mv2 == "31" && mh != "?" && mh != mh2);
+    BuildFingerprint.MetadataHeader(new byte[64], out var mvBad, out var mhBad);
+    FP("메타데이터 sanity 불일치 → ?", mvBad == "?" && mhBad == "?");
+    // 실제 메타데이터: <게임>\*_Data\il2cpp_data\Metadata\global-metadata.dat
+    string? gameDir = Path.GetDirectoryName(Path.GetFullPath(args[0]));
+    string? realMeta = gameDir == null ? null : Directory.GetDirectories(gameDir, "*_Data")
+        .Select(d => Path.Combine(d, "il2cpp_data", "Metadata", "global-metadata.dat")).FirstOrDefault(File.Exists);
+    if (realMeta != null)
+    {
+        var head = new byte[0x1000];
+        using (var fs = File.OpenRead(realMeta)) { int got = 0; while (got < head.Length) { int r = fs.Read(head, got, head.Length - got); if (r <= 0) break; got += r; } }
+        BuildFingerprint.MetadataHeader(head, out var rv, out var rh);
+        Console.WriteLine($"     global-metadata.dat 버전 {rv}, 헤더 해시 {rh}");
+        FP("실제 global-metadata.dat → 버전 31", rv == "31" && rh != "?");
+    }
+
+    var full = new Dictionary<string, string>(same)
+    {
+        ["gameAssemblyStamp"] = "ABCD1234", ["metadataVersion"] = "31", ["metadataHeader"] = "0123456789ABCDEF", ["unityPlayerStamp"] = "11112222",
+    };
+    var saved = BuildFingerprint.Parse(BuildFingerprint.Format(full, 118, new DateTime(2026, 11, 18), "2026-11-18 10:00 il vento d'oro\r\nx=y"))!;
+    FP("실기 확인 기록 저장 → 읽기 (줄바꿈 제거)", saved[BuildFingerprint.VerifiedPlayKey] == "2026-11-18 10:00 il vento d'oro  x=y" && !saved.ContainsKey("x"));
+    FP("기록 없으면 verifiedPlay 줄 없음", !BuildFingerprint.Parse(BuildFingerprint.Format(full, 1, DateTime.Now))!.ContainsKey(BuildFingerprint.VerifiedPlayKey));
+    FP("같은 지문 → SameBuild", BuildFingerprint.SameBuild(saved, full));
+    FP("링크 시각만 바뀜(크기 같음) → SameBuild 아님 + Diff 1건",
+        !BuildFingerprint.SameBuild(saved, new Dictionary<string, string>(full) { ["gameAssemblyStamp"] = "ABCD1235" })
+        && BuildFingerprint.Diff(saved, new Dictionary<string, string>(full) { ["gameAssemblyStamp"] = "ABCD1235" }, out _).Count == 1);
+    FP("옛 기록(새 키 없음) → SameBuild 아님 (실기 확인 이어받지 않음)", !BuildFingerprint.SameBuild(prev, full));
+    FP("GameAssembly 링크 시각을 못 읽음(?) → SameBuild 아님",
+        !BuildFingerprint.SameBuild(new Dictionary<string, string>(full) { ["gameAssemblyStamp"] = "?" }, new Dictionary<string, string>(full) { ["gameAssemblyStamp"] = "?" }));
+    FP("매니페스트 없는 설치(buildId ?끼리) → SameBuild",
+        BuildFingerprint.SameBuild(new Dictionary<string, string>(full) { ["buildId"] = "?" }, new Dictionary<string, string>(full) { ["buildId"] = "?" }));
+    FP("UnityPlayer 링크 시각 변경 → 위험",
+        BuildFingerprint.Diff(full, new Dictionary<string, string>(full) { ["unityPlayerStamp"] = "33334444" }, out bool rUp).Count == 1 && rUp);
 }
 void FP(string name, bool ok) { if (!ok) fail++; Console.WriteLine($"{(ok ? "OK  " : "FAIL")} {name}"); }
 
