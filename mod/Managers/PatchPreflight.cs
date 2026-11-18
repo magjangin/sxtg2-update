@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
@@ -188,7 +189,7 @@ public static class PatchPreflight
                     return false;
             }
         }
-        catch (Exception ex) when (ex is MissingMemberException or TypeLoadException or BadImageFormatException)
+        catch (Exception ex) when (ex is MissingMemberException or TypeLoadException or BadImageFormatException or FileNotFoundException or FileLoadException)
         {
             resolveError ??= $"{ex.GetType().Name}: {ex.Message}";
         }

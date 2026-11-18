@@ -94,12 +94,12 @@ public static class X64Decoder
                 modrm = true; break;
             case 0x86: case 0x87: // xchg: 둘 다
                 modrm = true; regWritesDst = 3; break;
-            case 0x69: modrm = true; regWritesDst = 1; imm = opSize16 ? 2 : 4; break;
+            case 0x69: modrm = true; regWritesDst = 1; imm = (!w && opSize16) ? 2 : 4; break;
             case 0x6B: modrm = true; regWritesDst = 1; imm = 1; break;
             case 0x80: case 0x82: case 0x83: case 0xC0: case 0xC1: case 0xC6:
                 modrm = true; regWritesDst = 2; imm = 1; break;
             case 0x81: case 0xC7:
-                modrm = true; regWritesDst = 2; imm = opSize16 ? 2 : 4; break;
+                modrm = true; regWritesDst = 2; imm = (!w && opSize16) ? 2 : 4; break;
             case 0xD0: case 0xD1: case 0xD2: case 0xD3: case 0xFE:
                 modrm = true; regWritesDst = 2; break;
             case 0x8F: modrm = true; regWritesDst = 2; break; // pop r/m
@@ -117,12 +117,12 @@ public static class X64Decoder
             case 0x68: imm = 4; break;
             case 0x6A: imm = 1; break;
             case 0xA8: imm = 1; break;
-            case 0xA9: imm = opSize16 ? 2 : 4; break;
+            case 0xA9: imm = (!w && opSize16) ? 2 : 4; break;
             case 0x04: case 0x0C: case 0x14: case 0x1C: case 0x24: case 0x2C: case 0x34: case 0x3C:
                 imm = 1; insn.Writes = 1 << 0; break;
             case 0x05: case 0x0D: case 0x15: case 0x1D: case 0x25: case 0x2D: case 0x35:
-                imm = opSize16 ? 2 : 4; insn.Writes = 1 << 0; break;
-            case 0x3D: imm = opSize16 ? 2 : 4; break; // cmp eax, imm
+                imm = (!w && opSize16) ? 2 : 4; insn.Writes = 1 << 0; break;
+            case 0x3D: imm = (!w && opSize16) ? 2 : 4; break; // cmp eax, imm
             // 문자열 명령(rep movs/stos/lods/scas/cmps): rdi·rsi·rcx·rax를 덮었다고 본다
             case 0xA4: case 0xA5: case 0xA6: case 0xA7: case 0xAA: case 0xAB: case 0xAC: case 0xAD: case 0xAE: case 0xAF:
                 insn.Writes = (1 << 0) | (1 << 1) | (1 << 6) | (1 << 7); break;
@@ -142,7 +142,7 @@ public static class X64Decoder
             if (op == 0xF6 || op == 0xF7)
             {
                 int sub = insn.Reg & 7;
-                if (sub <= 1) imm = op == 0xF6 ? 1 : (opSize16 ? 2 : 4); // test r/m, imm
+                if (sub <= 1) imm = op == 0xF6 ? 1 : ((!w && opSize16) ? 2 : 4); // test r/m, imm
                 else if (sub == 2 || sub == 3) regWritesDst = 2;          // not/neg
                 else insn.Writes |= (1 << 0) | (1 << 2);                  // mul/div → rax, rdx
             }
@@ -280,9 +280,10 @@ public static class X64Decoder
             i += 2;
         }
         if (i >= code.Length) return false;
-        i++; // 옵코드
+        byte vop = code[i++]; // 옵코드
         if (!ReadModRm(code, ref i, rexR, 0, rexB, ref insn)) return false;
-        if (map == 3) i += 1; // 0F 3A 계열 ib
+        if (map == 3 || (map == 1 && (vop == 0x70 || vop == 0xC2 || vop == 0xC4 || vop == 0xC5 || vop == 0xC6)))
+            i += 1; // 0F 3A 계열 및 0F 계열 AVX imm8(vpshuf*/vcmp*/vpinsrw/vpextrw/vshufp*)
         if (i > code.Length) return false;
         insn.Writes |= 1 << insn.Reg;
         if (insn.Mod == 3) insn.Writes |= 1 << insn.Rm;

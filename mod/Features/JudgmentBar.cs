@@ -120,7 +120,17 @@ public static class JudgmentBar
     {
         var key = (shape, w, h);
         if (ShapeCache.TryGetValue(key, out var cached) && cached != null) return cached;
-        if (ShapeCache.Count > 64) ShapeCache.Clear();
+        if (ShapeCache.Count > 64)
+        {
+            foreach (var s in ShapeCache.Values)
+            {
+                if (s == null) continue;
+                var t = s.texture;
+                UnityEngine.Object.Destroy(s);
+                if (t != null) UnityEngine.Object.Destroy(t);
+            }
+            ShapeCache.Clear();
+        }
 
         float radius = Math.Min(w, h) / 2f;
         float ax, ay, bx, by;

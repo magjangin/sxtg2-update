@@ -75,13 +75,14 @@ public static class IcfScanner
     }
 
     /// <summary>
-    /// 주소를 공유하는 메서드 수(대상 자신 포함). 모르면 0.
+    /// 주소를 공유하는 메서드 수(대상 자신 포함).
+    /// 검사 불가(Available==false)면 0, 스캔은 했지만 대상 목록에 없던 미스캔 주소면 -1.
     /// </summary>
     public static int GetShareCount(IntPtr nativeCode, out string sharers)
     {
         sharers = "";
         if (!Available || nativeCode == IntPtr.Zero) return 0;
-        if (!_byRva.TryGetValue(nativeCode.ToInt64() - _base.ToInt64(), out var e)) return 0;
+        if (!_byRva.TryGetValue(nativeCode.ToInt64() - _base.ToInt64(), out var e)) return -1;
         sharers = e.Sharers;
         return e.Count;
     }
@@ -207,7 +208,9 @@ public static class IcfScanner
                 sb.Append('\n');
             }
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
+            string tmp = path + ".tmp";
+            File.WriteAllText(tmp, sb.ToString(), new UTF8Encoding(false));
+            File.Move(tmp, path, overwrite: true);
         }
         catch (Exception ex)
         {

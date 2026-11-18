@@ -45,6 +45,23 @@ public static class UpdateGuard
 
     public static string? CurrentBuildId { get; private set; }
 
+    /// <summary>
+    /// LambdaTranslator·IcfScanner 캐시 무효화용 통합 지문.
+    /// mtime 대신 PE 링크 시각과 global-metadata.dat 헤더 해시를 써서 폴더 복사 시 불필요한 재스캔을 막고,
+    /// 크기가 같은 바이너리/메타데이터 교체도 즉시 감지한다.
+    /// </summary>
+    public static string BinaryFingerprint
+    {
+        get
+        {
+            string build = _current.TryGetValue("buildId", out var b) ? b : (CurrentBuildId ?? "?");
+            string gaSize = _current.TryGetValue("gameAssemblySize", out var gs) ? gs : "?";
+            string gaStamp = _current.TryGetValue("gameAssemblyStamp", out var gt) ? gt : "?";
+            string metaHead = _current.TryGetValue("metadataHeader", out var mh) ? mh : "?";
+            return $"{build}|{gaSize}|{gaStamp}|{metaHead}";
+        }
+    }
+
     /// <summary>소스의 검증 목록에 있는 빌드인지(지문 변경과 무관).</summary>
     private static bool ListVerified => CurrentBuildId != null && VerifiedBuilds.Contains(CurrentBuildId);
 

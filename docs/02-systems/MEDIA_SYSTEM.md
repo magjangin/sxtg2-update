@@ -1,6 +1,6 @@
 # 자켓과 BGA
 
-코드: `Managers/MediaOverrideManager.cs`, `Loaders/PngDecoder.cs`, `Core.cs` 6~10번 영역
+코드: `Managers/MediaOverrideManager.cs`, `Loaders/PngDecoder.cs`, `Features/CustomBga.cs`, `Features/CustomJackets.cs`
 
 ## 자켓 로딩
 

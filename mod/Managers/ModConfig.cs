@@ -227,11 +227,15 @@ public static class ModConfig
             for (int i = 0; i < lines.Length; i++)
             {
                 string t = lines[i].Trim();
+                int eq = t.IndexOf('=');
+                if (eq <= 0) continue;
+                string k = t.Substring(0, eq).Trim();
                 foreach (var key in new[] { "Sudden", "Hidden", "FadeIn", "FadeOut" })
                 {
-                    if (!t.StartsWith(key + "=", StringComparison.OrdinalIgnoreCase)) continue;
-                    string v = t.Substring(key.Length + 1).Trim();
+                    if (!string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) continue;
+                    string v = t.Substring(eq + 1).Trim();
                     if (v != "0") { lines[i] = key + "=0"; changed = true; }
+                    break;
                 }
             }
             if (changed)
@@ -301,7 +305,9 @@ public static class ModConfig
             var f = new float[4] { 0, 0, 0, 1 };
             bool ok = true;
             for (int i = 0; i < parts.Length; i++)
-                ok &= float.TryParse(parts[i].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out f[i]);
+            {
+                ok &= float.TryParse(parts[i].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out f[i]) && float.IsFinite(f[i]);
+            }
             if (ok)
             {
                 if (f[0] > 1f || f[1] > 1f || f[2] > 1f || f[3] > 1f)
@@ -309,7 +315,13 @@ public static class ModConfig
                     for (int i = 0; i < 3; i++) f[i] = Math.Clamp(f[i] / 255f, 0f, 1f);
                     if (f[3] > 1f) f[3] = Math.Clamp(f[3] / 255f, 0f, 1f);
                 }
-                return new Color { r = f[0], g = f[1], b = f[2], a = f[3] };
+                return new Color
+                {
+                    r = Math.Clamp(f[0], 0f, 1f),
+                    g = Math.Clamp(f[1], 0f, 1f),
+                    b = Math.Clamp(f[2], 0f, 1f),
+                    a = Math.Clamp(f[3], 0f, 1f)
+                };
             }
         }
 

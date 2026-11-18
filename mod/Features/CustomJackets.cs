@@ -60,15 +60,21 @@ public static class CustomJackets
     // Renewal list rows (TrackObject.thumbnail, the square left of each title). TrackObject.LoadThumbnail is inlined
     // into SetTrack; its async bundle callback <LoadThumbnail>b__1 assigns the bundle sprite (null for a custom ID,
     // leaving an empty box), so re-apply after both. Each row costs one dictionary lookup for official songs.
+    private static readonly Dictionary<IntPtr, string> _rowTrackIds = new();
+
     private static void ApplyListThumbnail(TrackObject? owner, ITrack? track)
     {
         var thumb = owner?.thumbnail;
-        if (thumb == null || track == null) return;
-        var album = CustomTrackManager.FindAlbum(track.TrackID);
+        if (owner == null || thumb == null || track == null) return;
+        string trackId = track.TrackID ?? "";
+        IntPtr ownerPtr = owner.Pointer;
+        _rowTrackIds[ownerPtr] = trackId;
+        var album = CustomTrackManager.FindAlbum(trackId);
         if (album == null || !album.HasCustomJacket) return;
         MediaOverrideManager.RequestAlbumSprite(album, sprite =>
         {
-            if (thumb == null) return;
+            if (owner == null || thumb == null) return;
+            if (!_rowTrackIds.TryGetValue(ownerPtr, out var cur) || cur != trackId) return;
             thumb.sprite = sprite;
             thumb.color = White;
             thumb.enabled = true;
@@ -87,7 +93,7 @@ public static class CustomJackets
                 requiredClosureMembers: new[] { "track" });
             if (m?.DeclaringType is Type closureType)
                 _getTrack = PatchResilience.CreateGetter<ITrack>(closureType, "track");
-            return m;
+            return (_getOwner != null && _getTrack != null) ? m : null;
         }
 
         public static void Postfix(Il2CppObjectBase __instance)
@@ -166,11 +172,15 @@ public static class CustomJackets
 
     private static System.Collections.IEnumerator ReapplyJacket(Image img, string where)
     {
+        string? trackId = CustomTrackManager.CurrentSelectedAlbum?.TrackId;
+        if (string.IsNullOrEmpty(trackId)) yield break;
         foreach (float delay in ReapplyDelays)
         {
             yield return new WaitForSecondsRealtime(delay);
             if (img == null || !Core.IsCustomTrackActive) yield break;
-            var sprite = CustomTrackManager.CurrentSelectedAlbum is { HasCustomJacket: true } album ? MediaOverrideManager.GetOrCreateAlbumSprite(album) : null;
+            var album = CustomTrackManager.CurrentSelectedAlbum;
+            if (album == null || !album.HasCustomJacket || album.TrackId != trackId) yield break;
+            var sprite = MediaOverrideManager.GetOrCreateAlbumSprite(album);
             if (sprite != null && img.sprite != sprite)
             {
                 img.sprite = sprite;

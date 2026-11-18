@@ -68,4 +68,17 @@ public class SxtgBmsConverterTests
         Assert.Contains("#WAV10 bgm.ogg", normalized);
         Assert.Contains("#00116:01000203", normalized);
     }
+
+    [Fact]
+    public void NormalizeValueWidth_PreservesMeasureLengthChannel02()
+    {
+        string sxtg3 = "#WAV001 note.wav\n#00102:0.5\n#00202:1.5\n#00116:001000\n";
+
+        string normalized = SxtgBmsConverter.NormalizeValueWidth(sxtg3, out bool changed);
+
+        Assert.True(changed);
+        Assert.Contains("#00102:0.5", normalized);
+        Assert.Contains("#00202:1.5", normalized);
+        Assert.Contains("#00116:0100", normalized);
+    }
 }

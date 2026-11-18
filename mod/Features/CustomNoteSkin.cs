@@ -76,6 +76,7 @@ public static class CustomNoteSkin
     /// </summary>
     public static void PrepareForPlay()
     {
+        ResetForNewPlay();
         if (!_loaded && ModConfig.CustomNotes && !ModConfig.RandomNoteSkin) EnsureLoaded();
     }
 

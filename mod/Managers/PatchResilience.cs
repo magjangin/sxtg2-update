@@ -79,7 +79,7 @@ public static class PatchResilience
             }
 
             var targets = new List<(MethodBase, IntPtr)>();
-            foreach (var target in ResolveDeclaredTargets(type))
+            foreach (var target in ResolveDeclaredTargets(type, logger))
             {
                 if (target == null) continue;
                 IntPtr code = GetNativeCodePointer(target);
@@ -95,7 +95,10 @@ public static class PatchResilience
                 if (resolve() is { } m && GetNativeCodePointer(m) is var code && code != IntPtr.Zero)
                     addresses.Add(code);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                logger.Warning($"[Harmony/ICFGuard] 동적 패치 대상 수집 중 예외 (실행 시 재확인됨): {ex.Message}");
+            }
         }
 
         // 2) 그 주소들을 다른 메서드가 같이 쓰는지 런타임에서 센다(같은 빌드면 캐시).
@@ -193,6 +196,12 @@ public static class PatchResilience
             return false;
         }
         int shared = IcfScanner.GetShareCount(code, out string sharers);
+        if (shared < 0)
+        {
+            Melon<Core>.Logger.Warning(
+                $"[Harmony/ICFGuard] '{target.DeclaringType?.Name}.{target.Name}' ({IcfScanner.Rva(code)})는 부팅 ICF 스캔 대상에 없던 주소입니다 — 빈 스텁 검사만 통과함");
+            return true;
+        }
         if (shared > allowed)
         {
             reason = $"네이티브 주소 {IcfScanner.Rva(code)}를 메서드 {shared}개가 공유함(허용 {allowed}개, 예: {sharers}). " +
@@ -206,7 +215,7 @@ public static class PatchResilience
     public static bool IsSafeToPatchNow(MethodBase target, out string reason)
         => IsSafeNativeTarget(target, GetNativeCodePointer(target), 1, out reason);
 
-    private static List<MethodBase?> ResolveDeclaredTargets(Type patchType)
+    private static List<MethodBase?> ResolveDeclaredTargets(Type patchType, MelonLogger.Instance logger)
     {
         var list = new List<MethodBase?>();
         try
@@ -261,9 +270,10 @@ public static class PatchResilience
                     list.Add(resolved);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Let Harmony report any resolution error during CreateClassProcessor.
+            var inner = ex is TargetInvocationException tie && tie.InnerException != null ? tie.InnerException : ex;
+            logger.Warning($"[Harmony] '{patchType.Name}' 대상 메서드 탐색 중 예외: {inner.GetType().Name}: {inner.Message}");
         }
         return list;
     }

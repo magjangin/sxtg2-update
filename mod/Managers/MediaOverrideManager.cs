@@ -133,34 +133,54 @@ public static class MediaOverrideManager
     // stripped from the game build ("Method not found").
     private static System.Collections.IEnumerator LoadAsync(CustomAlbumInfo album)
     {
-        string path = Path.GetFullPath(album.JacketPath!);
-        var decode = System.Threading.Tasks.Task.Run(() =>
-        {
-            byte[] file = File.ReadAllBytes(path);
-            bool ok = PngDecoder.TryDecode(file, 1024, out int w, out int h, out byte[] rgba);
-            return (ok, w, h, rgba);
-        });
-        while (!decode.IsCompleted) yield return null;
-
         Sprite? sprite = null;
-        if (decode.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && decode.Result.ok)
+        try
         {
-            var (_, w, h, rgba) = decode.Result;
-            var tex = TextureFromRgba(w, h, rgba);
-            if (tex != null)
-                sprite = Features.Overlay.MakeSprite(tex);
-        }
+            string? path = null;
+            try { path = Path.GetFullPath(album.JacketPath!); }
+            catch (Exception ex) { Melon<Core>.Logger.Warning($"{LOG_PREFIX} 자켓 경로 확인 실패 ({album.Title}): {ex.Message}"); }
 
-        // JPG, 16-bit / interlaced PNG or a failed upload: synchronous decoder.
-        sprite ??= LoadSpriteFromFile(album.JacketPath!);
-        if (sprite != null) SpriteCache[album.TrackId] = sprite;
-        else Failed.Add(album.TrackId);
-        if (Pending.Remove(album.TrackId, out var callbacks) && sprite != null)
-        {
-            foreach (var cb in callbacks)
+            if (path != null)
             {
-                try { cb(sprite); }
-                catch (Exception ex) { Melon<Core>.Logger.Warning($"{LOG_PREFIX} 자켓 콜백 실패: {ex.Message}"); }
+                var decode = System.Threading.Tasks.Task.Run(() =>
+                {
+                    byte[] file = File.ReadAllBytes(path);
+                    bool ok = PngDecoder.TryDecode(file, 1024, out int w, out int h, out byte[] rgba);
+                    return (ok, w, h, rgba);
+                });
+                while (!decode.IsCompleted) yield return null;
+
+                if (decode.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && decode.Result.ok)
+                {
+                    try
+                    {
+                        var (_, w, h, rgba) = decode.Result;
+                        var tex = TextureFromRgba(w, h, rgba);
+                        if (tex != null)
+                            sprite = Features.Overlay.MakeSprite(tex);
+                    }
+                    catch (Exception ex)
+                    {
+                        Melon<Core>.Logger.Warning($"{LOG_PREFIX} 자켓 텍스처 업로드 실패 ({album.Title}): {ex.Message}");
+                    }
+                }
+
+                // JPG, 16-bit / interlaced PNG or a failed upload: synchronous decoder.
+                sprite ??= LoadSpriteFromFile(album.JacketPath!);
+            }
+
+            if (sprite != null) SpriteCache[album.TrackId] = sprite;
+            else Failed.Add(album.TrackId);
+        }
+        finally
+        {
+            if (Pending.Remove(album.TrackId, out var callbacks) && sprite != null)
+            {
+                foreach (var cb in callbacks)
+                {
+                    try { cb(sprite); }
+                    catch (Exception ex) { Melon<Core>.Logger.Warning($"{LOG_PREFIX} 자켓 콜백 실패: {ex.Message}"); }
+                }
             }
         }
     }

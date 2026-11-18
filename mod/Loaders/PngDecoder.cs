@@ -33,11 +33,12 @@ public static class PngDecoder
             int len = ReadInt(file, pos);
             string type = System.Text.Encoding.ASCII.GetString(file, pos + 4, 4);
             int data = pos + 8;
-            if (len < 0 || data + len > file.Length) return false;
+            if (len < 0 || len > file.Length - data - 4) return false;
 
             switch (type)
             {
                 case "IHDR":
+                    if (len < 13) return false;
                     w = ReadInt(file, data);
                     h = ReadInt(file, data + 4);
                     int bitDepth = file[data + 8];
@@ -61,11 +62,18 @@ public static class PngDecoder
             if (type == "IEND") break;
             pos = data + len + 4; // skip CRC
         }
-        if (w <= 0 || h <= 0 || (colorType == 3 && palette == null)) return false;
+        if (w <= 0 || h <= 0 || w > 16384 || h > 16384) return false;
+        if (colorType == 3 && palette == null) return false;
+        // 컬러 타입 0(회색조)·2(RGB)의 tRNS 투명색 키는 미지원이므로 Unity 폴백으로 넘긴다.
+        if (paletteAlpha != null && (colorType == 0 || colorType == 2)) return false;
 
         int channels = colorType switch { 0 => 1, 2 => 3, 3 => 1, 4 => 2, _ => 4 };
-        int stride = w * channels;
-        var raw = new byte[(stride + 1) * h];
+        long strideLong = (long)w * channels;
+        long rawLenLong = (strideLong + 1) * h;
+        long pixLenLong = (long)w * h * 4;
+        if (rawLenLong > int.MaxValue || pixLenLong > int.MaxValue) return false;
+        int stride = (int)strideLong;
+        var raw = new byte[(int)rawLenLong];
         idat.Position = 0;
         using (var z = new ZLibStream(idat, CompressionMode.Decompress))
         {
@@ -86,6 +94,7 @@ public static class PngDecoder
         {
             int rowStart = y * (stride + 1);
             int filter = raw[rowStart];
+            if ((uint)filter > 4u) return false;
             Buffer.BlockCopy(raw, rowStart + 1, cur, 0, stride);
             for (int x = 0; x < stride; x++)
             {
