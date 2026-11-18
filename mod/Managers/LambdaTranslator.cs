@@ -704,9 +704,9 @@ public static class LambdaTranslator
     private static string? RvaMismatch(MethodInfo method, LambdaEntry cached)
     {
         if (_gameAssemblyBase == IntPtr.Zero) return null;
-        if (string.IsNullOrEmpty(cached.RvaHex)) return "저장된 RVA 없음";
         IntPtr code = PatchResilience.GetNativeCodePointer(method);
         if (code == IntPtr.Zero) return null;
+        if (string.IsNullOrEmpty(cached.RvaHex)) return "저장된 RVA 없음";
         string now = $"0x{code.ToInt64() - _gameAssemblyBase.ToInt64():X}";
         return string.Equals(now, cached.RvaHex, StringComparison.OrdinalIgnoreCase) ? null : $"RVA {cached.RvaHex} → {now}";
     }
@@ -946,9 +946,7 @@ public static class LambdaTranslator
         sb.AppendLine("  }");
         sb.AppendLine("}");
         // 쓰는 도중 게임이 꺼져도 사전이 반쪽이 되지 않게 임시 파일에 쓰고 바꿔치기
-        string tmp = _cacheFilePath + ".tmp";
-        File.WriteAllText(tmp, sb.ToString(), new UTF8Encoding(false));
-        File.Move(tmp, _cacheFilePath, overwrite: true);
+        AtomicFile.WriteAllText(_cacheFilePath, sb.ToString());
         _cachedBuildFingerprint = _currentBuildFingerprint;
         _retranslating = false;
         _dirty = false;

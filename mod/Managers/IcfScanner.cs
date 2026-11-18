@@ -207,10 +207,7 @@ public static class IcfScanner
                 if (e.Sharers.Length > 0) sb.Append('|').Append(e.Sharers);
                 sb.Append('\n');
             }
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            string tmp = path + ".tmp";
-            File.WriteAllText(tmp, sb.ToString(), new UTF8Encoding(false));
-            File.Move(tmp, path, overwrite: true);
+            AtomicFile.WriteAllText(path, sb.ToString());
         }
         catch (Exception ex)
         {

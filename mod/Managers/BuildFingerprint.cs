@@ -6,7 +6,7 @@ namespace SixtarGateMod.Managers;
 
 /// <summary>
 /// 게임 파일 지문(빌드 ID·파일 크기·PE 링크 시각·메타데이터 헤더)의 비교와 저장 형식. MelonLoader·IL2CPP에 의존하지 않는
-/// 순수 함수라 <c>tools/lambdascan</c>에서 오프라인으로 시험한다. 읽고 쓰는 쪽은 <see cref="UpdateGuard"/>.
+/// 순수 함수라 <c>tests/SixtarGateMod.Tests/BuildFingerprintTests.cs</c>와 <c>tools/lambdascan</c>에서 오프라인으로 시험한다. 읽고 쓰는 쪽은 <see cref="UpdateGuard"/>.
 /// </summary>
 public static class BuildFingerprint
 {
@@ -49,6 +49,8 @@ public static class BuildFingerprint
     /// 실기 확인 기록을 이어받아도 되는지: 지문 키가 양쪽에 모두 있고 전부 같아야 한다(<see cref="Diff"/>와 달리 빠진 키를 봐주지 않음).
     /// "?"끼리는 같다고 보되(매니페스트 없는 설치의 buildId 등), 바이너리를 직접 가리키는 키는 반드시 읽혀 있어야 한다.
     /// </summary>
+    private static readonly string[] RequiredBinaryKeys = { "gameAssemblySize", "gameAssemblyStamp", "metadataHeader" };
+
     public static bool SameBuild(IReadOnlyDictionary<string, string> previous, IReadOnlyDictionary<string, string> current)
     {
         foreach (var (key, _, _) in Keys)
@@ -56,7 +58,7 @@ public static class BuildFingerprint
             if (!current.TryGetValue(key, out string? now) || !previous.TryGetValue(key, out string? before)) return false;
             if (now != before) return false;
         }
-        foreach (var key in new[] { "gameAssemblySize", "gameAssemblyStamp", "metadataHeader" })
+        foreach (var key in RequiredBinaryKeys)
             if (current[key] == "?") return false;
         return true;
     }

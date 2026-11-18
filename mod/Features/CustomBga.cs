@@ -97,7 +97,7 @@ public static class CustomBga
         private static System.Collections.IEnumerator PlayAfter(VideoPlayer player, float delay)
         {
             yield return new WaitForSeconds(delay);
-            if (player != null && player.isActiveAndEnabled && Core.IsCustomTrackActive && PlayAssist.IsPlaying)
+            if (player != null && player.isActiveAndEnabled && Core.IsCustomTrackActive)
                 player.Play();
         }
     }

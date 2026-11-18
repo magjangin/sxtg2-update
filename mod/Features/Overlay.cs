@@ -62,6 +62,7 @@ public static class Overlay
     private static Sprite? _whiteSprite;
     private static bool _failed;
 
+    public static readonly Color White = Rgba(1f, 1f, 1f, 1f);
     public static float ScreenWidth { get; private set; }
     public static float ScreenHeight => _screenH;
 
@@ -203,7 +204,7 @@ public static class Overlay
         _rootRect = _root.GetComponent<RectTransform>();
 
         var tex = new Texture2D(1, 1);
-        tex.SetPixel(0, 0, Rgba(1f, 1f, 1f, 1f));
+        tex.SetPixel(0, 0, White);
         tex.Apply();
         tex.hideFlags = HideFlags.DontUnloadUnusedAsset;
         _whiteSprite = MakeSprite(tex);

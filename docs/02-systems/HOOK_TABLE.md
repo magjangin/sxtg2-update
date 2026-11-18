@@ -53,11 +53,12 @@
 | `Features/PlayAssist.cs` | `PlayRecordModule` | `RecordCoursePlayData` | Prefix | `0x7C1570` |
 | `Features/PlayAssist.cs` | `PlayRecordModule` | `RecordLicensePlayData` | Prefix | `0x7C1900` |
 | `Features/PlayAssist.cs` | `PlayRecordModule` | `RecordPlayData` | Prefix | `0x7C2E10` |
-| `Features/PlayAssist.cs` | `ScoreProcessor` | `UpdateScore` | Prefix/Postfix | `0x65F980` |
+| `Features/PlayAssist.cs` | `ScoreProcessor` | `UpdateScore` | Prefix/Postfix/Finalizer | `0x65F980` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `ChangeVolume` | Postfix | `0x7DF860` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `GetTimelinePosition` | Postfix | `0x7E05F0` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `Pause` | Prefix | `0x7E0E40` |
-| `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `Resume` (두 오버로드) | Prefix | `0x7E1920`, `0x7E19D0` |
+| `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `Resume(SoundChannel)` | Prefix | `0x7E1920` |
+| `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `Resume(SoundChannel, float)` | Prefix | `0x7E19D0` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `Stop` | Prefix | `0x7E2190` |
 | `Managers/CustomAudioManager.cs` | `SoundModuleForFMOD` | `set_CurrectionVolume` | Postfix | `0x7E27B0` |
 
