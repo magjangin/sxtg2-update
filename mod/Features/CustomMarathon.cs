@@ -68,7 +68,19 @@ public static class CustomMarathon
     public static void OnSceneLoaded(string sceneName)
     {
         if (!IsActive) return;
-        if (sceneName == "Result") { _resultShownAt = Time.time; _autoAdvanced = false; _banner = ""; }
+        if (string.Equals(sceneName, "Result", StringComparison.OrdinalIgnoreCase))
+        {
+            _resultShownAt = Time.time;
+            _autoAdvanced = false;
+            _bannerSecond = -1;
+            _banner = "";
+        }
+        else if (!_startingNext && sceneName.IndexOf("MusicSelect", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            IsActive = false;
+            _resultShownAt = -1f;
+            Queue.Clear();
+        }
     }
 
     /// <summary>GotoMusicSelect prefix: returns true when the next marathon song was started instead.</summary>

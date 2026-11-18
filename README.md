@@ -107,11 +107,18 @@ Mono 시절 모드 **sxtg2**의 기능을 현재 IL2CPP 빌드로 옮겼습니�
 
 ## 직접 빌드하기
 
-`mod\SixtarGateMod.csproj`는 게임 폴더의 MelonLoader DLL을 참조합니다(`HintPath`). 게임 경로가 다르면 csproj의 경로를 바꾸세요.
+`mod\SixtarGateMod.csproj`는 `$(GameDir)` 아래의 MelonLoader·Interop DLL을 참조합니다(기본값 `H:\steam\steamapps\common\Sixtar Gate STARTRAIL`). 게임 경로가 다르면 환경변수 `SIXTAR_GAME_DIR`을 설정하거나 `mod\Directory.Build.props.user`에서 `<GameDir>`을 덮어쓰세요.
 
 ```powershell
 dotnet build mod\SixtarGateMod.csproj
-Copy-Item mod\bin\Debug\net6.0\SixtarGateMod.dll "{게임 폴더}\Mods\" -Force
+```
+
+`$(GameDir)\Mods` 폴더가 있으면 빌드 후 `SixtarGateMod.dll`을 자동으로 복사합니다(건너뛰려면 `-p:SkipDeploy=true`).
+
+순수 모듈 단위 테스트(게임 DLL 불필요):
+
+```powershell
+dotnet test tests\SixtarGateMod.Tests\SixtarGateMod.Tests.csproj
 ```
 
 로그는 `{게임 폴더}\MelonLoader\Latest.log`에 남습니다. 시작할 때 `[Harmony] 패치 N개 모두 적용 완료`가 보이면 정상입니다.
@@ -120,11 +127,12 @@ Copy-Item mod\bin\Debug\net6.0\SixtarGateMod.dll "{게임 폴더}\Mods\" -Force
 
 ```
 mod/
-├── Core.cs                 진입점, CUSTOM 탭, 차트/미디어 주입, 오프라인 가드
-├── Features/               플레이 보조 (PlayAssist), 판정바, 키뷰어, 오버레이, 노트 효과, 스킨, 마라톤
-├── Managers/               커스텀 곡 스캔, 오디오(FMOD Core 스트림), 자켓/영상, 설정 파일
+├── Core.cs                 진입점, CUSTOM 탭, 플레이 진입, 차트 주입, 곡 끝, 프리뷰
+├── Features/               플레이 보조, 오프라인 우회, 해금, 자켓/BGA, 판정바, 키뷰어, 오버레이, 노트 효과, 스킨, 마라톤
+├── Managers/               커스텀 곡 스캔, 오디오(FMOD Core 스트림), 자켓/영상, 설정 파일, 업데이트 내성
 ├── Loaders/                BMS 길이/BPM 읽기, sxtg2 → 게임 BMS 변환, PNG 디코더, 곡 정보
 └── Models/
+tests/SixtarGateMod.Tests/  순수 모듈 xUnit 단위 테스트 (CI 연동)
 AGENTS.md                   기술 인수인계 문서 (훅 목록, 설계 이유, 실패한 시도)
 docs/                       주제별 문서 (docs/README.md부터)
 tools/datadump/             게임 데이터 확인용 UnityPy 스크립트

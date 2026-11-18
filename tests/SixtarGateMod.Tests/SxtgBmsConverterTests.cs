@@ -20,6 +20,13 @@ public class SxtgBmsConverterTests
     }
 
     [Fact]
+    public void IsSxtgFormat_DetectsSxtgLongNotesWithCrlf()
+    {
+        string bms = "#BPM 160\r\n#00111:02000300\r\n#00114:0005\r\n";
+        Assert.True(SxtgBmsConverter.IsSxtgFormat(bms));
+    }
+
+    [Fact]
     public void Convert_MapsShortNotesToGameChannels()
     {
         // sxtg2: 16(LL)->11, 11(L)->12, 12(R)->18, 13(RR)->19, 14(LT)->13, 15(RT)->15, 18(GATE)->14
