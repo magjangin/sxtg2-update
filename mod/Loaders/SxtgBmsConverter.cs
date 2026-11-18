@@ -129,23 +129,17 @@ public static class SxtgBmsConverter
             int len = end - pos;
             if (len > 0 && content[end - 1] == '\r') len--;
             var span = content.AsSpan(pos, len).Trim();
-            if (span.Length >= 7 && span[0] == '#' && span.IndexOf(':') == 6)
+            if (TryParseDataSpan(span, out int ch, out var data))
             {
-                var m = NoteLine.Match(span.ToString());
-                if (m.Success)
+                if (ch == 19 || (ch >= 50 && ch <= 59))
+                    return false; // game-native channels present
+                if (ch == 16) usesSxtgOnly = true;
+                if (ch >= 11 && ch <= 18)
                 {
-                    int ch = int.Parse(m.Groups[2].Value);
-                    if (ch == 19 || (ch >= 50 && ch <= 59))
-                        return false; // game-native channels present
-                    if (ch == 16) usesSxtgOnly = true;
-                    if (ch >= 11 && ch <= 18)
+                    for (int i = 0; i + 1 < data.Length; i += 2)
                     {
-                        string data = m.Groups[3].Value;
-                        for (int i = 0; i + 1 < data.Length; i += 2)
-                        {
-                            if (data[i] == '0' && (data[i + 1] == '2' || data[i + 1] == '3' || data[i + 1] == '5'))
-                                usesSxtgOnly = true;
-                        }
+                        if (data[i] == '0' && (data[i + 1] == '2' || data[i + 1] == '3' || data[i + 1] == '5'))
+                            usesSxtgOnly = true;
                     }
                 }
             }
@@ -153,6 +147,21 @@ public static class SxtgBmsConverter
             pos = nl + 1;
         }
         return usesSxtgOnly;
+    }
+
+    private static bool TryParseDataSpan(ReadOnlySpan<char> span, out int channel, out ReadOnlySpan<char> data)
+    {
+        channel = 0;
+        data = ReadOnlySpan<char>.Empty;
+        if (span.Length < 8 || span[0] != '#' || span[6] != ':') return false;
+        for (int i = 1; i <= 5; i++)
+            if (span[i] < '0' || span[i] > '9') return false;
+        var rawData = span.Slice(7);
+        for (int i = 0; i < rawData.Length; i++)
+            if (char.IsWhiteSpace(rawData[i])) return false;
+        channel = (span[4] - '0') * 10 + (span[5] - '0');
+        data = rawData;
+        return true;
     }
 
     public static string Convert(string content, out int convertedNotes)
@@ -211,7 +220,12 @@ public static class SxtgBmsConverter
         return output.ToString();
     }
 
-    private static int Lcm(int a, int b) => a / Gcd(a, b) * b;
+    private static int Lcm(int a, int b)
+    {
+        if (a <= 0 || b <= 0) return Math.Max(1, Math.Max(a, b));
+        long res = (long)a / Gcd(a, b) * b;
+        return res > 1_000_000 ? a : (int)res;
+    }
 
     private static int Gcd(int a, int b)
     {

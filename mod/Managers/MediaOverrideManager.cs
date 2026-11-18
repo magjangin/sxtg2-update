@@ -65,6 +65,9 @@ public static class MediaOverrideManager
         MelonCoroutines.Start(LoadAsync(album));
     }
 
+    /// <summary>Clears failed jacket records so newly fixed image files can be retried after a folder refresh.</summary>
+    public static void ClearFailed() => Failed.Clear();
+
     /// <summary>Decodes every custom jacket in the background, one request at a time, so browsing never waits.</summary>
     public static void PreloadAll(IEnumerable<CustomAlbumInfo> albums)
     {
@@ -77,16 +80,23 @@ public static class MediaOverrideManager
     {
         var started = DateTime.Now;
         int loaded = 0;
-        foreach (var album in albums)
+        try
         {
-            if (!album.HasCustomJacket || SpriteCache.ContainsKey(album.TrackId) || Failed.Contains(album.TrackId)) continue;
-            bool done = false;
-            RequestAlbumSprite(album, _ => done = true);
-            float waitUntil = Time.realtimeSinceStartup + 10f;
-            while (!done && Pending.ContainsKey(album.TrackId) && Time.realtimeSinceStartup < waitUntil) yield return null;
-            if (SpriteCache.ContainsKey(album.TrackId)) loaded++;
+            foreach (var album in albums)
+            {
+                if (!album.HasCustomJacket || SpriteCache.ContainsKey(album.TrackId) || Failed.Contains(album.TrackId)) continue;
+                bool done = false;
+                RequestAlbumSprite(album, _ => done = true);
+                float waitUntil = Time.realtimeSinceStartup + 10f;
+                while (!done && Pending.ContainsKey(album.TrackId) && Time.realtimeSinceStartup < waitUntil) yield return null;
+                if (SpriteCache.ContainsKey(album.TrackId)) loaded++;
+            }
+            Core.DebugLog($"{LOG_PREFIX} 자켓 {loaded}장 미리 로드 ({(DateTime.Now - started).TotalSeconds:F1}초)");
         }
-        Core.DebugLog($"{LOG_PREFIX} 자켓 {loaded}장 미리 로드 ({(DateTime.Now - started).TotalSeconds:F1}초)");
+        finally
+        {
+            _preloading = false;
+        }
     }
 
     private static bool _rawUploadBroken;

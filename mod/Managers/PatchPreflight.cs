@@ -40,6 +40,13 @@ public static class PatchPreflight
 
     public static int MethodsChecked => Verdicts.Count;
 
+    /// <summary>부팅 시 패치 적용이 끝난 뒤 IL 파싱 캐시와 옵코드 테이블을 비워 메모리를 회수한다.</summary>
+    public static void TrimStartupCaches()
+    {
+        CalleeCache.Clear();
+        _opcodes = null;
+    }
+
     /// <summary>
     /// 패치 클래스(중첩 형식 포함)와 그것이 부르는 모드 내부 메서드를 미리 JIT. 문제가 없으면 null, 있으면 사유.
     /// </summary>

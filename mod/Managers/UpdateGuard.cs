@@ -283,7 +283,7 @@ public static class UpdateGuard
     {
         try
         {
-            var check = _playTracker.OnScene(sceneName, customTrackActive, _unityExceptionCount, out int during);
+            var check = _playTracker.OnScene(sceneName, customTrackActive, System.Threading.Volatile.Read(ref _unityExceptionCount), out int during);
             if (check == PlayCheck.None) return;
             string title = string.IsNullOrWhiteSpace(trackTitle) ? "(제목 없음)" : trackTitle!;
             if (check == PlayCheck.ExceptionsDuring)
@@ -331,7 +331,7 @@ public static class UpdateGuard
     private static void OnUnityLog(string condition, string stackTrace, LogType type)
     {
         if (type != LogType.Exception && type != LogType.Assert) return;
-        _unityExceptionCount++; // 같은 예외 반복·상한 초과로 출력을 생략해도 세기는 한다(실기 확인 기록 판정용)
+        System.Threading.Interlocked.Increment(ref _unityExceptionCount); // 같은 예외 반복·상한 초과로 출력을 생략해도 세기는 한다(실기 확인 기록 판정용)
         try
         {
             string firstFrame = FirstLine(stackTrace);

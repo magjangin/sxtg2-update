@@ -93,6 +93,7 @@ public static class CustomTrackManager
 
         _chart = null;
         _chartPath = null;
+        MediaOverrideManager.ClearFailed();
         var entries = ModLog.RunCaptured(ScanHwaFolder);
         ModLog.Flush(entries);
         Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더 변경 감지 → 커스텀 곡 다시 스캔 ({Albums.Count}곡)");
@@ -132,8 +133,10 @@ public static class CustomTrackManager
             return;
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var albumFolders = new List<string> { HwaFolderPath };
-        albumFolders.AddRange(Directory.GetDirectories(HwaFolderPath));
+        var subDirs = Directory.GetDirectories(HwaFolderPath);
+        Array.Sort(subDirs, StringComparer.OrdinalIgnoreCase);
+        var albumFolders = new List<string>(1 + subDirs.Length) { HwaFolderPath };
+        albumFolders.AddRange(subDirs);
 
         int scanCount = 0;
         foreach (var folder in albumFolders)
