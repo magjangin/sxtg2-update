@@ -181,6 +181,32 @@ if (args.Length > 1)
         BuildFingerprint.SameBuild(new Dictionary<string, string>(full) { ["buildId"] = "?" }, new Dictionary<string, string>(full) { ["buildId"] = "?" }));
     FP("UnityPlayer 링크 시각 변경 → 위험",
         BuildFingerprint.Diff(full, new Dictionary<string, string>(full) { ["unityPlayerStamp"] = "33334444" }, out bool rUp).Count == 1 && rUp);
+
+    // ---- VerifiedPlayTracker: 2026-11-18 실기 로그의 씬 순서 그대로 ----
+    PlayCheck Run(params (string scene, bool custom, int exc)[] seq)
+    {
+        var t = new VerifiedPlayTracker();
+        PlayCheck last = PlayCheck.None;
+        foreach (var (scene, custom, exc) in seq) { var c = t.OnScene(scene, custom, exc, out _); if (c != PlayCheck.None) last = c; }
+        return last;
+    }
+    var boot = new[] { ("_BOOT", false, 0), ("Warning", false, 0), ("Splash", false, 0), ("MainTitle", false, 0), ("ModeSelect_2021Xmas", false, 0), ("Loading", false, 0), ("MusicSelect", false, 0) };
+    FP("실측: 커스텀 곡 PlayLoading → Renewal_Play → Loading → Result (예외 0) → Passed",
+        Run(boot.Concat(new[] { ("PlayLoading", true, 0), ("Renewal_Play", true, 0), ("Loading", true, 0), ("Result", true, 0) }).ToArray()) == PlayCheck.Passed);
+    FP("플레이 중 예외 2건 → ExceptionsDuring",
+        Run(("Renewal_Play", true, 3), ("Loading", true, 5), ("Result", true, 5)) == PlayCheck.ExceptionsDuring);
+    FP("부팅 때 예외는 플레이 판정에 안 셈",
+        Run(("MusicSelect", false, 4), ("Renewal_Play", true, 4), ("Loading", true, 4), ("Result", true, 4)) == PlayCheck.Passed);
+    FP("중간에 그만둠(Renewal_Play → Loading → MusicSelect) → None",
+        Run(("Renewal_Play", true, 0), ("Loading", true, 0), ("MusicSelect", false, 0)) == PlayCheck.None);
+    FP("그만둔 뒤 결과 화면 없이 다시 Result 씬 → None (Renewal_Play 없이)",
+        Run(("Renewal_Play", true, 0), ("MusicSelect", false, 0), ("Result", true, 0)) == PlayCheck.None);
+    FP("공식 곡 → None", Run(("Renewal_Play", false, 0), ("Loading", false, 0), ("Result", false, 0)) == PlayCheck.None);
+    FP("마라톤 두 곡 연속 → 두 번째도 판정",
+        new VerifiedPlayTracker() is var mt
+        && mt.OnScene("Renewal_Play", true, 0, out _) == PlayCheck.None && mt.OnScene("Result", true, 0, out _) == PlayCheck.Passed
+        && mt.OnScene("PlayLoading", true, 0, out _) == PlayCheck.None && mt.OnScene("Renewal_Play", true, 0, out _) == PlayCheck.None
+        && mt.OnScene("Loading", true, 1, out _) == PlayCheck.None && mt.OnScene("Result", true, 1, out int marDuring) == PlayCheck.ExceptionsDuring && marDuring == 1);
 }
 void FP(string name, bool ok) { if (!ok) fail++; Console.WriteLine($"{(ok ? "OK  " : "FAIL")} {name}"); }
 

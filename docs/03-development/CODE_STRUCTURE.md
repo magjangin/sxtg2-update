@@ -24,8 +24,8 @@
 | `Features/JudgmentBar.cs` | 161 | 판정바 (히스토리 수명 관리 및 플레이 종료 시 리셋) |
 | `Loaders/TrackInfoParser.cs` | 160 | info.txt / trackinfo.txt (한국어/영어/중국어/일본어 키, `:`/`：`, 첫 값 채택, 부제·채보자 키 무시), `NormalizeMetadataText` |
 | `Loaders/PngDecoder.cs` | 158 | 관리 코드 PNG 디코더 |
-| `Managers/UpdateGuard.cs` | 368 | Steam 매니페스트 빌드 확인, 지난 실행 지문 비교·저장, 패치 후 점검 결과 한 줄, Unity 내부 예외 포워딩·개수 세기, 커스텀 곡 결과 화면 도달 시 실기 확인 기록 |
-| `Managers/BuildFingerprint.cs` | 126 | 지문(크기·PE 링크 시각·메타데이터 버전/헤더 해시) 비교·`SameBuild`·읽기·쓰기 순수 함수(`tools/lambdascan`에서 시험) |
+| `Managers/UpdateGuard.cs` | 364 | Steam 매니페스트 빌드 확인, 지난 실행 지문 비교·저장, 패치 후 점검 결과 한 줄, Unity 내부 예외 포워딩·개수 세기, 커스텀 곡 결과 화면 도달 시 실기 확인 기록 |
+| `Managers/BuildFingerprint.cs` | 164 | 지문(크기·PE 링크 시각·메타데이터 버전/헤더 해시) 비교·`SameBuild`·읽기·쓰기, 실기 플레이 판정 `VerifiedPlayTracker` 순수 함수(`tools/lambdascan`에서 시험) |
 | `Features/KeyViewer.cs` | 143 | 키뷰어 |
 | `Features/CustomMarathon.cs` | 141 | 마라톤 |
 | `Managers/NativeLambdaScan.cs` | 141 | 람다 x64 본문에서 클로저 → 소유자 → 대상 필드 로드를 명령 단위로 레지스터를 따라 찾는 순수 함수 (`tools/lambdascan`으로 오프라인 시험) |

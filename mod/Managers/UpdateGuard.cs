@@ -173,7 +173,7 @@ public static class UpdateGuard
             else if (!allApplied)
                 verdict = $"일부 패치 빠짐 (ICF {skippedIcf}, 사전 JIT {skippedPreflight}, 실패 {failed}): 해당 기능만 동작하지 않습니다";
             else if (ListVerified && !_fingerprintChanged)
-                verdict = "정상 (검증된 빌드, 패치 전부 적용)";
+                verdict = "정상 (검증된 빌드, 패치 전부 적용" + (_locallyVerified != null ? $", 이 PC 실기 확인: {_locallyVerified})" : ")");
             else if (_locallyVerified != null)
                 verdict = $"정상 (이 PC에서 실기 플레이로 확인된 빌드: {_locallyVerified}, 패치 전부 적용)";
             else
@@ -271,9 +271,11 @@ public static class UpdateGuard
     // 씬 흐름(실측): PlayLoading → Renewal_Play → Loading → Result. 플레이 중 그만두면 Renewal_Play → Loading → MusicSelect.
     // 커스텀 곡으로 Renewal_Play에 들어간 뒤 Result에 닿을 때까지 게임 내부 예외(Exception/Assert 로그)가 0건이면
     // 문서의 "커스텀 곡 1곡을 결과 화면까지 플레이" 확인과 같은 것으로 보고 지문 파일에 기록한다.
+    // 처음 판(77036d2)은 검증 목록에 이미 있는 빌드면 로그도 없이 건너뛰어서, 실제로 플레이해도 결과를 알 수 없었다
+    // (2026-11-18 실기). 지금은 검증 목록과 무관하게 항상 기록하고 판정을 로그로 남긴다.
 
     private static int _unityExceptionCount;
-    private static int _playStartExceptions = -1; // -1 = 진행 중인 커스텀 플레이 없음
+    private static readonly VerifiedPlayTracker _playTracker = new();
     private static bool _recordedThisRun;
 
     /// <summary>Core.OnSceneWasLoaded에서 매 씬마다 호출.</summary>
@@ -281,37 +283,31 @@ public static class UpdateGuard
     {
         try
         {
-            if (string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase))
+            var check = _playTracker.OnScene(sceneName, customTrackActive, _unityExceptionCount, out int during);
+            if (check == PlayCheck.None) return;
+            string title = string.IsNullOrWhiteSpace(trackTitle) ? "(제목 없음)" : trackTitle!;
+            if (check == PlayCheck.ExceptionsDuring)
             {
-                _playStartExceptions = customTrackActive ? _unityExceptionCount : -1;
-                return;
-            }
-            if (string.Equals(sceneName, "Loading", StringComparison.OrdinalIgnoreCase)) return; // 플레이 → 결과 사이의 로딩 씬
-            int start = _playStartExceptions;
-            _playStartExceptions = -1;
-            if (start < 0 || !customTrackActive || !string.Equals(sceneName, "Result", StringComparison.OrdinalIgnoreCase)) return;
-
-            int during = _unityExceptionCount - start;
-            if (during > 0)
-            {
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 커스텀 곡 플레이 중 게임 내부 예외 {during}건: 이 빌드를 실기 확인으로 기록하지 않습니다 (위의 '게임 내부 예외' 줄 참조).");
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 커스텀 곡 '{title}' 플레이 중 게임 내부 예외 {during}건: 이 빌드를 실기 확인으로 기록하지 않습니다 (위의 '게임 내부 예외' 줄 참조).");
                 return;
             }
             if (!_stateSaved || _gameRoot == null)
             {
-                Core.DebugLog($"{LOG_PREFIX} 패치가 일부 빠진 실행이라 실기 확인으로 기록하지 않음");
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 커스텀 곡 '{title}'이 결과 화면까지 갔지만, 이번 실행은 패치가 일부 빠져서 실기 확인으로 기록하지 않습니다.");
                 return;
             }
-            if (_recordedThisRun || (ListVerified && !_fingerprintChanged)) return; // 이미 확인된 빌드: 파일을 다시 쓸 이유 없음
+            if (_recordedThisRun)
+            {
+                Core.DebugLog($"{LOG_PREFIX} 커스텀 곡 '{title}' 결과 화면 도달 (이번 실행은 이미 기록함)");
+                return;
+            }
 
-            string note = $"{DateTime.Now:yyyy-MM-dd HH:mm} {(string.IsNullOrWhiteSpace(trackTitle) ? "(제목 없음)" : trackTitle)}";
+            string note = $"{DateTime.Now:yyyy-MM-dd HH:mm} {title}";
             SaveState(_gameRoot, _appliedPatches, note);
             _recordedThisRun = true;
-            bool first = _locallyVerified == null;
             _locallyVerified = note;
-            if (first)
-                Melon<Core>.Logger.Msg($"{LOG_PREFIX} 커스텀 곡을 결과 화면까지 예외 없이 플레이: 이 빌드({CurrentBuildId ?? "?"})를 이 PC에서 실기 확인된 지문으로 기록했습니다. " +
-                                       "개발 중이면 UpdateGuard.VerifiedBuilds와 AGENTS.md에도 적으세요.");
+            Melon<Core>.Logger.Msg($"{LOG_PREFIX} 커스텀 곡 '{title}'을 결과 화면까지 게임 내부 예외 없이 플레이: 빌드 {CurrentBuildId ?? "?"}의 지문을 이 PC에서 실기 확인된 것으로 기록 ({StateFileName}의 {BuildFingerprint.VerifiedPlayKey}=)" +
+                                   (ListVerified ? "" : ". 개발 중이면 UpdateGuard.VerifiedBuilds와 AGENTS.md에도 적으세요."));
         }
         catch (Exception ex)
         {
