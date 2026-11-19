@@ -74,6 +74,7 @@ public static class OfflineBypass
         public static bool Prefix(BackEndWebRequest __instance)
         {
             if (!Core.BlockServerUpload) return true;
+            if (__instance == null) return false;
 
             try
             {
@@ -94,7 +95,7 @@ public static class OfflineBypass
             catch (Exception ex)
             {
                 Melon<Core>.Logger.Warning($"[OfflineBypass] 오프라인 초기화 경고: {ex.Message}");
-                __instance.HasInitialized = true;
+                if (__instance != null) __instance.HasInitialized = true;
             }
             return false;
         }
@@ -116,6 +117,7 @@ public static class OfflineBypass
 
     // RVA 0x580050, ICF=1 — prevents BACKND failure from quitting the client
     [HarmonyPatch(typeof(BackEndWebRequest), nameof(BackEndWebRequest.Exit))]
+    [CriticalPatch("오프라인/BACKND 오류 시 클라이언트 강제 종료 차단")]
     public static class BackEndWebRequest_Exit_Patch
     {
         public static bool Prefix()
@@ -147,7 +149,7 @@ public static class OfflineBypass
         public static bool Prefix(BackEndWebRequest __instance, Il2CppSystem.Action<Users> callback)
         {
             if (!Core.BlockServerUpload) return true;
-            var user = EnsureOfflineUsers(__instance);
+            var user = __instance != null ? EnsureOfflineUsers(__instance) : new Users();
             callback?.Invoke(user);
             return false;
         }
@@ -160,7 +162,7 @@ public static class OfflineBypass
         public static bool Prefix(BackEndWebRequest __instance, Users user, Il2CppSystem.Action completeCallback)
         {
             if (!Core.BlockServerUpload) return true;
-            if (user != null) __instance._userData = user;
+            if (__instance != null && user != null) __instance._userData = user;
             completeCallback?.Invoke();
             return false;
         }
@@ -185,7 +187,7 @@ public static class OfflineBypass
         public static bool Prefix(BackEndWebRequest __instance, Users profile, Il2CppSystem.Action<bool> complete)
         {
             if (!Core.BlockServerUpload) return true;
-            if (profile != null) __instance._userData = profile;
+            if (__instance != null && profile != null) __instance._userData = profile;
             complete?.Invoke(true);
             return false;
         }
@@ -322,6 +324,7 @@ public static class OfflineBypass
     /// Computes local rewards via TravelArkkRewardProvider without touching BACKND DB.
     /// </summary>
     [HarmonyPatch(typeof(BackEndUserDataService), nameof(BackEndUserDataService.RequestTravelModeArkkRewards))]
+    [CriticalPatch("오프라인 결과 화면 Arkk 보상 로컬 계산 및 FinishInitialize 완료 보장")]
     public static class BackEndUserDataService_RequestTravelModeArkkRewards_Patch
     {
         public static bool Prefix(
@@ -502,6 +505,7 @@ public static class OfflineBypass
     /// if the server is unreachable.
     /// </summary>
     [HarmonyPatch(typeof(UpdateCheckController), nameof(UpdateCheckController.Initialize))]
+    [CriticalPatch("오프라인 모드 선택 진입 시 서버 버전 체크 팝업 차단")]
     public static class UpdateCheckController_Initialize_Patch
     {
         public static bool Prefix(UpdateCheckController __instance)
@@ -524,8 +528,11 @@ public static class OfflineBypass
             if (!Core.BlockServerUpload) return true;
             UpdateCheckController._firstCheck = true;
             UpdateCheckController._passed = true;
-            __instance.OnNeedUpdate?.Invoke(false);
-            __instance.Close();
+            if (__instance != null)
+            {
+                __instance.OnNeedUpdate?.Invoke(false);
+                __instance.Close();
+            }
             return false;
         }
     }
@@ -646,11 +653,13 @@ public static class OfflineBypass
     /// creates a local SixtarUser and sets HasInitialized = true.
     /// </summary>
     [HarmonyPatch(typeof(ClientDataProvider), nameof(ClientDataProvider.InitializeModule))]
+    [CriticalPatch("Steam 미실행 시 오프라인 기본 프로필 폴백으로 부팅 정지 방지")]
     public static class ClientDataProvider_InitializeModule_Patch
     {
         public static Exception Finalizer(ClientDataProvider __instance, Exception __exception)
         {
             if (__exception == null) return null;
+            if (__instance == null) return null;
             try
             {
                 Melon<Core>.Logger.Warning($"[OfflineBypass] Steam 클라이언트 초기화 실패 ({__exception.Message}), 오프라인 기본 프로필로 대체");
@@ -672,7 +681,7 @@ public static class OfflineBypass
         public static Exception Finalizer(AchievementModule __instance, Exception __exception)
         {
             if (__exception == null) return null;
-            __instance.HasInitialized = true;
+            if (__instance != null) __instance.HasInitialized = true;
             return null;
         }
     }
@@ -751,7 +760,7 @@ public static class OfflineBypass
                 if (helper != null)
                     helper.InitializeUnlockData(new Il2CppSystem.Collections.Generic.List<string>());
             }
-            catch (Exception ex) { Core.DebugLog($"[OfflineBypass] 팝업 정리 건너뜀: {ex.Message}"); }
+            catch (Exception ex) { Core.DebugLog($"[OfflineBypass] 레거시 해금 초기화 건너뜀: {ex.Message}"); }
             return false;
         }
     }
@@ -939,7 +948,7 @@ public static class OfflineBypass
                 if (ua != null)
                     ua.runtimeCheck = new RuntimeCheck { isUpdateChecked = true };
             }
-            catch (Exception ex) { Core.DebugLog($"[OfflineBypass] 팝업 정리 건너뜀: {ex.Message}"); }
+            catch (Exception ex) { Core.DebugLog($"[OfflineBypass] 레거시 버전 확인 정리 건너뜀: {ex.Message}"); }
             onLatestVersion?.Invoke();
             return false;
         }

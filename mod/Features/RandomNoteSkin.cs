@@ -61,13 +61,22 @@ public static class RandomNoteSkin
                 return (Func<IngameUIRenderer, LaneIndex, NoteObject?>)Delegate.CreateDelegate(
                     typeof(Func<IngameUIRenderer, LaneIndex, NoteObject?>), m);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} {m.Name} 델리게이트 바인딩 실패: {ex.Message}");
+            }
         }
-        return (ui, lane) => ui.GetNoteReferance(lane);
+        else
+        {
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} IngameUIRenderer.GetNoteReferance/GetNoteReference 메서드를 찾지 못함");
+        }
+        // 직접 호출 폴백을 두면 게임 업데이트로 오타가 수정됐을 때 PatchPreflight가 공유 스폰 훅 전체를 탈락시키므로 null 반환
+        return (_, _) => null;
     }
 
-    private static string SuffixOf(string name)
+    private static string SuffixOf(string? name)
     {
+        if (string.IsNullOrEmpty(name)) return "";
         foreach (var s in Suffixes)
             if (name.EndsWith(s, StringComparison.OrdinalIgnoreCase)) return s;
         return "";
@@ -140,6 +149,8 @@ public static class RandomNoteSkin
         _rendererPtr = _spawnRendererPtr = IntPtr.Zero;
         _ui = null;
         InstanceParts.Clear();
+        SkinsBySuffix.Clear();
+        LaneSuffix.Clear();
     }
 
     private static void Copy(Look[] from, Image[] to)

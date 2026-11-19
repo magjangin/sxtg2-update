@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-19)
+# 현재 상태 (2026-11-20)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 118개(`[Harmony] 패치 118개 모두 적용 완료`, 2026-11-14 3차 정리 전 120개). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -25,7 +25,7 @@
 | 전곡·DLC 해금 | 실기 확인 | |
 | 출석 보상 창 자동 표시 끄기 | 실기 확인 | 로그 `[Attendance] Skipped ...` |
 
-## 최근 변경 (2026-10-30 ~ 2026-11-19, `#n` = PR 번호)
+## 최근 변경 (2026-10-30 ~ 2026-11-20, `#n` = PR 번호)
 
 1. **#1** AllPerfect가 안 누른 롱노트 틱에 레인 불빛을 켜던 문제 수정
 2. **#2** README, 성능 정리(오버레이 IL2CPP 호출 제거, 디스크 접근 제거, 차트 캐시), 죽은 훅 제거 (4,217 → 3,746줄)
@@ -68,11 +68,15 @@
     - **리팩토링·인수인계:** `Managers/AtomicFile.cs` 추출로 `UpdateGuard`/`LambdaTranslator`/`IcfScanner`/`ModConfig` 원자적 쓰기 통일, `Overlay.White`·`CustomJackets.SetJacketImage`·`Core.LoadCurrentAlbumBmsOrDefault` 중복 제거 및 미사용 `using`·배열 할당 정리, `AGENTS.md`·`HANDOVER_NOTES.md`·`CODE_STRUCTURE.md` 최신화. Release/Debug 빌드(경고/오류 0)·xUnit 40건·`lambdascan`·`icf_check.py` 통과(실기 미실행).
 32. 패치 시그니처 대조·오버로드 내성·오프라인 대조 도구 (2026-11-19): Harmony는 패치 인자를 이름으로만 묶고 형식을 확인하지 않아, 업데이트로 훅 대상 인자 형식이 바뀌면(`int`→`long` 등) 패치가 붙은 뒤 첫 호출에서 잘못된 값·크래시가 남. `Managers/PatchSignatureCheck.cs`가 부팅 시 Prefix/Postfix/Finalizer 인자를 대상과 대조해 값 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 건너뛰고(`[Harmony/Signature]`, `[CriticalPatch]`면 필수 빠짐), 참조 형식 불일치는 경고만. `PatchResilience.ResolveMethod`가 업데이트로 생긴 오버로드(`AmbiguousMatchException`)를 잡고, 이름·개수 대체 경로를 `[Harmony/Resolve]` 경고로 남김. `tools/sigcheck`(오프라인, `check_update.ps1` 5단계)로 게임을 켜기 전 전수 대조: 빌드 `26455233` 통과 114·오류 0·경고 0·클로저 4개 런타임 필요(인자는 `Il2CppObjectBase __instance`뿐). xUnit 40 → 50건, Release 빌드 경고/오류 0. 실기 미실행. [REVIEW_2026-11-19.md](03-development/REVIEW_2026-11-19.md)
 33. 추가 점검 (2026-11-20): **버그** `ModConfig.ReloadIfChanged`가 읽기 전에 수정 시각을 기록해, 편집기 저장 순간 잠긴 파일을 못 읽으면 그 변경이 다음 저장까지 무시되던 문제 수정(성공 후 기록, `FileShare.ReadWrite`로 읽음). **개선** `CustomTrackManager.RefreshIfChanged`가 폴더 수정 시각만 봐서 `info.txt` 제자리 저장을 못 잡던 것을 곡 폴더 안 파일 이름·크기·수정 시각까지 접어 비교(열거 속성 사용, 1초 간격). **업데이트 내성** 인자 형식 없는 `[HarmonyPatch(typeof(X), "M")]`에 업데이트로 오버로드가 생기면(게임 HarmonyX가 `AmbiguousMatchException`을 던짐을 확인) 패치 인자 목록으로 맞는 오버로드가 하나일 때 골라 직접 패치(`PatchSignatureCheck.PickOverload`, `PatchResilience.PatchManually`), `tools/sigcheck`도 같은 해석. xUnit 52건, Release 빌드 경고/오류 0, sigcheck 통과 114·오류 0·오버로드로 고름 0. 실기 미실행. [REVIEW_2026-11-19.md](03-development/REVIEW_2026-11-19.md) 5장
+34. 심층 감사·오프라인/기능 모듈 안정화·시그니처 대조 보강 (2026-11-20):
+    - **시그니처 대조·도구:** `PatchSignatureCheck` `__0`/`__1` 위치 인자 검증·`__instance` 값/참조 불일치 오류·`Strip()` 포인터 유지(`int*` vs `int` 감지), `tools/sigcheck` `overloaded++` 조건 버그 수정·`BaseType` 탐색·`TargetMethods()` 지원 동기화.
+    - **업데이트 내성·기능 안정화:** `RandomNoteSkin.BindGetNoteReference`의 오타 직접 호출 폴백 제거(업데이트 시 `PatchPreflight` 공유 스폰 훅 탈락 방지) 및 `EndPlay()` 스킨/레인 캐시 정리, `NoteEffects.SetNotePatches` 부분 패치 롤백 및 `RestoreAndClearCovers()` 재시작 투명도 복원, `CustomMusicSelect` `nameof` 통일·`TrackID` null/예외 가드, `OfflineBypass` 핵심 4개 훅(`[CriticalPatch]` 16→20개) 추가·Finalizer/catch `__instance` null 가드·오타 로그 수정, `AttendancePopup` `_getOwner` 누락 경고 및 `Prefix` 예외 가드, `CustomNoteSkin` 스프라이트 생성 실패 시 `Texture2D` 파괴.
+    - **검증:** xUnit **57건 통과**, Release/Debug 빌드(경고/오류 0), `tools/sigcheck` 통과 114·오류 0·경고 0·오버로드로 고름 0(실기 미실행).
 
 ## 알려진 한계
 
 - 오른쪽 곡 목록에서 MAX COMBO가 `---`로 나옵니다. 직접 채우는 시도를 했으나 화면에 반영되지 않아 뺐습니다.
-- 이미 한 번 표시된 커스텀 곡 자켓을 같은 파일 이름의 다른 그림으로 바꾸면 게임을 다시 켜야 반영됩니다(스프라이트 캐시가 곡 ID 기준).
+- 이미 한 번 표시된 커스텀 곡 자켓을 다른 그림으로 바꾸면(같은/다른 파일명 모두) 게임을 다시 켜야 반영됩니다(스프라이트 캐시가 곡 ID 기준).
 - 키뷰어 키 이름은 리뉴얼 입력 모듈에서 읽고, 못 읽으면 레인 이름(LL, L …)을 씁니다.
 - 결과 화면 특수 연출(시이 대신 다른 모델)은 커스텀 곡에 나오지 않습니다. 곡 ID로 고르기 때문입니다. [RESULT_ANIMATIONS.md](04-game-reference/RESULT_ANIMATIONS.md) 참고.
 - 노란 줄 `[Il2CppInterop] Class::Init signatures have been exhausted`는 MelonLoader 자체 메시지라 남습니다.

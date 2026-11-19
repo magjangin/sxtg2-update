@@ -1,6 +1,6 @@
 # 코드 구조
 
-`mod/` 36개 파일, 9,514줄 (2026-11-19 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(8개 테스트 파일, 52건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+`mod/` 36개 파일, 9,620줄 (2026-11-20 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(8개 테스트 파일, 57건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
 | 파일 | 줄 | 역할 |
 | --- | ---: | --- |
@@ -41,11 +41,11 @@
 | `Managers/AtomicFile.cs` | 35 | 임시 파일(`.tmp`) → `File.Move` 원자적 UTF-8 쓰기 유틸 (`UpdateGuard`·`LambdaTranslator`·`IcfScanner`·`ModConfig` 공용) |
 | `Models/CustomAlbumInfo.cs` | 28 | 앨범 정보 |
 
-## 순수 모듈 테스트 (`tests/SixtarGateMod.Tests/`, 52건)
+## 순수 모듈 테스트 (`tests/SixtarGateMod.Tests/`, 57건)
 
 | 파일 | 건수 | 대상 |
 | --- | ---: | --- |
-| `PatchSignatureCheckTests.cs` | 12 | `PatchSignatureCheck` 정상 통과·인자 이름 변경·값 형식 변경·정적 `__instance`·void `__result`·열거형↔정수 크기·참조 형식 경고·특수 인자 |
+| `PatchSignatureCheckTests.cs` | 17 | `PatchSignatureCheck` 정상 통과·인자 이름/값/포인터 변경·위치 인자(`__0`)·`__instance`/`__result`·`Finalizer`/생성자/속성·`PickOverload` |
 | `BuildFingerprintTests.cs` | 8 | `BuildFingerprint` 지문 비교·왕복·PE 타임스탬프·메타데이터 헤더·`VerifiedPlayTracker` |
 | `NativeLambdaScanTests.cs` | 8 | `NativeLambdaScan` 레지스터 추적·`call`/`xor`/`lea`/즉값 위장/`int3` 경계 |
 | `SxtgBmsConverterTests.cs` | 7 | `SxtgBmsConverter` 포맷 판별·채널 매핑·3자리 정규화·채널 `02` 보존 |
@@ -57,7 +57,7 @@
 ## 코드 규칙
 
 - **패치 클래스 하나 = 훅 하나.** `[HarmonyPatch(typeof(대상), nameof(메서드))]`를 단 `public static class`. 이름은 `{대상}_{메서드}_Patch`.
-- **핵심 패치는 `[CriticalPatch("누락 시 영향")]` 표시.** 부팅 시 누락되면 `[UpdateGuard]`가 즉시 `문제 있음`으로 경고합니다(현재 16개).
+- **핵심 패치는 `[CriticalPatch("누락 시 영향")]` 표시.** 부팅 시 누락되면 `[UpdateGuard]`가 즉시 `문제 있음`으로 경고합니다(현재 20개).
 - **오버로드가 생길 수 있는 대상은 인자 형식까지 지정.** `[HarmonyPatch(typeof(X), nameof(X.M), new[] { typeof(int) })]`. 인자 형식 없이 이름만 주면 업데이트로 같은 이름 오버로드가 생겼을 때 `AmbiguousMatchException`이 납니다(2026-11-20부터는 패치 인자 목록으로 맞는 오버로드가 하나면 골라 붙이지만, 여럿이 맞으면 빠짐). 패치 인자는 대상과 **같은 이름·같은 형식**으로 받습니다(부팅 시 `PatchSignatureCheck`가 대조, 값 형식이 다르면 건너뜀).
 - **대상은 `typeof`로.** `AccessTools.TypeByName` 금지 (노란 경고).
 - **패치 전에 ICF 확인.** `script.json`에서 주소 중복 개수를 셉니다 ([IL2CPP_PITFALLS.md](IL2CPP_PITFALLS.md)). 일부러 공유 주소를 패치하면 `[IcfShared(n, "안전한 이유")]`를 붙입니다(없으면 실행 중 검사가 건너뜀).

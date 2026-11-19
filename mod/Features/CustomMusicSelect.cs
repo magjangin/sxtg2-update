@@ -1,6 +1,8 @@
+using System;
 using HarmonyLib;
 using Il2CppSixtarGate;
 using Il2CppSixtarGate.MusicSelect;
+using MelonLoader;
 using SixtarGateMod.Managers;
 
 namespace SixtarGateMod.Features;
@@ -15,36 +17,53 @@ public static class CustomMusicSelect
 
     // SelectTrack stores the confirmed track in the "LastSelectedTrack" flag; LoadData later looks that ID up in
     // AllTracks (official tracks only), so a custom ID is never found and the list opens on its first song.
-    [HarmonyPatch(typeof(TrackSelectController), "SelectTrack")]
+    [HarmonyPatch(typeof(TrackSelectController), nameof(TrackSelectController.SelectTrack))]
     public static class TrackSelectController_SelectTrack_Patch
     {
         public static void Postfix(TrackSelectController __instance)
         {
-            var track = __instance.SelectedTrack;
-            if (track != null)
-                LastCustomTrackId = CustomTrackManager.AlbumsByTrackId.ContainsKey(track.TrackID) ? track.TrackID : null;
+            if (__instance == null) return;
+            try
+            {
+                var track = __instance.SelectedTrack;
+                if (track == null) return;
+                string? id = track.TrackID;
+                LastCustomTrackId = !string.IsNullOrEmpty(id) && CustomTrackManager.AlbumsByTrackId.ContainsKey(id) ? id : null;
+            }
+            catch (Exception ex)
+            {
+                Melon<Core>.Logger.Warning($"[MusicSelect] 커스텀 곡 선택 기록 실패: {ex.Message}");
+            }
         }
     }
 
-    [HarmonyPatch(typeof(TrackSelectController), "LoadData")]
+    [HarmonyPatch(typeof(TrackSelectController), nameof(TrackSelectController.LoadData))]
     public static class TrackSelectController_LoadData_Patch
     {
         public static void Postfix(TrackSelectController __instance)
         {
+            if (__instance == null) return;
             string? id = LastCustomTrackId;
-            if (id == null) return;
-            var current = __instance.SelectedTrack;
-            if (current != null && current.TrackID == id) return;
-
-            var tracks = __instance.GetTracks(Core.CUSTOM_CATEGORY_NAME);
-            if (tracks == null) return;
-            for (int i = 0; i < tracks.Count; i++)
+            if (string.IsNullOrEmpty(id)) return;
+            try
             {
-                var t = tracks[i];
-                if (t == null || t.TrackID != id) continue;
-                __instance.SelectedTrack = t;
-                Core.DebugLog($"[MusicSelect] 마지막 커스텀 곡 위치 복원: '{t.DisplayName}'");
-                return;
+                var current = __instance.SelectedTrack;
+                if (current != null && current.TrackID == id) return;
+
+                var tracks = __instance.GetTracks(Core.CUSTOM_CATEGORY_NAME);
+                if (tracks == null) return;
+                for (int i = 0; i < tracks.Count; i++)
+                {
+                    var t = tracks[i];
+                    if (t == null || t.TrackID != id) continue;
+                    __instance.SelectedTrack = t;
+                    Core.DebugLog($"[MusicSelect] 마지막 커스텀 곡 위치 복원: '{t.DisplayName}'");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Melon<Core>.Logger.Warning($"[MusicSelect] 마지막 커스텀 곡 위치 복원 실패: {ex.Message}");
             }
         }
     }

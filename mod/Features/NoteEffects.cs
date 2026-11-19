@@ -42,7 +42,7 @@ public static class NoteEffects
             NoteFactor.Clear();
             LaneFactor.Clear();
             NoteLane.Clear();
-            Covers.Clear();
+            RestoreAndClearCovers();
             _random = new System.Random();
 
             if (_renderer == null || _renderer.Pointer != __instance.Pointer)
@@ -78,8 +78,20 @@ public static class NoteEffects
         NoteFactor.Clear();
         LaneFactor.Clear();
         NoteLane.Clear();
-        Covers.Clear();
+        RestoreAndClearCovers();
         _renderer = null;
+    }
+
+    private static void RestoreAndClearCovers()
+    {
+        foreach (var c in Covers.Values)
+        {
+            if (c.Group != null && c.Alpha != 1f)
+            {
+                try { c.Group.alpha = 1f; } catch { }
+            }
+        }
+        Covers.Clear();
     }
 
     private static float Lerp(float min, float max) => min + (max - min) * (float)_random.NextDouble();
@@ -158,12 +170,20 @@ public static class NoteEffects
                 return;
             }
             harmony.Patch(head, prefix: new HarmonyMethod(typeof(NoteObject_SetHeadPosition_Patch), nameof(NoteObject_SetHeadPosition_Patch.Prefix)));
-            harmony.Patch(length, prefix: new HarmonyMethod(typeof(NoteObject_SetNoteLength_Patch), nameof(NoteObject_SetNoteLength_Patch.Prefix)));
+            try
+            {
+                harmony.Patch(length, prefix: new HarmonyMethod(typeof(NoteObject_SetNoteLength_Patch), nameof(NoteObject_SetNoteLength_Patch.Prefix)));
+            }
+            catch
+            {
+                try { harmony.Unpatch(head, HarmonyPatchType.Prefix, harmony.Id); } catch { }
+                throw;
+            }
         }
         else
         {
-            harmony.Unpatch(head, HarmonyPatchType.Prefix, harmony.Id);
-            harmony.Unpatch(length, HarmonyPatchType.Prefix, harmony.Id);
+            if (head != null) harmony.Unpatch(head, HarmonyPatchType.Prefix, harmony.Id);
+            if (length != null) harmony.Unpatch(length, HarmonyPatchType.Prefix, harmony.Id);
         }
         _notePatchesActive = active;
         Core.DebugLog($"[NoteEffects] NoteObject 위치 훅 {(active ? "부착" : "해제")}");
