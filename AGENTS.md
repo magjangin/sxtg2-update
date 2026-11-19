@@ -22,7 +22,7 @@
 3. **오프라인 & 서버 종료 대비 (`Features/OfflineBypass.cs`, 66개 훅):** BACKND 초기화 실패 시 `HasInitialized = true`에 도달하지 못해 게임이 멈추는 문제와, BACKND 초기화 생략 시 `UnitySessionModule` 커넥터가 누락되어 곡 시작·종료가 멈추는 문제를 함께 차단(`BackEndChatServer.Initialize` 우회 포함 리뉴얼 42개 + 레거시 24개).
 4. **전곡 & DLC 해금 (`Features/Unlock.cs`):** `ItemUnlockChecker`, `ItemProvideModule`, `TrackData.IsOwned`를 일괄 `true`로 오버라이드.
 5. **업데이트 내성 (`Managers/PatchResilience.cs`, `LambdaTranslator.cs`, `IcfScanner.cs`, `PatchPreflight.cs`, `UpdateGuard.cs`, `AtomicFile.cs`):**
-   - `[assembly: HarmonyDontPatchAll]` + 부팅 시 5단계 검증: ⓪ `PatchSignatureCheck`(Prefix/Postfix/Finalizer 인자를 훅 대상 시그니처와 이름·형식으로 대조, 값 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 스킵, 참조 형식 불일치는 경고), ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, 미스캔 주소 `-1` 경고, `[IcfShared]` 2개), ② `PatchPreflight`(패치 메서드·호출 그래프 사전 JIT 및 필드/타입/어셈블리 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(8개 지문 키 비교 + `BinaryFingerprint`로 `BuildState.txt`·`LambdaMap.json`·`IcfCounts.txt` 캐시 무효화 통일 + `[CriticalPatch]` 16개 누락 감지 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
+   - `[assembly: HarmonyDontPatchAll]` + 부팅 시 5단계 검증: ⓪ `PatchSignatureCheck`(Prefix/Postfix/Finalizer 인자를 훅 대상 시그니처와 이름·형식으로 대조, 값 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 스킵, 참조 형식 불일치는 경고. 인자 형식 없는 속성 대상에 업데이트로 오버로드가 생기면 패치 인자 목록으로 맞는 오버로드가 하나일 때만 골라 직접 패치), ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, 미스캔 주소 `-1` 경고, `[IcfShared]` 2개), ② `PatchPreflight`(패치 메서드·호출 그래프 사전 JIT 및 필드/타입/어셈블리 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(8개 지문 키 비교 + `BinaryFingerprint`로 `BuildState.txt`·`LambdaMap.json`·`IcfCounts.txt` 캐시 무효화 통일 + `[CriticalPatch]` 16개 누락 감지 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
    - `AtomicFile`로 모든 상태/캐시/설정 파일을 `.tmp` → `File.Move` 원자적 교체.
 6. **성능 원칙 (IL2CPP 네이티브 호출 최소화):**
    - `new Rect`, `new Color`, `Mathf.*` 등 Unity 값 형식 헬퍼는 전부 `il2cpp_runtime_invoke` + boxing을 유발하므로 `Overlay.Rgba`/`Box` 및 `MathF`/`Math`만 사용.
@@ -36,7 +36,7 @@
 - **오디오 (`Core.cs`, `Managers/CustomAudioManager.cs`):** `SoundModuleForFMOD.Play` (`0x7E11E0`) → FMOD Core `createStream` 직접 재생 및 `Stop`/`Pause`/`Resume`/`GetTimelinePosition`/`set_CurrectionVolume`/`ChangeVolume` 연동.
 - **BGA & 자켓 (`Features/CustomBga.cs`, `Features/CustomJackets.cs`):** `BackgroundUIProcessor` URL 재적용·`PlayBGA`/`PauseBGA`/`IsVideoPlayable` 대체; `TrackInfoViewer.Set`, `TrackObject.SetTrack`/`<LoadThumbnail>b__1`, `PlayLoadingManager`, `Pause.TrackInfoViewerModule`, `Result.TrackInfoModule`/`TravelBackgroundModule` 비동기/지연 자켓 적용.
 - **플레이 보조 & 오버레이 (`Features/PlayAssist.cs`, `Overlay.cs`, `JudgmentBar.cs`, `KeyViewer.cs`, `NoteEffects.cs`, `CustomNoteSkin.cs`, `RandomNoteSkin.cs`, `CustomMarathon.cs`):** `JudgeProcessor.Judge`/`OnTickEvent`/`SetPressedState`, `ScoreProcessor.UpdateScore`, `PlayRecordModule.Record*`, `StartrailPatternRenderer.GetNoteObejct`/`Register`, `AttendanceController` 팝업 생략.
-- **메타데이터 & 설정 (`Loaders/TrackInfoParser.cs`, `TextDecoder.cs`, `Managers/ModConfig.cs`):** `{게임}\hwa\` 스캔(`info.txt` → BMS `#TITLE`/`#ARTIST` → 폴더명), `{게임}\SaveCustomKey\config.txt` 동적 리로드.
+- **메타데이터 & 설정 (`Loaders/TrackInfoParser.cs`, `TextDecoder.cs`, `Managers/ModConfig.cs`):** `{게임}\hwa\` 스캔(`info.txt` → BMS `#TITLE`/`#ARTIST` → 폴더명), `{게임}\SaveCustomKey\config.txt` 동적 리로드(읽기 성공 후에만 수정 시각 기록), `hwa\` 변경 감지는 곡 폴더 안 파일 크기·수정 시각까지(1초 간격).
 
 ## 5. 시도했다가 실패한 것들 (Dead Ends / Failed Attempts)
 - **IL2CPP 동일 코드 접기(ICF) 미확인 패치:** 공유 주소 패치 시 엉뚱한 `this`로 실행됨 (`OpenPopup` 5192개, `SetTickData` 102개, `set_IsAutoJudge` 44개, `set_TrackEndTiming` 11개, `_Set_b__3_1` 11개 등). 반드시 `IcfScanner`/`script.json` 확인.
@@ -64,7 +64,7 @@
   dotnet build mod/SixtarGateMod.csproj
   ```
   - 빌드 후 `$(GameDir)\Mods\`가 있으면 `SixtarGateMod.dll`을 자동 복사함(게임 실행 중 잠겨 있으면 경고만 출력). 복사 생략 시 `-p:SkipDeploy=true`.
-- **순수 모듈 단위 테스트 (게임 DLL 불필요, 8개 파일 50건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동):**
+- **순수 모듈 단위 테스트 (게임 DLL 불필요, 8개 파일 52건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동):**
   ```powershell
   dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
   ```

@@ -25,13 +25,14 @@ AppDomain.CurrentDomain.AssemblyResolve += (_, e) =>
 var asm = Assembly.LoadFrom(modDll);
 var check = asm.GetType("SixtarGateMod.Managers.PatchSignatureCheck")?.GetMethod("Check");
 if (check == null) { Console.Error.WriteLine("이 모드 DLL에는 PatchSignatureCheck가 없습니다."); return 2; }
+var pickOverload = check.DeclaringType!.GetMethod("PickOverload");
 
 Type[] types;
 try { types = asm.GetTypes(); }
 catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray()!; }
 
 const BindingFlags Flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-int ok = 0, errors = 0, warnings = 0, unresolved = 0;
+int ok = 0, errors = 0, warnings = 0, unresolved = 0, overloaded = 0;
 foreach (var t in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
 {
     if (t.GetCustomAttributes(typeof(HarmonyPatch), false).Length == 0) continue;
@@ -54,13 +55,26 @@ foreach (var t in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
                 if (i.methodType.HasValue) kind = i.methodType.Value;
                 if (i.argumentTypes != null) argTypes = i.argumentTypes;
             }
-            MethodBase? r = decl == null ? null : kind switch
+            MethodBase? r;
+            try
             {
-                MethodType.Constructor => AccessTools.Constructor(decl, argTypes),
-                MethodType.Getter => name == null ? null : AccessTools.PropertyGetter(decl, name),
-                MethodType.Setter => name == null ? null : AccessTools.PropertySetter(decl, name),
-                _ => name == null ? null : AccessTools.Method(decl, name, argTypes),
-            };
+                r = decl == null ? null : kind switch
+                {
+                    MethodType.Constructor => AccessTools.Constructor(decl, argTypes),
+                    MethodType.Getter => name == null ? null : AccessTools.PropertyGetter(decl, name),
+                    MethodType.Setter => name == null ? null : AccessTools.PropertySetter(decl, name),
+                    _ => name == null ? null : AccessTools.Method(decl, name, argTypes),
+                };
+            }
+            catch (AmbiguousMatchException) when (kind == MethodType.Normal && argTypes == null && decl != null && name != null)
+            {
+                // 부팅 시와 같은 해석: 패치 인자 목록으로 오버로드를 고름(PatchResilience.PickOverloadForPatch)
+                var candidates = decl.GetMethods(Flags | BindingFlags.Instance).Where(m => m.Name == name && !m.IsGenericMethodDefinition).ToList();
+                var args2 = new object?[] { t, candidates, null };
+                r = (MethodInfo?)pickOverload!.Invoke(null, args2);
+                Console.WriteLine($"  오버로드     {t.Name}: {args2[2]}");
+                overloaded++;
+            }
             if (r != null) targets.Add(r);
         }
     }
@@ -88,5 +102,5 @@ foreach (var t in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
     else ok++;
 }
 
-Console.WriteLine($"패치 시그니처 대조: 통과 {ok}, 오류 {errors}, 경고 {warnings}, 대상 미확인(클로저·런타임 필요) {unresolved}");
+Console.WriteLine($"패치 시그니처 대조: 통과 {ok}, 오류 {errors}, 경고 {warnings}, 대상 미확인(클로저·런타임 필요) {unresolved}, 오버로드로 고름 {overloaded}");
 return errors > 0 ? 1 : 0;

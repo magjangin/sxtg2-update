@@ -57,3 +57,9 @@
 - **오탐 검증:** 현재 빌드 `26455233`의 실제 `Il2CppAssemblies`로 `tools/sigcheck`를 돌려 114개 통과, 오류 0, 경고 0. 나머지 4개(`PlayLoading_JacketCallback/ThumbnailCallback`, `ResultTrackInfo_Callback3/4`)는 `LambdaTranslator`가 네이티브 기계어를 봐야 대상이 정해져 오프라인에선 대상 미확인이지만, 인자가 `Il2CppObjectBase __instance` 하나라 어떤 클로저에도 통과한다.
 - **`ResolveMethod` 보강:** 인자 형식 없이 이름으로 찾다 업데이트로 오버로드가 생기면 HarmonyX `AccessTools.Method`가 `AmbiguousMatchException`을 던져 `TargetMethod` 전체가 실패했다. 이제 잡아서 이름·개수 대조로 넘기고, 후보가 여럿이면 고르지 않고 `[Harmony/Resolve]` 경고. 이름·개수 대체로 찾은 경우도 경고(전에는 조용히 대체 → 형식이 바뀐 대상에 패치가 붙을 수 있었음, 지금은 `PatchSignatureCheck`가 이어서 형식을 대조).
 - **실기:** 미실행. 다음 실기 부팅에서 `[Harmony/Signature]`·`[Harmony/Resolve]` 줄이 **0개**이고 `패치 118개 모두 적용 완료`인지 확인할 것(오프라인 대조와 같은 결과여야 함).
+
+## 8. 오버로드 자동 선택 (2026-11-20)
+
+- 게임의 HarmonyX(`MelonLoader/net6/0Harmony.dll`)에서 `AccessTools.Method(type, name)`은 같은 이름이 여럿이면 null이 아니라 `AmbiguousMatchException`을 던진다(scratchpad 콘솔로 확인). Harmony 클래스 처리기도 같은 해석을 하므로 그 패치는 통째로 실패한다.
+- `ResolveDeclaredTargets`가 이 예외를 잡으면(일반 메서드, 인자 형식 미지정일 때만) `PatchSignatureCheck.PickOverload`로 패치 인자에 맞는 오버로드를 고르고, 그 패치 클래스는 `ManualTargets`에 넣어 `PatchManually`(`harmony.Patch(target, prefix, postfix, finalizer)`)로 붙인다. Transpiler는 이 모드에 없으므로 다루지 않는다.
+- `TargetMethod()` 안의 `ResolveMethod`(오타 대응)는 패치 형식을 모르므로 고르지 않고 경고만 남긴다. 새 오타 대응 패치는 `ResolveMethod(type, new[] { typeof(...) }, ...)`처럼 인자 형식을 넘길 것.

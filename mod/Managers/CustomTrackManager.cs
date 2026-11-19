@@ -87,6 +87,11 @@ public static class CustomTrackManager
         if (string.IsNullOrEmpty(HwaFolderPath) || !Directory.Exists(HwaFolderPath))
             return false;
 
+        // 곡 폴더 안 파일까지 훑으므로(아래) 탭을 연달아 바꿀 때 디스크를 반복해서 읽지 않게 1초에 한 번만 확인.
+        long nowTicks = Environment.TickCount64;
+        if (nowTicks - _lastStampCheck < 1000) return false;
+        _lastStampCheck = nowTicks;
+
         long current = ComputeHwaStamp();
         if (current == _lastHwaStamp)
             return false;
@@ -100,19 +105,28 @@ public static class CustomTrackManager
         return true;
     }
 
+    private static long _lastStampCheck = long.MinValue / 2;
+
+    /// <summary>
+    /// hwa 폴더(루트도 곡 폴더 하나로 쓰임)와 직계 하위 폴더의 파일 목록·크기·수정 시각을 접은 값.
+    /// 폴더 수정 시각만 보던 때는 파일을 만들거나 지울 때만 바뀌어서, info.txt를 제자리에서 고쳐 저장하면
+    /// (메모장 등) 제목·아티스트 변경이 게임을 다시 켤 때까지 반영되지 않았다. 열거 결과의 속성(FileSystemInfo)을
+    /// 쓰므로 파일마다 따로 stat하지 않는다.
+    /// </summary>
     private static long ComputeHwaStamp()
     {
         try
         {
+            var root = new DirectoryInfo(HwaFolderPath);
             long hash = 17;
-            hash = hash * 31 + Directory.GetLastWriteTimeUtc(HwaFolderPath).Ticks;
-            var dirs = Directory.GetDirectories(HwaFolderPath);
-            Array.Sort(dirs, StringComparer.OrdinalIgnoreCase);
+            hash = hash * 31 + FoldFiles(root);
+            var dirs = root.GetDirectories();
+            Array.Sort(dirs, (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name));
             hash = hash * 31 + dirs.Length;
             foreach (var dir in dirs)
             {
-                hash = hash * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(dir);
-                hash = hash * 31 + Directory.GetLastWriteTimeUtc(dir).Ticks;
+                hash = hash * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(dir.Name);
+                hash = hash * 31 + FoldFiles(dir);
             }
             return hash;
         }
@@ -120,6 +134,21 @@ public static class CustomTrackManager
         {
             return _lastHwaStamp;
         }
+    }
+
+    /// <summary>폴더 안 파일들의 이름·크기·수정 시각을 순서와 무관하게 접는다(파일 시스템마다 열거 순서가 달라서).</summary>
+    private static long FoldFiles(DirectoryInfo dir)
+    {
+        long sum = dir.LastWriteTimeUtc.Ticks, xor = 0;
+        foreach (var f in dir.EnumerateFiles())
+        {
+            long h = StringComparer.OrdinalIgnoreCase.GetHashCode(f.Name);
+            h = h * 1_000_003 + f.Length;
+            h = h * 1_000_003 + f.LastWriteTimeUtc.Ticks;
+            sum += h;
+            xor ^= h;
+        }
+        return sum * 31 + xor;
     }
 
     // 작업 스레드에서 돈다: Unity/IL2CPP를 부르지 않고, 로그는 ModLog로(메인 스레드에서 출력), 공개 속성 대신 필드에 쓴다.

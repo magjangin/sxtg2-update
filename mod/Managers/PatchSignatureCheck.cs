@@ -54,6 +54,31 @@ public static class PatchSignatureCheck
         return null;
     }
 
+    /// <summary>
+    /// 업데이트로 같은 이름의 오버로드가 생겨 인자 형식 없는 <c>[HarmonyPatch(typeof(X), "M")]</c>가 모호해졌을 때,
+    /// 패치 자신의 인자 목록을 시그니처 단서로 써서 대조를 통과하는 오버로드를 고른다(2026-11-19).
+    /// 오류 없이 통과하는 후보가 하나면 그것, 여럿이면 경고까지 없는 후보가 하나일 때만 그것, 아니면 null(고르지 않음).
+    /// 패치가 대상 인자를 하나도 받지 않으면 모든 후보가 통과하므로 null이 된다.
+    /// </summary>
+    public static MethodInfo? PickOverload(Type patchType, IReadOnlyList<MethodInfo> candidates, out string note)
+    {
+        var passing = new List<MethodInfo>();
+        var clean = new List<MethodInfo>();
+        foreach (var c in candidates)
+        {
+            var w = new List<string>();
+            if (Check(patchType, new MethodBase[] { c }, w) != null) continue;
+            passing.Add(c);
+            if (w.Count == 0) clean.Add(c);
+        }
+
+        MethodInfo? pick = passing.Count == 1 ? passing[0] : clean.Count == 1 ? clean[0] : null;
+        note = pick != null
+            ? $"오버로드 {candidates.Count}개 중 패치 인자와 맞는 ({ParamList(pick.GetParameters())})를 고름"
+            : $"오버로드 {candidates.Count}개 중 패치 인자와 맞는 것이 {passing.Count}개라 고르지 않음";
+        return pick;
+    }
+
     /// <summary>패치 메서드 하나를 대상 하나와 대조. 오류 사유 또는 null.</summary>
     public static string? CheckMethod(MethodBase target, MethodInfo patch, List<string> warnings)
     {
