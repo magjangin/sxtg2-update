@@ -151,7 +151,8 @@ public static class PatchResilience
                 }
 
                 long t0 = Stopwatch.GetTimestamp();
-                harmony.CreateClassProcessor(type).Patch();
+                if (ManualTargets.Contains(type)) PatchManually(harmony, type, targets);
+                else harmony.CreateClassProcessor(type).Patch();
                 patchTimes.Add((type.Name, (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency));
                 applied++;
             }
@@ -286,12 +287,23 @@ public static class PatchResilience
             }
             else if (declType != null && !string.IsNullOrEmpty(methodName))
             {
-                MethodBase? resolved = methodType switch
+                MethodBase? resolved;
+                try
                 {
-                    MethodType.Getter => AccessTools.PropertyGetter(declType, methodName),
-                    MethodType.Setter => AccessTools.PropertySetter(declType, methodName),
-                    _ => AccessTools.Method(declType, methodName, argTypes),
-                };
+                    resolved = methodType switch
+                    {
+                        MethodType.Getter => AccessTools.PropertyGetter(declType, methodName),
+                        MethodType.Setter => AccessTools.PropertySetter(declType, methodName),
+                        _ => AccessTools.Method(declType, methodName, argTypes),
+                    };
+                }
+                catch (AmbiguousMatchException) when (methodType == MethodType.Normal && argTypes == null)
+                {
+                    // 업데이트로 같은 이름 오버로드가 생김: 패치 인자 목록으로 고르고, 고르면 Harmony의 속성 해석을
+                    // 거치지 않고 직접 붙인다(ApplyAllPatches의 ManualTargets).
+                    resolved = PickOverloadForPatch(patchType, declType, methodName, logger);
+                    if (resolved != null) ManualTargets.Add(patchType);
+                }
                 if (resolved != null)
                     list.Add(resolved);
             }
@@ -305,6 +317,35 @@ public static class PatchResilience
             logger.Warning($"[Harmony] '{patchType.Name}' 대상 메서드 탐색 중 예외: {inner.GetType().Name}: {inner.Message}{hint}");
         }
         return list;
+    }
+
+    /// <summary>오버로드가 생겨 Harmony 속성만으로는 대상을 못 정한 패치 클래스(직접 붙임).</summary>
+    private static readonly HashSet<Type> ManualTargets = new();
+
+    private static MethodInfo? PickOverloadForPatch(Type patchType, Type declType, string methodName, MelonLogger.Instance logger)
+    {
+        var candidates = new List<MethodInfo>();
+        for (Type? t = declType; t != null && candidates.Count == 0; t = t.BaseType)
+            foreach (var m in t.GetMethods(AllFlags))
+                if (string.Equals(m.Name, methodName, StringComparison.Ordinal) && !m.IsGenericMethodDefinition)
+                    candidates.Add(m);
+
+        var pick = PatchSignatureCheck.PickOverload(patchType, candidates, out string note);
+        logger.Warning($"[Harmony/Resolve] '{patchType.Name}': {declType.Name}.{methodName}에 업데이트로 오버로드가 생김 — {note}" +
+                       (pick == null ? ". [HarmonyPatch]에 인자 형식을 지정해야 함" : ""));
+        return pick;
+    }
+
+    /// <summary>Harmony 속성 해석 대신 이미 고른 대상에 패치 클래스의 Prefix/Postfix/Finalizer를 직접 붙인다.</summary>
+    private static void PatchManually(HarmonyLib.Harmony harmony, Type patchType, List<(MethodBase Method, IntPtr Code)> targets)
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        HarmonyMethod? Hm(string name) => patchType.GetMethod(name, flags) is { } m ? new HarmonyMethod(m) : null;
+        var prefix = Hm("Prefix");
+        var postfix = Hm("Postfix");
+        var finalizer = Hm("Finalizer");
+        foreach (var (target, _) in targets)
+            harmony.Patch(target, prefix: prefix, postfix: postfix, finalizer: finalizer);
     }
 
     /// <summary>

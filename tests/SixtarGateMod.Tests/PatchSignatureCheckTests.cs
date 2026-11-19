@@ -102,6 +102,41 @@ public class PatchSignatureCheckTests
         Assert.Single(w);
     }
 
+    // ---- 업데이트로 오버로드가 생긴 대상 ----
+    private class Overloaded
+    {
+        public void Play(string audioName, int channel) { }
+        public void Play(string audioName, int channel, float position) { }
+        public void Play(long audioId) { }
+        public void Stop() { }
+        public void Stop(int channel) { }
+    }
+
+    private static class PlayByPositionPatch { public static void Prefix(string audioName, float position) { } }
+    private static class PlayByNamePatch { public static void Prefix(string audioName, int channel) { } }
+    private static class NoArgsPatch { public static void Postfix() { } }
+
+    private static List<MethodInfo> Overloads(string name)
+        => typeof(Overloaded).GetMethods().Where(m => m.Name == name).ToList();
+
+    [Fact]
+    public void PickOverload_UsesPatchArgumentsAsSignatureHint()
+    {
+        var pick = PatchSignatureCheck.PickOverload(typeof(PlayByPositionPatch), Overloads("Play"), out _);
+        Assert.NotNull(pick);
+        Assert.Equal(3, pick!.GetParameters().Length);
+    }
+
+    [Fact]
+    public void PickOverload_RefusesWhenSeveralFit()
+    {
+        // (string audioName, int channel)는 2인자·3인자 오버로드 둘 다에 맞음 → 고르지 않음
+        Assert.Null(PatchSignatureCheck.PickOverload(typeof(PlayByNamePatch), Overloads("Play"), out var note));
+        Assert.Contains("2개", note);
+        // 인자를 안 받는 패치는 단서가 없음
+        Assert.Null(PatchSignatureCheck.PickOverload(typeof(NoArgsPatch), Overloads("Stop"), out _));
+    }
+
     [Fact]
     public void ObjectByRefAndSpecialArguments_Pass()
     {

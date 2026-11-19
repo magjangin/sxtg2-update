@@ -140,8 +140,14 @@ public static class ModConfig
             if (!File.Exists(ConfigPath)) return;
             var write = File.GetLastWriteTimeUtc(ConfigPath);
             if (!force && write == _lastWrite) return;
+            // 읽기에 성공한 뒤에만 시각을 기록한다. 전에는 먼저 기록해서, 편집기가 저장하는 순간 파일이 잠겨 읽기가
+            // 실패하면 그 변경은 파일을 다시 저장할 때까지 반영되지 않았다(다음 확인 때 시각이 같아 건너뜀).
+            string[] lines;
+            using (var fs = new FileStream(ConfigPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(fs))
+                lines = reader.ReadToEnd().Split('\n');
+            Apply(Parse(lines));
             _lastWrite = write;
-            Apply(Parse(File.ReadAllLines(ConfigPath)));
             Melon<Core>.Logger.Msg($"{LOG_PREFIX} 설정 로드: AutoPlay={AutoPlay}, AllPerfect={AllPerfect}, BlockSave={BlockSave}, MaxScore={MaxScore:0}, " +
                 $"JudgmentBar={EnableJudgmentBar}(vertical={JudgmentBarVertical}, shape={JudgmentBarShape}, side={JudgmentBarSide}), KeyViewer={EnableKeyViewer}, CustomNotes={CustomNotes}, RandomNoteSkin={RandomNoteSkin}, " +
                 $"SpeedChaos={NoteSpeedChaos}({NoteSpeedChaosMin}-{NoteSpeedChaosMax}, perLane={NoteSpeedChaosPerLane}), Hidden={Hidden}, FadeIn={FadeIn}, FadeOut={FadeOut}, " +
