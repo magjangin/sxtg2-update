@@ -94,8 +94,13 @@ public static class PatchSignatureCheck
             {
                 if (target.IsStatic) return "정적 메서드인데 패치가 __instance를 받음";
                 Type? decl = target.DeclaringType;
-                if (decl != null && !pt.IsAssignableFrom(decl) && !decl.IsAssignableFrom(pt))
-                    warnings.Add($"{Describe(target)}: __instance 형식 {pt.Name} ↔ 대상 클래스 {decl.Name}");
+                if (decl != null)
+                {
+                    if (pt.IsValueType != decl.IsValueType)
+                        return $"__instance 형식이 바뀜: 패치 {pt.Name} ↔ 대상 클래스 {decl.Name} (값/참조 형식 불일치)";
+                    if (!pt.IsAssignableFrom(decl) && !decl.IsAssignableFrom(pt))
+                        warnings.Add($"{Describe(target)}: __instance 형식 {pt.Name} ↔ 대상 클래스 {decl.Name}");
+                }
                 continue;
             }
 
@@ -108,8 +113,25 @@ public static class PatchSignatureCheck
                 continue;
             }
 
-            // ___field(필드 주입), __0(위치 인자) 등 나머지 특수 형식은 대상 인자와 무관
-            if (name.StartsWith("__", StringComparison.Ordinal)) continue;
+            // ___field(필드 주입)는 대상 인자와 무관
+            if (name.StartsWith("___", StringComparison.Ordinal)) continue;
+
+            // __0, __1 등 위치 인자: 대상의 idx번째 인자 형식과 대조
+            if (name.StartsWith("__", StringComparison.Ordinal))
+            {
+                if (int.TryParse(name.AsSpan(2), out int idx) && idx >= 0)
+                {
+                    if (idx >= targetParams.Length)
+                        return $"위치 인자 '{name}'가 대상 인자 수({targetParams.Length})를 벗어남 (대상 인자: {ParamList(targetParams)})";
+                    string? posErr = Compare(pt, Strip(targetParams[idx].ParameterType), name, target, warnings);
+                    if (posErr != null) return posErr;
+                }
+                else
+                {
+                    warnings.Add($"{Describe(target)}: 알 수 없는 Harmony 특수 인자 '{name}' (오타 확인 필요)");
+                }
+                continue;
+            }
 
             ParameterInfo? tp = null;
             foreach (var cand in targetParams)
@@ -127,6 +149,9 @@ public static class PatchSignatureCheck
     {
         if (patchType == targetType) return null;
         if (patchType == typeof(object)) return null; // object로 받는 패치(박싱)는 Harmony가 처리
+
+        if (patchType.IsPointer || targetType.IsPointer)
+            return $"'{name}' 포인터 형식이 바뀜: 패치 {patchType.Name} ↔ 대상 {targetType.Name}";
 
         if (patchType.IsValueType || targetType.IsValueType)
         {
@@ -159,7 +184,7 @@ public static class PatchSignatureCheck
         };
     }
 
-    private static Type Strip(Type t) => t.IsByRef || t.IsPointer ? t.GetElementType() ?? t : t;
+    private static Type Strip(Type t) => t.IsByRef ? t.GetElementType() ?? t : t;
 
     private static string ParamList(ParameterInfo[] ps)
     {

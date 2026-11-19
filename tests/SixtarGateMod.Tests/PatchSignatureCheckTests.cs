@@ -16,6 +16,8 @@ public class PatchSignatureCheckTests
 
     private class Target
     {
+        public Target(int id) { }
+        public int Prop { get; set; }
         public void Judge(int lane, float time, Derived data) { }
         public static void StaticCall(int lane) { }
         public bool IsOwned() => true;
@@ -144,5 +146,75 @@ public class PatchSignatureCheckTests
         Assert.Null(Run(typeof(ObjectResultPatch), nameof(Target.IsOwned)));
         Assert.Null(Run(typeof(RefArgPatch), nameof(Target.Ref)));
         Assert.Null(Run(typeof(SpecialArgsPatch), nameof(Target.Judge)));
+    }
+
+    private static class PositionalOkPatch { public static void Prefix(int __0, float __1) { } }
+    private static class PositionalWrongTypePatch { public static void Prefix(long __0) { } }
+    private static class PositionalOutOfRangePatch { public static void Prefix(int __9) { } }
+    private static class TypoSpecialArgPatch { public static void Prefix(object __instnace) { } }
+    private static class ValueTypeInstancePatch { public static void Prefix(int __instance) { } }
+    private static class UnrelatedInstancePatch { public static void Prefix(Other __instance) { } }
+    private static class FinalizerPatch { public static Exception? Finalizer(Exception __exception, ref bool __result) => null; }
+    private static class CtorResultPatch { public static void Postfix(int __result) { } }
+    private static class CtorInstancePatch { public static void Postfix(Target __instance, int id) { } }
+    private static class GetterPatch { public static void Postfix(ref int __result) { } }
+    private static class SetterPatch { public static void Prefix(int value) { } }
+
+    private class TieBreakerTarget
+    {
+        public void Send(Derived item) { }
+        public void Send(Other item) { }
+    }
+    private static class SendDerivedPatch { public static void Prefix(Derived item) { } }
+    private static class NoMatchPatch { public static void Prefix(string nonexistent) { } }
+
+    [Fact]
+    public void PositionalArguments_ValidateBoundsAndTypes()
+    {
+        Assert.Null(Run(typeof(PositionalOkPatch), nameof(Target.Judge)));
+        Assert.NotNull(Run(typeof(PositionalWrongTypePatch), nameof(Target.Judge)));
+        Assert.NotNull(Run(typeof(PositionalOutOfRangePatch), nameof(Target.Judge)));
+    }
+
+    [Fact]
+    public void UnknownDoubleUnderscoreArg_EmitsWarning()
+    {
+        var w = new List<string>();
+        Assert.Null(Run(typeof(TypoSpecialArgPatch), nameof(Target.Judge), w));
+        Assert.Single(w);
+    }
+
+    [Fact]
+    public void InstanceTypeMismatch_ValueIsError_UnrelatedRefIsWarning()
+    {
+        Assert.NotNull(Run(typeof(ValueTypeInstancePatch), nameof(Target.Judge)));
+        var w = new List<string>();
+        Assert.Null(Run(typeof(UnrelatedInstancePatch), nameof(Target.Judge), w));
+        Assert.Single(w);
+    }
+
+    [Fact]
+    public void Finalizer_Constructor_AndPropertyAccessors_ValidateCorrectly()
+    {
+        Assert.Null(Run(typeof(FinalizerPatch), nameof(Target.IsOwned)));
+
+        var ctor = typeof(Target).GetConstructor(new[] { typeof(int) })!;
+        Assert.NotNull(PatchSignatureCheck.Check(typeof(CtorResultPatch), new MethodBase[] { ctor }, new List<string>()));
+        Assert.Null(PatchSignatureCheck.Check(typeof(CtorInstancePatch), new MethodBase[] { ctor }, new List<string>()));
+
+        var prop = typeof(Target).GetProperty(nameof(Target.Prop))!;
+        Assert.Null(PatchSignatureCheck.Check(typeof(GetterPatch), new MethodBase[] { prop.GetGetMethod()! }, new List<string>()));
+        Assert.Null(PatchSignatureCheck.Check(typeof(SetterPatch), new MethodBase[] { prop.GetSetMethod()! }, new List<string>()));
+    }
+
+    [Fact]
+    public void PickOverload_PrefersWarningFreeOverload_AndReturnsNullWhenNoneFit()
+    {
+        var cands = typeof(TieBreakerTarget).GetMethods().Where(m => m.Name == nameof(TieBreakerTarget.Send)).ToList();
+        var pick = PatchSignatureCheck.PickOverload(typeof(SendDerivedPatch), cands, out _);
+        Assert.NotNull(pick);
+        Assert.Equal(typeof(Derived), pick!.GetParameters()[0].ParameterType);
+
+        Assert.Null(PatchSignatureCheck.PickOverload(typeof(NoMatchPatch), cands, out _));
     }
 }

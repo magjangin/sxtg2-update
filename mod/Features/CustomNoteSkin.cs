@@ -94,7 +94,11 @@ public static class CustomNoteSkin
             {
                 Sprite? sprite = null;
                 if (d.Rgba != null && MediaOverrideManager.TextureFromRgba(d.Width, d.Height, d.Rgba) is { } tex)
-                    sprite = Overlay.MakeSprite(tex);
+                {
+                    try { sprite = Overlay.MakeSprite(tex); }
+                    catch { sprite = null; }
+                    if (sprite == null) UnityEngine.Object.Destroy(tex);
+                }
                 sprite ??= MediaOverrideManager.LoadSpriteFromFile(d.Path);
                 if (sprite != null) Sprites[d.Name] = sprite;
             }

@@ -40,9 +40,16 @@ foreach (var t in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
     try
     {
         var tm = t.GetMethod("TargetMethod", Flags);
+        var tms = tm == null ? t.GetMethod("TargetMethods", Flags) : null;
         if (tm != null)
         {
             if (tm.Invoke(null, null) is MethodBase mb) targets.Add(mb);
+        }
+        else if (tms != null)
+        {
+            if (tms.Invoke(null, null) is System.Collections.IEnumerable seq)
+                foreach (var item in seq)
+                    if (item is MethodBase mb) targets.Add(mb);
         }
         else
         {
@@ -66,14 +73,19 @@ foreach (var t in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
                     _ => name == null ? null : AccessTools.Method(decl, name, argTypes),
                 };
             }
-            catch (AmbiguousMatchException) when (kind == MethodType.Normal && argTypes == null && decl != null && name != null)
+            catch (AmbiguousMatchException) when (kind == MethodType.Normal && argTypes == null && decl != null && name != null && pickOverload != null)
             {
-                // 부팅 시와 같은 해석: 패치 인자 목록으로 오버로드를 고름(PatchResilience.PickOverloadForPatch)
-                var candidates = decl.GetMethods(Flags | BindingFlags.Instance).Where(m => m.Name == name && !m.IsGenericMethodDefinition).ToList();
+                // 부팅 시와 같은 해석: 패치 인자 목록으로 오버로드를 고름(PatchResilience.PickOverloadForPatch, 기반 형식까지 탐색)
+                var candidates = new List<MethodInfo>();
+                for (Type? cur = decl; cur != null && candidates.Count == 0; cur = cur.BaseType)
+                {
+                    foreach (var m in cur.GetMethods(Flags | BindingFlags.Instance))
+                        if (m.Name == name && !m.IsGenericMethodDefinition) candidates.Add(m);
+                }
                 var args2 = new object?[] { t, candidates, null };
-                r = (MethodInfo?)pickOverload!.Invoke(null, args2);
+                r = (MethodInfo?)pickOverload.Invoke(null, args2);
                 Console.WriteLine($"  오버로드     {t.Name}: {args2[2]}");
-                overloaded++;
+                if (r != null) overloaded++;
             }
             if (r != null) targets.Add(r);
         }
