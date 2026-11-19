@@ -63,6 +63,7 @@ public static class PatchResilience
         //    사라진 패치는 붙이지 않는다(붙이면 처음 불릴 때마다 트램펄린 오류).
         var plan = new List<(Type Type, List<(MethodBase Method, IntPtr Code)> Targets)>();
         var addresses = new HashSet<IntPtr>();
+        var signatureWarnings = new List<string>();
         foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Core).Assembly))
         {
             if (type.GetCustomAttributes(typeof(HarmonyPatch), false).Length == 0) continue;
@@ -79,9 +80,34 @@ public static class PatchResilience
             }
 
             var targets = new List<(MethodBase, IntPtr)>();
+            var resolved = new List<MethodBase>();
             foreach (var target in ResolveDeclaredTargets(type, logger))
             {
                 if (target == null) continue;
+                resolved.Add(target);
+            }
+
+            // 패치 인자 ↔ 대상 시그니처 대조(2026-11-19): Harmony는 인자를 이름으로만 묶어, 업데이트로 형식이 바뀌면
+            // 그대로 붙은 뒤 첫 호출에서 잘못된 값을 읽거나 크래시한다.
+            if (resolved.Count > 0)
+            {
+                signatureWarnings.Clear();
+                string? mismatch;
+                try { mismatch = PatchSignatureCheck.Check(type, resolved, signatureWarnings); }
+                catch (Exception ex) { mismatch = null; logger.Warning($"[Harmony/Signature] '{type.Name}' 대조 중 예외(건너뛰지 않음): {ex.Message}"); }
+                foreach (var w in signatureWarnings)
+                    logger.Warning($"[Harmony/Signature] '{type.Name}' {w} — 업데이트로 형식이 바뀌었을 수 있음");
+                if (mismatch != null)
+                {
+                    skippedPreflight++;
+                    logger.Error($"[Harmony/Signature] '{type.Name}' 건너뜀: 게임 업데이트로 훅 대상 시그니처가 바뀜 — {mismatch}");
+                    NoteCritical(type, criticalMissing);
+                    continue;
+                }
+            }
+
+            foreach (var target in resolved)
+            {
                 IntPtr code = GetNativeCodePointer(target);
                 targets.Add((target, code));
                 if (code != IntPtr.Zero) addresses.Add(code);
@@ -142,7 +168,7 @@ public static class PatchResilience
         if (failed == 0 && skippedIcf == 0 && skippedPreflight == 0)
             logger.Msg($"[Harmony] 패치 {applied}개 모두 적용 완료 ({timing})");
         else
-            logger.Warning($"[Harmony] 패치 {applied}개 적용, ICF 보호로 {skippedIcf}개 건너뜀, 사전 JIT 검사로 {skippedPreflight}개 건너뜀, {failed}개 실패 ({timing})");
+            logger.Warning($"[Harmony] 패치 {applied}개 적용, ICF 보호로 {skippedIcf}개 건너뜀, 사전 검사(JIT·시그니처)로 {skippedPreflight}개 건너뜀, {failed}개 실패 ({timing})");
         foreach (var line in criticalMissing)
             logger.Error($"[Harmony] 필수 패치 빠짐: {line}");
 
@@ -273,7 +299,10 @@ public static class PatchResilience
         catch (Exception ex)
         {
             var inner = ex is TargetInvocationException tie && tie.InnerException != null ? tie.InnerException : ex;
-            logger.Warning($"[Harmony] '{patchType.Name}' 대상 메서드 탐색 중 예외: {inner.GetType().Name}: {inner.Message}");
+            string hint = inner is AmbiguousMatchException
+                ? " (게임 업데이트로 같은 이름의 오버로드가 생김: [HarmonyPatch]에 인자 형식을 지정해야 함)"
+                : "";
+            logger.Warning($"[Harmony] '{patchType.Name}' 대상 메서드 탐색 중 예외: {inner.GetType().Name}: {inner.Message}{hint}");
         }
         return list;
     }
@@ -354,19 +383,28 @@ public static class PatchResilience
     {
         foreach (string name in candidateNames)
         {
-            if (paramTypes != null)
+            try
             {
-                var exact = AccessTools.Method(type, name, paramTypes);
-                if (exact != null) return exact;
+                if (paramTypes != null)
+                {
+                    var exact = AccessTools.Method(type, name, paramTypes);
+                    if (exact != null) return exact;
+                }
+                else
+                {
+                    var m = AccessTools.Method(type, name);
+                    if (m != null) return m;
+                }
             }
-            else
+            catch (AmbiguousMatchException)
             {
-                var m = AccessTools.Method(type, name);
-                if (m != null) return m;
+                // 업데이트로 같은 이름의 오버로드가 생김(인자 형식 미지정 조회). 아래 이름·개수 대조로 넘어가고,
+                // 여러 개면 고르지 않는다(엉뚱한 오버로드를 패치하지 않도록).
             }
         }
 
         // Fallback if parameter types changed slightly in an update: match by name and parameter count.
+        // 이 경로로 찾았다면 시그니처가 바뀐 것이므로 로그로 남긴다(PatchSignatureCheck가 인자 형식을 다시 대조함).
         foreach (string name in candidateNames)
         {
             MethodInfo? singleMatch = null;
@@ -378,7 +416,14 @@ public static class PatchResilience
                 singleMatch = m;
                 matches++;
             }
-            if (matches == 1) return singleMatch;
+            if (matches == 1)
+            {
+                LogResolveWarning($"'{type.Name}.{name}': 정확한 시그니처로 못 찾아 이름·인자 개수로 대체함 " +
+                                  $"({string.Join(", ", Array.ConvertAll(singleMatch!.GetParameters(), p => p.ParameterType.Name))}). 게임 업데이트로 시그니처가 바뀌었을 수 있음");
+                return singleMatch;
+            }
+            if (matches > 1)
+                LogResolveWarning($"'{type.Name}.{name}': 같은 이름 후보가 {matches}개라 고르지 않음(업데이트로 오버로드가 생김) — 인자 형식을 지정해야 함");
         }
 
         return null;
@@ -386,6 +431,15 @@ public static class PatchResilience
 
     public static MethodInfo? ResolveMethod(Type type, params string[] candidateNames)
         => ResolveMethod(type, null, candidateNames);
+
+    /// <summary>Harmony가 TargetMethod를 다시 불러도 같은 경고를 두 번 찍지 않는다.</summary>
+    private static readonly HashSet<string> ResolveWarned = new(StringComparer.Ordinal);
+
+    private static void LogResolveWarning(string message)
+    {
+        if (ResolveWarned.Add(message))
+            Melon<Core>.Logger.Warning($"[Harmony/Resolve] {message}");
+    }
 
     public static MethodInfo? ResolvePropertySetter(Type type, params string[] candidateNames)
     {

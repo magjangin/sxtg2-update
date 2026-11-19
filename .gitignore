@@ -24,3 +24,5 @@ __pycache__/
 *.pickle
 tools/lambdascan/bin/
 tools/lambdascan/obj/
+tools/sigcheck/bin/
+tools/sigcheck/obj/

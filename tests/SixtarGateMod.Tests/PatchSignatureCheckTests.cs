@@ -1,0 +1,113 @@
+using System.Reflection;
+using SixtarGateMod.Managers;
+using Xunit;
+
+namespace SixtarGateMod.Tests;
+
+public class PatchSignatureCheckTests
+{
+    private enum Lane : int { A, B }
+    private enum SmallLane : byte { A }
+
+    // ---- 훅 대상(게임 메서드 역할) ----
+    private class Base { }
+    private class Derived : Base { }
+    private class Other { }
+
+    private class Target
+    {
+        public void Judge(int lane, float time, Derived data) { }
+        public static void StaticCall(int lane) { }
+        public bool IsOwned() => true;
+        public void Set(Lane lane) { }
+        public void Ref(ref int count) { }
+    }
+
+    private static MethodBase T(string name) => typeof(Target).GetMethod(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)!;
+
+    // ---- 패치 클래스들 ----
+    private static class GoodPatch
+    {
+        public static bool Prefix(Target __instance, int lane, Derived data, ref bool __runOriginal) => true;
+        public static void Postfix(float time) { }
+    }
+
+    private static class RenamedArgPatch { public static void Prefix(int laneIndex) { } }
+    private static class WrongValueTypePatch { public static void Prefix(long lane) { } }
+    private static class FloatVsIntPatch { public static void Prefix(float lane) { } }
+    private static class InstanceOnStaticPatch { public static void Prefix(object __instance) { } }
+    private static class ResultOnVoidPatch { public static void Postfix(bool __result) { } }
+    private static class ResultOkPatch { public static void Postfix(ref bool __result) { } }
+    private static class ResultWrongPatch { public static void Postfix(ref int __result) { } }
+    private static class EnumAsIntPatch { public static void Prefix(int lane) { } }
+    private static class EnumAsByteEnumPatch { public static void Prefix(SmallLane lane) { } }
+    private static class BaseTypePatch { public static void Prefix(Base data) { } }
+    private static class UnrelatedRefPatch { public static void Prefix(Other data) { } }
+    private static class ObjectPatch { public static void Prefix(object data) { } }
+    private static class ObjectResultPatch { public static void Postfix(object __result) { } }
+    private static class RefArgPatch { public static void Prefix(ref int count) { } }
+    private static class SpecialArgsPatch { public static void Prefix(int __state, object[] __args, MethodBase __originalMethod, int ___field) { } }
+
+    private static string? Run(Type patch, string target, List<string>? warnings = null)
+        => PatchSignatureCheck.Check(patch, new[] { T(target) }, warnings ?? new List<string>());
+
+    [Fact]
+    public void MatchingSignature_Passes()
+    {
+        var w = new List<string>();
+        Assert.Null(Run(typeof(GoodPatch), nameof(Target.Judge), w));
+        Assert.Empty(w);
+    }
+
+    [Fact]
+    public void RenamedTargetArgument_IsError()
+        => Assert.Contains("laneIndex", Run(typeof(RenamedArgPatch), nameof(Target.Judge)));
+
+    [Theory]
+    [InlineData(typeof(WrongValueTypePatch))]
+    [InlineData(typeof(FloatVsIntPatch))]
+    public void ValueTypeChange_IsError(Type patch)
+        => Assert.NotNull(Run(patch, nameof(Target.Judge)));
+
+    [Fact]
+    public void InstanceOnStaticTarget_IsError()
+        => Assert.NotNull(Run(typeof(InstanceOnStaticPatch), nameof(Target.StaticCall)));
+
+    [Fact]
+    public void ResultOnVoidTarget_IsError()
+        => Assert.NotNull(Run(typeof(ResultOnVoidPatch), nameof(Target.Judge)));
+
+    [Fact]
+    public void ResultTypeMatch_Passes_AndMismatch_IsError()
+    {
+        Assert.Null(Run(typeof(ResultOkPatch), nameof(Target.IsOwned)));
+        Assert.NotNull(Run(typeof(ResultWrongPatch), nameof(Target.IsOwned)));
+    }
+
+    [Fact]
+    public void EnumReceivedAsSameSizeInt_Passes_ButSmallerEnum_IsError()
+    {
+        Assert.Null(Run(typeof(EnumAsIntPatch), nameof(Target.Set)));
+        Assert.NotNull(Run(typeof(EnumAsByteEnumPatch), nameof(Target.Set)));
+    }
+
+    [Fact]
+    public void ReferenceTypes_BaseIsSilent_UnrelatedIsWarningOnly()
+    {
+        var w = new List<string>();
+        Assert.Null(Run(typeof(BaseTypePatch), nameof(Target.Judge), w));
+        Assert.Empty(w);
+
+        Assert.Null(Run(typeof(UnrelatedRefPatch), nameof(Target.Judge), w));
+        Assert.Single(w);
+    }
+
+    [Fact]
+    public void ObjectByRefAndSpecialArguments_Pass()
+    {
+        Assert.Null(Run(typeof(ObjectPatch), nameof(Target.Judge)));
+        Assert.Null(Run(typeof(ObjectResultPatch), nameof(Target.IsOwned)));
+        Assert.Null(Run(typeof(RefArgPatch), nameof(Target.Ref)));
+        Assert.Null(Run(typeof(SpecialArgsPatch), nameof(Target.Judge)));
+    }
+}

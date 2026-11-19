@@ -13,7 +13,7 @@
 
 | 접두사 | 출처 |
 | --- | --- |
-| `[Harmony]` | 패치 적용 결과 (`[Harmony/Preflight]`, `[Harmony/ICFGuard]` 포함) |
+| `[Harmony]` | 패치 적용 결과 (`[Harmony/Preflight]` 사라진 멤버, `[Harmony/Signature]` 인자 시그니처 불일치, `[Harmony/Resolve]` 대체 해석·오버로드, `[Harmony/ICFGuard]` 공유 주소 포함) |
 | `[UpdateGuard]` | Steam 빌드 확인, 파일 지문 비교, Unity 예외 전달, 실기 확인 기록 |
 | `[LambdaTranslator]` | 람다/코루틴 번역 사전 적중 및 기계어 재번역 |
 | `[ICFScan]` | 실행 중 IL2CPP 주소 공유 개수 스캔 |
