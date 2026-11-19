@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    게임 업데이트 후(MelonLoader가 Il2CppAssemblies를 새로 만든 뒤) 게임을 켜기 전에, 빌드된 SixtarGateMod.dll의
+    모든 [HarmonyPatch] 클래스의 Prefix/Postfix/Finalizer 인자를 새 인터롭 어셈블리의 훅 대상 시그니처와 대조한다.
+    모드 안의 PatchSignatureCheck를 그대로 불러 쓰므로 부팅 시 판정과 같다. IL2CPP 런타임은 필요 없다.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RollForward>Major</RollForward>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <GameDir Condition="'$(GameDir)' == ''">$(SIXTAR_GAME_DIR)</GameDir>
+    <GameDir Condition="'$(GameDir)' == ''">H:\steam\steamapps\common\Sixtar Gate STARTRAIL</GameDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameDir)\MelonLoader\net6\0Harmony.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

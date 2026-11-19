@@ -6,6 +6,7 @@
 2. 차이 중 모드가 훅하는 형식(mod 소스의 typeof(...))에 걸린 줄만 따로 출력.
 3. slices/에 남은 이전 바이너리 함수와 새 GameAssembly.dll 바이트 비교(python+pefile 있을 때).
 4. -ScriptJson을 주면 훅 대상의 ICF(주소 공유) 개수를 새 빌드 기준으로 다시 셈(icf_check.py).
+5. 빌드된 모드 DLL이 있으면 모든 패치의 인자를 새 인터롭 어셈블리의 훅 대상 시그니처와 대조(tools/sigcheck).
 
 사용:
   powershell -ExecutionPolicy Bypass -File tools\version_diff\check_update.ps1
@@ -90,6 +91,18 @@ if ($py -and $ScriptJson) {
 } else {
     Write-Host ""
     Write-Host "[4] ICF 개수 점검 생략: 새 빌드로 Il2CppDumper를 돌린 뒤 -ScriptJson <script.json>을 주세요."
+}
+
+$modDll = Join-Path $Repo "mod\bin\Release\net6.0\SixtarGateMod.dll"
+Write-Host ""
+if (Test-Path $modDll) {
+    Write-Host "[5] 패치 인자 ↔ 새 인터롭 시그니처 대조 (tools/sigcheck):"
+    $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
+    if (-not $dotnet) { $dotnet = "C:\Program Files\dotnet\dotnet.EXE" }
+    & $dotnet run --project (Join-Path $Repo "tools\sigcheck\sigcheck.csproj") -v q -- $modDll $Game
+    if ($LASTEXITCODE -eq 1) { Write-Host "    시그니처가 바뀐 훅이 있습니다. 그 패치는 부팅 시 [Harmony/Signature]로 건너뛰어집니다. 패치 인자를 새 시그니처에 맞추세요." }
+} else {
+    Write-Host "[5] 시그니처 대조 생략: 먼저 dotnet build mod/SixtarGateMod.csproj -c Release"
 }
 
 Write-Host ""

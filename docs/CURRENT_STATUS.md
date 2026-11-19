@@ -66,6 +66,7 @@
 31. 수정 기록 감사·회귀 수정·리팩토링·인수인계 강화 (2026-11-19):
     - **수정 기록·업데이트 내성 감사 수정:** `CustomMarathon.OnSceneLoaded` `inPlayFlow`에 `"Loading"` 씬 누락 회귀 수정, `CustomBga.PlayAfter`에서 지연 BGA를 막을 수 있던 `PlayAssist.IsPlaying` 조건 제거, `LambdaTranslator.RvaMismatch` `code == IntPtr.Zero` 검사 순서 교정, `UpdateGuard.LogBuildVerdict` `!_fingerprintChanged` 조건 통일, `CustomJackets.ClearRowCache()` 비-MusicSelect 씬 정리, `HOOK_TABLE.md` `Resume` 두 오버로드 행 분리(`icf_check.py` 120/120 전수 검사).
     - **리팩토링·인수인계:** `Managers/AtomicFile.cs` 추출로 `UpdateGuard`/`LambdaTranslator`/`IcfScanner`/`ModConfig` 원자적 쓰기 통일, `Overlay.White`·`CustomJackets.SetJacketImage`·`Core.LoadCurrentAlbumBmsOrDefault` 중복 제거 및 미사용 `using`·배열 할당 정리, `AGENTS.md`·`HANDOVER_NOTES.md`·`CODE_STRUCTURE.md` 최신화. Release/Debug 빌드(경고/오류 0)·xUnit 40건·`lambdascan`·`icf_check.py` 통과(실기 미실행).
+32. 패치 시그니처 대조·오버로드 내성·오프라인 대조 도구 (2026-11-19): Harmony는 패치 인자를 이름으로만 묶고 형식을 확인하지 않아, 업데이트로 훅 대상 인자 형식이 바뀌면(`int`→`long` 등) 패치가 붙은 뒤 첫 호출에서 잘못된 값·크래시가 남. `Managers/PatchSignatureCheck.cs`가 부팅 시 Prefix/Postfix/Finalizer 인자를 대상과 대조해 값 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 건너뛰고(`[Harmony/Signature]`, `[CriticalPatch]`면 필수 빠짐), 참조 형식 불일치는 경고만. `PatchResilience.ResolveMethod`가 업데이트로 생긴 오버로드(`AmbiguousMatchException`)를 잡고, 이름·개수 대체 경로를 `[Harmony/Resolve]` 경고로 남김. `tools/sigcheck`(오프라인, `check_update.ps1` 5단계)로 게임을 켜기 전 전수 대조: 빌드 `26455233` 통과 114·오류 0·경고 0·클로저 4개 런타임 필요(인자는 `Il2CppObjectBase __instance`뿐). xUnit 40 → 50건, Release 빌드 경고/오류 0. 실기 미실행. [REVIEW_2026-11-19.md](03-development/REVIEW_2026-11-19.md)
 
 ## 알려진 한계
 

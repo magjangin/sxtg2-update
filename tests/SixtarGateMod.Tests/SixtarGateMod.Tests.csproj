@@ -22,6 +22,7 @@
     <Compile Include="..\..\mod\Loaders\TrackInfoParser.cs" Link="Loaders\TrackInfoParser.cs" />
     <Compile Include="..\..\mod\Managers\BuildFingerprint.cs" Link="Managers\BuildFingerprint.cs" />
     <Compile Include="..\..\mod\Managers\NativeLambdaScan.cs" Link="Managers\NativeLambdaScan.cs" />
+    <Compile Include="..\..\mod\Managers\PatchSignatureCheck.cs" Link="Managers\PatchSignatureCheck.cs" />
     <Compile Include="..\..\mod\Managers\X64Decoder.cs" Link="Managers\X64Decoder.cs" />
   </ItemGroup>
 
