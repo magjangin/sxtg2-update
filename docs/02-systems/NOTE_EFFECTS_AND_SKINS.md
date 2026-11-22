@@ -42,6 +42,8 @@ head가 판정선까지 거리라서, head와 tail에 같은 배율을 곱하면
 | `Hold.png`, `BlueHold.png`, `RedHold.png` | 롱노트 몸통 (`bodyImage`, `holdImage`) |
 | `Tail.png`, `BlueTail.png`, `RedTail.png` | 롱노트 끝 (`tailImage`) |
 
+샘플 이미지는 [`note-skins/`](note-skins/)에 있습니다. `blue.png`/`red.png`는 기본 머리 이미지(`Blue.png`/`Red.png`로 이름을 맞춰 `CustomNotes\`에 넣으면 됨)이고, `눈송이`·`왓카`·`컬러풀`은 완성 스킨 예시(레드/블루 한 쌍)입니다.
+
 훅: `StartrailPatternRenderer.GetNoteObejct(LaneIndex, Transform)` Postfix. 노트 풀이 레인별(`Dictionary<LaneIndex, Queue<NoteObject>>`)이라 lane 인자가 곧 노트 레인입니다.
 `NoteObject.SetTickData`는 102개 함수와 코드를 공유해서 쓰면 안 됩니다.
 
