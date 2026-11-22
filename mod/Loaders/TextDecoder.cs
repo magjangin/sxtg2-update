@@ -61,7 +61,10 @@ public static class TextDecoder
                 encodingName = enc.WebName;
                 return text;
             }
-            catch (Exception) { }
+            catch (Exception ex) when (ex is DecoderFallbackException or ArgumentException or NotSupportedException)
+            {
+                // 이 코드 페이지로는 안 풀림(잘못된 바이트열이거나 이 런타임에 없는 페이지): 다음 후보로.
+            }
         }
 
         encodingName = "utf-8 (lossy)";
@@ -76,14 +79,14 @@ public static class TextDecoder
             int cp = CultureInfo.CurrentCulture.TextInfo.ANSICodePage;
             return cp is 932 or 936 or 949 or 950 ? cp : 0;
         }
-        catch { return 0; }
+        catch (Exception) { return 0; } // 문화권 정보를 못 읽으면 ANSI 후보 없이 진행
     }
 
     private static void EnsureProvider()
     {
         if (_providerRegistered) return;
         try { Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); }
-        catch { }
+        catch (Exception) { } // 이미 등록됐거나 등록 불가: 이후 GetEncoding이 실패하면 위에서 다음 후보로 넘어감
         _providerRegistered = true;
     }
 }

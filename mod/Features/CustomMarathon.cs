@@ -126,6 +126,8 @@ public static class CustomMarathon
         }
     }
 
+    private static bool _escReadFailed;
+
     public static void Update(float now)
     {
         if (!IsActive || _resultShownAt < 0f) return;
@@ -142,7 +144,15 @@ public static class CustomMarathon
                 return;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // 입력 모듈이 없거나 아직 준비 전이면 Esc 중단만 못 쓴다. 프레임마다 반복되므로 한 번만 알림.
+            if (!_escReadFailed)
+            {
+                _escReadFailed = true;
+                Melon<Core>.Logger.Warning($"[Marathon] Esc 입력을 읽지 못해 Esc 중단을 쓸 수 없음 (이후 같은 오류는 생략): {ex.Message}");
+            }
+        }
 
         float auto = ModConfig.CustomMarathonAutoNext;
         if (auto > 0f && !_autoAdvanced && now - _resultShownAt >= auto)

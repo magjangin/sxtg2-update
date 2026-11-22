@@ -1,6 +1,6 @@
 # 코드 구조
 
-`mod/` 36개 파일, 9,620줄 (2026-11-20 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(8개 테스트 파일, 57건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+`mod/` 36개 파일, 9,620줄 (2026-11-20 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(11개 테스트 파일, 71건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
 | 파일 | 줄 | 역할 |
 | --- | ---: | --- |
@@ -41,7 +41,7 @@
 | `Managers/AtomicFile.cs` | 35 | 임시 파일(`.tmp`) → `File.Move` 원자적 UTF-8 쓰기 유틸 (`UpdateGuard`·`LambdaTranslator`·`IcfScanner`·`ModConfig` 공용) |
 | `Models/CustomAlbumInfo.cs` | 28 | 앨범 정보 |
 
-## 순수 모듈 테스트 (`tests/SixtarGateMod.Tests/`, 57건)
+## 순수 모듈 테스트 (`tests/SixtarGateMod.Tests/`, 71건)
 
 | 파일 | 건수 | 대상 |
 | --- | ---: | --- |
@@ -53,12 +53,16 @@
 | `BmsParserTests.cs` | 5 | `BmsParser` BPM·변속·변박·롱노트·중복 BPM 덮어쓰기 |
 | `TextDecoderTests.cs` | 3 | `TextDecoder` BOM·UTF-8·CP949/Shift-JIS 판별 |
 | `TrackInfoParserTests.cs` | 2 | `TrackInfoParser` 다국어 키·전각 구분자·축약형 정규화 |
+| `PngDecoderTests.cs` | 9 | `PngDecoder` 필터 1·2(Sub·Up)·팔레트+tRNS·박스 축소·인터레이스/16비트 거부·잘린 데이터·픽셀 상한(`MaxPixels`) |
+| `AtomicFileTests.cs` | 3 | `AtomicFile` 상위 폴더 생성·`.tmp` 미잔류·덮어쓰기·BOM 없음 |
+| `SourceHygieneTests.cs` | 2 | 이유 없는 빈 `catch` 금지, `csproj` `<Version>`과 `MelonInfo` 버전 일치 |
 
 ## 코드 규칙
 
 - **패치 클래스 하나 = 훅 하나.** `[HarmonyPatch(typeof(대상), nameof(메서드))]`를 단 `public static class`. 이름은 `{대상}_{메서드}_Patch`.
 - **핵심 패치는 `[CriticalPatch("누락 시 영향")]` 표시.** 부팅 시 누락되면 `[UpdateGuard]`가 즉시 `문제 있음`으로 경고합니다(현재 20개).
 - **오버로드가 생길 수 있는 대상은 인자 형식까지 지정.** `[HarmonyPatch(typeof(X), nameof(X.M), new[] { typeof(int) })]`. 인자 형식 없이 이름만 주면 업데이트로 같은 이름 오버로드가 생겼을 때 `AmbiguousMatchException`이 납니다(2026-11-20부터는 패치 인자 목록으로 맞는 오버로드가 하나면 골라 붙이지만, 여럿이 맞으면 빠짐). 패치 인자는 대상과 **같은 이름·같은 형식**으로 받습니다(부팅 시 `PatchSignatureCheck`가 대조, 값 형식이 다르면 건너뜀).
+- **빈 `catch`는 이유 없이 쓰지 않음.** 예외 필터로 좁히거나(`when (ex is IOException)`), 본문/줄 끝에 이유 주석을 달거나, `Core.DebugLog`로 남깁니다. `SourceHygieneTests`가 CI에서 강제합니다. 작업 스레드(`ModLog.RunCaptured` 밖)에서는 로그를 직접 못 부르므로 결과 값으로 실패를 알리고 메인 스레드에서 보고합니다.
 - **대상은 `typeof`로.** `AccessTools.TypeByName` 금지 (노란 경고).
 - **패치 전에 ICF 확인.** `script.json`에서 주소 중복 개수를 셉니다 ([IL2CPP_PITFALLS.md](IL2CPP_PITFALLS.md)). 일부러 공유 주소를 패치하면 `[IcfShared(n, "안전한 이유")]`를 붙입니다(없으면 실행 중 검사가 건너뜀).
 - **매 프레임 코드에 Unity 값 형식 헬퍼 금지.** `Box`, `Overlay.Rgba`, `MathF`만.

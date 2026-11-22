@@ -74,7 +74,8 @@ public static class NoteEffects
 
     public static void EndPlay()
     {
-        try { SetNotePatches(false); } catch { }
+        try { SetNotePatches(false); }
+        catch (Exception ex) { Core.DebugLog($"[NoteEffects] 동적 패치 해제 실패(무시): {ex.Message}"); }
         NoteFactor.Clear();
         LaneFactor.Clear();
         NoteLane.Clear();
@@ -88,7 +89,8 @@ public static class NoteEffects
         {
             if (c.Group != null && c.Alpha != 1f)
             {
-                try { c.Group.alpha = 1f; } catch { }
+                try { c.Group.alpha = 1f; }
+                catch (Exception) { } // 씬 전환으로 이미 파괴된 CanvasGroup: 복원할 것이 없음
             }
         }
         Covers.Clear();
@@ -176,7 +178,7 @@ public static class NoteEffects
             }
             catch
             {
-                try { harmony.Unpatch(head, HarmonyPatchType.Prefix, harmony.Id); } catch { }
+                try { harmony.Unpatch(head, HarmonyPatchType.Prefix, harmony.Id); } catch (Exception ex) { Core.DebugLog($"[NoteEffects] HeadPosition 패치 해제 실패(무시): {ex.Message}"); }
                 throw;
             }
         }

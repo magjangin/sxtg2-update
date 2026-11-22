@@ -20,6 +20,8 @@
     <Compile Include="..\..\mod\Loaders\SxtgBmsConverter.cs" Link="Loaders\SxtgBmsConverter.cs" />
     <Compile Include="..\..\mod\Loaders\TextDecoder.cs" Link="Loaders\TextDecoder.cs" />
     <Compile Include="..\..\mod\Loaders\TrackInfoParser.cs" Link="Loaders\TrackInfoParser.cs" />
+    <Compile Include="..\..\mod\Loaders\PngDecoder.cs" Link="Loaders\PngDecoder.cs" />
+    <Compile Include="..\..\mod\Managers\AtomicFile.cs" Link="Managers\AtomicFile.cs" />
     <Compile Include="..\..\mod\Managers\BuildFingerprint.cs" Link="Managers\BuildFingerprint.cs" />
     <Compile Include="..\..\mod\Managers\NativeLambdaScan.cs" Link="Managers\NativeLambdaScan.cs" />
     <Compile Include="..\..\mod\Managers\PatchSignatureCheck.cs" Link="Managers\PatchSignatureCheck.cs" />

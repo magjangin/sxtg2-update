@@ -107,8 +107,9 @@ public static class CustomAudioManager
         }
         catch
         {
-            try { ch.stop(); } catch { }
-            try { sound.release(); } catch { }
+            // 재생 실패 뒤 정리: 핸들이 이미 무효일 수 있어 결과는 무시하고 원래 예외를 다시 던진다.
+            try { ch.stop(); } catch (Exception) { /* 이미 무효인 핸들 */ }
+            try { sound.release(); } catch (Exception) { /* 이미 해제됨 */ }
             throw;
         }
     }
