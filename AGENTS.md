@@ -64,7 +64,7 @@
   dotnet build mod/SixtarGateMod.csproj
   ```
   - 빌드 후 `$(GameDir)\Mods\`가 있으면 `SixtarGateMod.dll`을 자동 복사함(게임 실행 중 잠겨 있으면 경고만 출력). 복사 생략 시 `-p:SkipDeploy=true`.
-- **순수 모듈 단위 테스트 (게임 DLL 불필요, 8개 파일 57건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동):**
+- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 71건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동):**
   ```powershell
   dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
   ```

@@ -193,7 +193,11 @@ public static class PatchPreflight
         {
             resolveError ??= $"{ex.GetType().Name}: {ex.Message}";
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // 예상 밖 예외는 '멀쩡함'으로 취급하되(거짓 건너뜀 방지) 원인 추적용으로 남긴다.
+            Core.DebugLog($"[Harmony/Preflight] 토큰 검사 중 예상 밖 예외(무시): {ex.GetType().Name}: {ex.Message}");
+        }
         return false;
     }
 

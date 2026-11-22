@@ -72,6 +72,7 @@ docs/
 - [REVIEW_2026-11-16.md](03-development/REVIEW_2026-11-16.md): 코드 리뷰 — 업데이트 지문 비교(메타데이터·UnityPlayer 크기), 부팅 끝 점검 결과 한 줄, `BuildFingerprint` 오프라인 시험
 - [REVIEW_2026-11-18.md](03-development/REVIEW_2026-11-18.md): 코드 리뷰 — 크기가 같은 변경 감지(PE 링크 시각, 메타데이터 버전·헤더 해시), 커스텀 곡 결과 화면 도달 시 실기 확인 자동 기록(`verifiedPlay`)
 - [REVIEW_2026-11-19.md](03-development/REVIEW_2026-11-19.md): 코드 리뷰 — 패치 인자 ↔ 훅 대상 시그니처 대조(`PatchSignatureCheck`), 오버로드 생김 대응, 오프라인 대조 도구 `tools/sigcheck`
+- [REVIEW_2026-11-22.md](03-development/REVIEW_2026-11-22.md): 빈 `catch` 12곳 정리, `PngDecoder` 픽셀 상한, 테스트 71건(PNG·AtomicFile·소스 규칙), v2.3.1
 
 **04-game-reference**
 - [MODE_SELECT.md](04-game-reference/MODE_SELECT.md): 모드 7종과 테마 8종

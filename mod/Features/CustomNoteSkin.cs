@@ -64,7 +64,10 @@ public static class CustomNoteSkin
             {
                 if (PngDecoder.TryDecode(File.ReadAllBytes(file), 0, out w, out h, out var pixels)) rgba = pixels;
             }
-            catch { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // 작업 스레드라 여기서 로그를 남기지 않는다: Rgba가 null이면 메인 스레드가 LoadImage로 다시 읽고, 거기서도 실패하면 보고한다.
+            }
             list.Add(new Decoded(Path.GetFileNameWithoutExtension(file), file, w, h, rgba));
         }
         return list;

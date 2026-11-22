@@ -769,7 +769,7 @@ public static class PatchResilience
             for (int i = 0; i < copyArray.Length; i++)
             {
                 try { copyArray[i](src, dst); }
-                catch { }
+                catch (Exception ex) { Core.DebugLog($"[PropertyCloner] 속성 #{i} 복제 실패(건너뜀): {ex.Message}"); }
             }
         };
     }

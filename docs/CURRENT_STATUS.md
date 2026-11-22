@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-20)
+# 현재 상태 (2026-11-22)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 118개(`[Harmony] 패치 118개 모두 적용 완료`, 2026-11-14 3차 정리 전 120개). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -25,7 +25,7 @@
 | 전곡·DLC 해금 | 실기 확인 | |
 | 출석 보상 창 자동 표시 끄기 | 실기 확인 | 로그 `[Attendance] Skipped ...` |
 
-## 최근 변경 (2026-10-30 ~ 2026-11-20, `#n` = PR 번호)
+## 최근 변경 (2026-10-30 ~ 2026-11-22, `#n` = PR 번호)
 
 1. **#1** AllPerfect가 안 누른 롱노트 틱에 레인 불빛을 켜던 문제 수정
 2. **#2** README, 성능 정리(오버레이 IL2CPP 호출 제거, 디스크 접근 제거, 차트 캐시), 죽은 훅 제거 (4,217 → 3,746줄)
@@ -72,6 +72,7 @@
     - **시그니처 대조·도구:** `PatchSignatureCheck` `__0`/`__1` 위치 인자 검증·`__instance` 값/참조 불일치 오류·`Strip()` 포인터 유지(`int*` vs `int` 감지), `tools/sigcheck` `overloaded++` 조건 버그 수정·`BaseType` 탐색·`TargetMethods()` 지원 동기화.
     - **업데이트 내성·기능 안정화:** `RandomNoteSkin.BindGetNoteReference`의 오타 직접 호출 폴백 제거(업데이트 시 `PatchPreflight` 공유 스폰 훅 탈락 방지) 및 `EndPlay()` 스킨/레인 캐시 정리, `NoteEffects.SetNotePatches` 부분 패치 롤백 및 `RestoreAndClearCovers()` 재시작 투명도 복원, `CustomMusicSelect` `nameof` 통일·`TrackID` null/예외 가드, `OfflineBypass` 핵심 4개 훅(`[CriticalPatch]` 16→20개) 추가·Finalizer/catch `__instance` null 가드·오타 로그 수정, `AttendancePopup` `_getOwner` 누락 경고 및 `Prefix` 예외 가드, `CustomNoteSkin` 스프라이트 생성 실패 시 `Texture2D` 파괴.
     - **검증:** xUnit **57건 통과**, Release/Debug 빌드(경고/오류 0), `tools/sigcheck` 통과 114·오류 0·경고 0·오버로드로 고름 0(실기 미실행).
+35. 빈 `catch` 정리·`PngDecoder` 상한·테스트 보강·v2.3.1 (2026-11-22, [상세](03-development/REVIEW_2026-11-22.md)): 빈 `catch { }` 12곳을 예외 필터·이유 주석·`DebugLog`로 바꿈(마라톤 Esc 입력 오류는 한 번만 경고), `PngDecoder`에 `MaxPixels`(40,000,000) 상한 추가(16384×16384 PNG가 해독 버퍼 2GB를 잡던 것 → Unity `LoadImage` 폴백), xUnit 57건 → 71건(`PngDecoder`·`AtomicFile`·소스 규칙 `SourceHygieneTests`). **검증:** Release 빌드 경고/오류 0, xUnit 71건 통과. 실기는 미실행.
 
 ## 알려진 한계
 

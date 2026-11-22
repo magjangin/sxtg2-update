@@ -16,6 +16,12 @@ public static class PngDecoder
 {
     private static readonly byte[] Signature = { 137, 80, 78, 71, 13, 10, 26, 10 };
 
+    /// <summary>
+    /// 이보다 큰 그림은 해독하지 않고 false(호출자가 Unity LoadImage로 폴백). 16384×16384 PNG는 해독 버퍼만 2GB 가까이
+    /// 잡혀 작업 스레드에서 메모리 부족이 나므로, 자켓·노트 스킨으로 쓰는 크기(8K급까지)로 제한한다.
+    /// </summary>
+    internal const long MaxPixels = 40_000_000;
+
     public static bool TryDecode(byte[] file, int maxWidth, out int width, out int height, out byte[] rgba)
     {
         width = height = 0;
@@ -62,7 +68,7 @@ public static class PngDecoder
             if (type == "IEND") break;
             pos = data + len + 4; // skip CRC
         }
-        if (w <= 0 || h <= 0 || w > 16384 || h > 16384) return false;
+        if (w <= 0 || h <= 0 || w > 16384 || h > 16384 || (long)w * h > MaxPixels) return false;
         if (colorType == 3 && palette == null) return false;
         // 컬러 타입 0(회색조)·2(RGB)의 tRNS 투명색 키는 미지원이므로 Unity 폴백으로 넘긴다.
         if (paletteAlpha != null && (colorType == 0 || colorType == 2)) return false;

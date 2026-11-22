@@ -14,7 +14,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using SixtarGateMod.Managers;
 using SixtarGateMod.Features;
 
-[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.0", "화영왕 (Hwa-young-wang)")]
+[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.1", "화영왕 (Hwa-young-wang)")]
 [assembly: MelonGame("Lyrebird Studio", "Sixtar Gate STARTRAIL")]
 // OnInitializeMelon calls PatchAll itself; without this MelonLoader auto-patches too and every hook runs twice.
 [assembly: HarmonyDontPatchAll]
@@ -68,7 +68,7 @@ public class Core : MelonMod
     public override void OnInitializeMelon()
     {
         var ver = typeof(Core).Assembly.GetName().Version;
-        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "2.3.0";
+        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "2.3.1";
         LoggerInstance.Msg("==========================================================");
         LoggerInstance.Msg($" Sixtar Gate: STARTRAIL 커스텀 차트 & 미디어 로더 v{verText}");
         LoggerInstance.Msg(" 제작: 화영왕 (Hwa-young-wang)");

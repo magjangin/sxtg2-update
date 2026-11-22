@@ -144,7 +144,7 @@ public static class UpdateGuard
                 if (File.Exists(f)) { meta = f; break; }
             }
         }
-        catch { }
+        catch (Exception ex) { Core.DebugLog($"[UpdateGuard] global-metadata.dat 위치 검색 실패: {ex.Message}"); }
         d["metadataSize"] = meta == null ? "?" : SizeOf(meta);
         BuildFingerprint.MetadataHeader(meta == null ? Array.Empty<byte>() : ReadHead(meta, 0x1000), out string metaVersion, out string metaHeader);
         d["metadataVersion"] = metaVersion;
