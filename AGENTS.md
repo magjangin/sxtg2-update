@@ -80,4 +80,10 @@
   dotnet run --project tools/sigcheck -- [mod/bin/Release/net6.0/SixtarGateMod.dll] [게임 폴더]
   ```
   빌드 `26455233` 기준(2026-11-23): 통과 114, 오류 0, 경고 0, 대상 미확인 4(LambdaTranslator 클로저 콜백 — IL2CPP 런타임 필요, 모두 `Il2CppObjectBase __instance`만 받음), 오버로드로 고름 0, 바뀐 시그니처로 고름 0.
+- **릴리즈 (`tools/release.ps1`, 게임 설치 PC에서 실행 — 빌드에 게임 DLL이 필요해 GitHub Actions에서는 불가):**
+  ```powershell
+  .\tools\release.ps1            # 버전 일치 확인 + Release 빌드 + 단위 테스트 + sigcheck → dist\SixtarGateMod-v<버전>.zip, 노트 초안
+  .\tools\release.ps1 -Publish   # 위 + main=origin/main·깨끗한 트리 확인 → 태그 v<버전> 푸시 → gh release create
+  ```
+  버전 기준은 csproj `<Version>`이며 `Core.cs` `MelonInfo`·`CHANGELOG.md` `## [<버전>]`이 다르면 중단. 릴리즈 노트 = CHANGELOG 해당 항목 + 설치 안내(게임 빌드는 1절에서 읽음) + SHA256. 이미 있는 태그면 중단하므로 먼저 세 곳의 버전을 올릴 것.
 - **로그:** `{GameDir}\MelonLoader\Latest.log` (정상 기동: `[Harmony] 패치 118개 모두 적용 완료`), Unity 예외는 `%USERPROFILE%\AppData\LocalLow\Lyrebird Studio\Sixtar Gate STARTRAIL\Player.log`.
