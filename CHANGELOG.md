@@ -2,6 +2,11 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [Unreleased]
+
+### 추가
+- `tools/release.ps1`: csproj 버전 기준으로 빌드·테스트·시그니처 대조 후 zip을 만들고, `-Publish`면 태그 `v<버전>`과 GitHub 릴리즈(zip 업로드, CHANGELOG 항목을 노트로)를 만듦.
+
 ## [2.3.2] - 2026-11-23
 
 ### 업데이트 내성
