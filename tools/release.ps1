@@ -42,6 +42,10 @@ Set-Location $root
 function Step($msg) { Write-Host "`n== $msg" -ForegroundColor Cyan }
 function Invoke-Native {
     param([string]$What, [string]$Exe, [string[]]$Arguments)
+    # 성공 판정은 종료 코드로만 한다. git push 는 정상 진행 메시지("To https://...")를 stderr 로 내는데, 스크립트 출력을
+    # 2>&1 로 받거나 파이프로 넘기면 Windows PowerShell 5.1 이 그 줄을 ErrorRecord 로 바꾸고 'Stop' 아래에서 예외로 만든다
+    # (2026-11-23 v2.3.3 게시 때 태그는 올라갔는데 "푸시 실패"로 판단해 로컬 태그를 지웠음).
+    $ErrorActionPreference = 'Continue'
     & $Exe @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$What 실패 (종료 코드 $LASTEXITCODE)" }
 }

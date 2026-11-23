@@ -2,6 +2,11 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [Unreleased]
+
+### 수정
+- `tools/release.ps1`: 출력을 `2>&1`/파이프로 받으면 `git push`의 정상 stderr를 오류로 보고 "태그 푸시 실패"로 로컬 태그를 지우던 문제(Windows PowerShell 5.1). 종료 코드로만 판정. 모드 DLL은 바뀌지 않음.
+
 ## [2.3.3] - 2026-11-23
 
 ### 업데이트 내성
