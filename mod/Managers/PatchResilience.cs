@@ -185,7 +185,7 @@ public static class PatchResilience
         }
 
         LambdaTranslator.FlushSummary();
-        UpdateGuard.ReportPatchSummary(applied, skippedIcf, skippedPreflight, failed, criticalMissing.Count);
+        UpdateGuard.ReportPatchSummary(applied, skippedIcf, skippedPreflight, failed, criticalMissing.Count, FallbackResolved);
         PatchPreflight.TrimStartupCaches();
     }
 
@@ -301,7 +301,14 @@ public static class PatchResilience
                 {
                     // 업데이트로 같은 이름 오버로드가 생김: 패치 인자 목록으로 고르고, 고르면 Harmony의 속성 해석을
                     // 거치지 않고 직접 붙인다(ApplyAllPatches의 ManualTargets).
-                    resolved = PickOverloadForPatch(patchType, declType, methodName, logger);
+                    resolved = PickOverloadForPatch(patchType, declType, methodName!, logger);
+                    if (resolved != null) ManualTargets.Add(patchType);
+                }
+                // 인자 형식을 지정했는데 정확히 맞는 메서드가 없음: 업데이트로 인자가 늘거나 형식이 바뀐 경우.
+                // 같은 이름이 하나뿐이고 패치 인자와 맞으면 그것을 고른다(2026-11-23). 전에는 필수 패치가 그대로 빠졌다.
+                if (resolved == null && methodType == MethodType.Normal && argTypes != null)
+                {
+                    resolved = PickChangedSignatureForPatch(patchType, declType, methodName!, argTypes, logger);
                     if (resolved != null) ManualTargets.Add(patchType);
                 }
                 if (resolved != null)
@@ -324,17 +331,30 @@ public static class PatchResilience
 
     private static MethodInfo? PickOverloadForPatch(Type patchType, Type declType, string methodName, MelonLogger.Instance logger)
     {
-        var candidates = new List<MethodInfo>();
-        for (Type? t = declType; t != null && candidates.Count == 0; t = t.BaseType)
-            foreach (var m in t.GetMethods(AllFlags))
-                if (string.Equals(m.Name, methodName, StringComparison.Ordinal) && !m.IsGenericMethodDefinition)
-                    candidates.Add(m);
-
+        var candidates = PatchSignatureCheck.SameNameMethods(declType, methodName);
         var pick = PatchSignatureCheck.PickOverload(patchType, candidates, out string note);
         logger.Warning($"[Harmony/Resolve] '{patchType.Name}': {declType.Name}.{methodName}에 업데이트로 오버로드가 생김 — {note}" +
                        (pick == null ? ". [HarmonyPatch]에 인자 형식을 지정해야 함" : ""));
+        if (pick != null) FallbackResolved++;
         return pick;
     }
+
+    private static MethodInfo? PickChangedSignatureForPatch(Type patchType, Type declType, string methodName, Type[] argTypes, MelonLogger.Instance logger)
+    {
+        var candidates = PatchSignatureCheck.SameNameMethods(declType, methodName);
+        var pick = PatchSignatureCheck.PickChangedSignature(patchType, candidates, out string note);
+        string declared = string.Join(", ", Array.ConvertAll(argTypes, t => t.Name));
+        logger.Warning($"[Harmony/Resolve] '{patchType.Name}': {declType.Name}.{methodName}({declared})가 없음(업데이트로 시그니처가 바뀜) — {note}" +
+                       (pick == null ? ". [HarmonyPatch]의 인자 형식을 고쳐야 함" : ". 실기로 동작을 확인하고 [HarmonyPatch] 인자 형식을 새 시그니처로 고칠 것"));
+        if (pick != null) FallbackResolved++;
+        return pick;
+    }
+
+    /// <summary>
+    /// 이번 부팅에서 정확한 시그니처가 아닌 대체 경로(오버로드 고름, 바뀐 시그니처 고름, 이름·인자 개수 대체)로 대상을
+    /// 정한 패치 수. 붙기는 했어도 뜻이 같은지는 실기로만 알 수 있으므로 <see cref="UpdateGuard"/> 요약이 "정상"으로 넘기지 않는다.
+    /// </summary>
+    public static int FallbackResolved { get; private set; }
 
     /// <summary>Harmony 속성 해석 대신 이미 고른 대상에 패치 클래스의 Prefix/Postfix/Finalizer를 직접 붙인다.</summary>
     private static void PatchManually(HarmonyLib.Harmony harmony, Type patchType, List<(MethodBase Method, IntPtr Code)> targets)
@@ -459,7 +479,7 @@ public static class PatchResilience
             }
             if (matches == 1)
             {
-                LogResolveWarning($"'{type.Name}.{name}': 정확한 시그니처로 못 찾아 이름·인자 개수로 대체함 " +
+                LogResolveWarning(countsAsFallback: true, message: $"'{type.Name}.{name}': 정확한 시그니처로 못 찾아 이름·인자 개수로 대체함 " +
                                   $"({string.Join(", ", Array.ConvertAll(singleMatch!.GetParameters(), p => p.ParameterType.Name))}). 게임 업데이트로 시그니처가 바뀌었을 수 있음");
                 return singleMatch;
             }
@@ -476,10 +496,11 @@ public static class PatchResilience
     /// <summary>Harmony가 TargetMethod를 다시 불러도 같은 경고를 두 번 찍지 않는다.</summary>
     private static readonly HashSet<string> ResolveWarned = new(StringComparer.Ordinal);
 
-    private static void LogResolveWarning(string message)
+    private static void LogResolveWarning(string message, bool countsAsFallback = false)
     {
-        if (ResolveWarned.Add(message))
-            Melon<Core>.Logger.Warning($"[Harmony/Resolve] {message}");
+        if (!ResolveWarned.Add(message)) return;
+        if (countsAsFallback) FallbackResolved++;
+        Melon<Core>.Logger.Warning($"[Harmony/Resolve] {message}");
     }
 
     public static MethodInfo? ResolvePropertySetter(Type type, params string[] candidateNames)

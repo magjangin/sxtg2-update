@@ -19,7 +19,7 @@ Mono 시절 모드 `sxtg2`가 하던 일을 IL2CPP로 다시 만든 것이 출�
 | Steam Build | `26455233` (ver 1.1.007 / Release 1 (1027), 2026-11-06) |
 | 엔진 | Unity `2022.3.50f1`, IL2CPP x64, 메타데이터 v31 |
 | 모드 로더 | MelonLoader 0.7.3 (.NET 6) |
-| 모드 버전 | 2.3.1 (`mod/Core.cs`의 `MelonInfo`) |
+| 모드 버전 | 2.3.2 (`mod/Core.cs`의 `MelonInfo`) |
 
 ## sxtg2와 다른 점
 

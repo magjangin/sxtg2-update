@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-22)
+# 현재 상태 (2026-11-23)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 118개(`[Harmony] 패치 118개 모두 적용 완료`, 2026-11-14 3차 정리 전 120개). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -73,6 +73,8 @@
     - **업데이트 내성·기능 안정화:** `RandomNoteSkin.BindGetNoteReference`의 오타 직접 호출 폴백 제거(업데이트 시 `PatchPreflight` 공유 스폰 훅 탈락 방지) 및 `EndPlay()` 스킨/레인 캐시 정리, `NoteEffects.SetNotePatches` 부분 패치 롤백 및 `RestoreAndClearCovers()` 재시작 투명도 복원, `CustomMusicSelect` `nameof` 통일·`TrackID` null/예외 가드, `OfflineBypass` 핵심 4개 훅(`[CriticalPatch]` 16→20개) 추가·Finalizer/catch `__instance` null 가드·오타 로그 수정, `AttendancePopup` `_getOwner` 누락 경고 및 `Prefix` 예외 가드, `CustomNoteSkin` 스프라이트 생성 실패 시 `Texture2D` 파괴.
     - **검증:** xUnit **57건 통과**, Release/Debug 빌드(경고/오류 0), `tools/sigcheck` 통과 114·오류 0·경고 0·오버로드로 고름 0(실기 미실행).
 35. 빈 `catch` 정리·`PngDecoder` 상한·테스트 보강·v2.3.1 (2026-11-22, [상세](03-development/REVIEW_2026-11-22.md)): 빈 `catch { }` 12곳을 예외 필터·이유 주석·`DebugLog`로 바꿈(마라톤 Esc 입력 오류는 한 번만 경고), `PngDecoder`에 `MaxPixels`(40,000,000) 상한 추가(16384×16384 PNG가 해독 버퍼 2GB를 잡던 것 → Unity `LoadImage` 폴백), xUnit 57건 → 71건(`PngDecoder`·`AtomicFile`·소스 규칙 `SourceHygieneTests`). **검증:** Release 빌드 경고/오류 0, xUnit 71건 통과. 실기는 미실행.
+
+36. 업데이트 내성·병목·v2.3.2 (2026-11-23, [상세](03-development/REVIEW_2026-11-23.md)): **업데이트 내성** 인자 형식을 지정한 `[HarmonyPatch]` 대상이 업데이트로 인자가 늘거나 형식이 바뀌어 없어지면 같은 이름 메서드가 하나뿐이고 패치 인자와 맞을 때만 골라 직접 붙임(`PickChangedSignature`, 전에는 필수 패치도 그대로 빠짐), 대체 해석이 있으면 `업데이트 점검 결과`가 "정상" 대신 실기 확인 요청, `tools/sigcheck` 동기화. **병목** 오버레이의 그리기 호출마다 하던 Unity `== null`(IL2CPP `op_Equality`, 키뷰어를 켜면 프레임당 약 50회)과 매 프레임 화면 크기 조회를 관리 플래그·30프레임 간격으로, 판정바 라벨 지연 생성, 노트 스폰·목록 행 자켓 훅의 Unity null 비교 제거. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 74건, sigcheck 통과 114·오류 0·대체 해석 0. 실기는 미실행.
 
 ## 알려진 한계
 

@@ -27,10 +27,15 @@ public static class JudgmentBar
     private static readonly Color WhiteRange = Overlay.Rgba(0.75f, 0.75f, 0.75f, 0.2f);
     private static readonly Color BlueRange = Overlay.Rgba(0.2f, 0.5f, 0.85f, 0.32f);
     private static readonly Color CenterLine = Overlay.White;
+    private static readonly Color UnknownJudge = Overlay.Rgba(0.7f, 0.7f, 0.7f, 1f);
 
     private static float _lastHitTime = -999f;
     private static Color _lastHitColor;
     private static string _lastHitText = "";
+    // 라벨 문자열은 그릴 때 한 번만 만든다(전에는 판정마다 만들어, 프레임에 판정이 여럿이면 마지막 것만 쓰고 버렸다).
+    private static float _lastHitOffsetMs;
+    private static int _lastHitJudge;
+    private static bool _labelDirty;
 
     private static readonly Dictionary<(int, int, int), Sprite> ShapeCache = new();
 
@@ -38,11 +43,12 @@ public static class JudgmentBar
     {
         float offsetMs = -deltaTimeSeconds * 1000f;
         float now = Time.time;
-        var color = judge >= 0 && judge < JudgeColors.Length ? JudgeColors[judge] : Overlay.Rgba(0.7f, 0.7f, 0.7f, 1f);
-        string name = judge >= 0 && judge < JudgeNames.Length ? JudgeNames[judge] : "?";
+        var color = judge >= 0 && judge < JudgeColors.Length ? JudgeColors[judge] : UnknownJudge;
         _lastHitTime = now;
         _lastHitColor = color;
-        _lastHitText = $"{(offsetMs >= 0f ? "+" : "")}{offsetMs:F1} ms · {name} ({(offsetMs >= 0f ? "FAST" : "SLOW")})";
+        _lastHitOffsetMs = offsetMs;
+        _lastHitJudge = judge;
+        _labelDirty = true;
         HitHistory.Add(new HitTick(offsetMs, now, color));
     }
 
@@ -51,6 +57,7 @@ public static class JudgmentBar
         HitHistory.Clear();
         _lastHitTime = -999f;
         _lastHitText = "";
+        _labelDirty = false;
     }
 
     public static void Draw(float now)
@@ -97,6 +104,14 @@ public static class JudgmentBar
         float sinceLast = now - _lastHitTime;
         if (sinceLast >= Duration) return;
 
+        if (_labelDirty)
+        {
+            _labelDirty = false;
+            float ms = _lastHitOffsetMs;
+            string name = _lastHitJudge >= 0 && _lastHitJudge < JudgeNames.Length ? JudgeNames[_lastHitJudge] : "?";
+            _lastHitText = $"{(ms >= 0f ? "+" : "")}{ms:F1} ms · {name} ({(ms >= 0f ? "FAST" : "SLOW")})";
+        }
+
         bool labelOnLeft = vertical && right;
         var label = !vertical ? new Box(cx - 90f, cy - barH / 2f - 28f, 260f, 24f)
                   : labelOnLeft ? new Box(cx - barW / 2f - 270f, cy - 12f, 260f, 24f)
@@ -119,7 +134,9 @@ public static class JudgmentBar
     private static Sprite? GetShapeSprite(int shape, int w, int h)
     {
         var key = (shape, w, h);
-        if (ShapeCache.TryGetValue(key, out var cached) && cached != null) return cached;
+        // 관리 코드 null 비교: Unity의 != null은 IL2CPP 호출(매 프레임 4번). 이 스프라이트는 DontUnloadUnusedAsset이라
+        // 아래에서 직접 지울 때만 없어진다.
+        if (ShapeCache.TryGetValue(key, out var cached) && cached is not null) return cached;
         if (ShapeCache.Count > 64)
         {
             foreach (var s in ShapeCache.Values)

@@ -22,12 +22,13 @@
 3. **오프라인 & 서버 종료 대비 (`Features/OfflineBypass.cs`, 66개 훅):** BACKND 초기화 실패 시 `HasInitialized = true`에 도달하지 못해 게임이 멈추는 문제와, BACKND 초기화 생략 시 `UnitySessionModule` 커넥터가 누락되어 곡 시작·종료가 멈추는 문제를 함께 차단(`BackEndChatServer.Initialize` 우회 포함 리뉴얼 42개 + 레거시 24개).
 4. **전곡 & DLC 해금 (`Features/Unlock.cs`):** `ItemUnlockChecker`, `ItemProvideModule`, `TrackData.IsOwned`를 일괄 `true`로 오버라이드.
 5. **업데이트 내성 (`Managers/PatchResilience.cs`, `LambdaTranslator.cs`, `IcfScanner.cs`, `PatchPreflight.cs`, `UpdateGuard.cs`, `AtomicFile.cs`):**
-   - `[assembly: HarmonyDontPatchAll]` + 부팅 시 5단계 검증: ⓪ `PatchSignatureCheck`(Prefix/Postfix/Finalizer 인자와 `__0`/`__1` 위치 인자를 훅 대상 시그니처와 이름·형식으로 대조, 값/포인터 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 스킵, 참조 형식 불일치는 경고. 인자 형식 없는 속성 대상에 업데이트로 오버로드가 생기면 패치 인자 목록으로 맞는 오버로드가 하나일 때만 골라 직접 패치), ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, 미스캔 주소 `-1` 경고, `[IcfShared]` 2개), ② `PatchPreflight`(패치 메서드·호출 그래프 사전 JIT 및 필드/타입/어셈블리 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(8개 지문 키 비교 + `BinaryFingerprint`로 `BuildState.txt`·`LambdaMap.json`·`IcfCounts.txt` 캐시 무효화 통일 + `[CriticalPatch]` 20개 누락 감지 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
+   - `[assembly: HarmonyDontPatchAll]` + 부팅 시 5단계 검증: ⓪ `PatchSignatureCheck`(Prefix/Postfix/Finalizer 인자와 `__0`/`__1` 위치 인자를 훅 대상 시그니처와 이름·형식으로 대조, 값/포인터 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 스킵, 참조 형식 불일치는 경고. 인자 형식 없는 속성 대상에 업데이트로 오버로드가 생기면 패치 인자 목록으로 맞는 오버로드가 하나일 때만 골라 직접 패치, 인자 형식을 지정한 대상이 업데이트로 없어지면 같은 이름 메서드가 하나뿐이고 패치 인자와 맞을 때만 골라 직접 패치 — 대체 해석이 하나라도 있으면 `업데이트 점검 결과`가 "정상" 대신 실기 확인 요청), ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, 미스캔 주소 `-1` 경고, `[IcfShared]` 2개), ② `PatchPreflight`(패치 메서드·호출 그래프 사전 JIT 및 필드/타입/어셈블리 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(8개 지문 키 비교 + `BinaryFingerprint`로 `BuildState.txt`·`LambdaMap.json`·`IcfCounts.txt` 캐시 무효화 통일 + `[CriticalPatch]` 20개 누락 감지 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
    - `AtomicFile`로 모든 상태/캐시/설정 파일을 `.tmp` → `File.Move` 원자적 교체.
 6. **성능 원칙 (IL2CPP 네이티브 호출 최소화):**
    - `new Rect`, `new Color`, `Mathf.*` 등 Unity 값 형식 헬퍼는 전부 `il2cpp_runtime_invoke` + boxing을 유발하므로 `Overlay.Rgba`/`Box` 및 `MathF`/`Math`만 사용.
    - `Overlay`는 풀링된 uGUI `Image`/`Text` 값 캐싱 및 비플레이 씬 `OnLateUpdate` 조기 반환.
    - `NoteEffects`는 기능이 켜져 있을 때만 `NoteObject.set_HeadPosition/set_NoteLength`를 동적 패치.
+   - Unity 객체 `== null`도 `op_Equality` IL2CPP 호출: 매 프레임·매 노트 경로는 `is null`(관리 비교) + 경계에서만 Unity 비교(`Overlay`는 30프레임마다 캔버스 생존·화면 크기 재조회).
 
 ## 4. 핵심 후킹 타깃 요약 (전체 표: [`docs/02-systems/HOOK_TABLE.md`](docs/02-systems/HOOK_TABLE.md))
 - **커스텀 카테고리/목록 (`Core.cs`):** `CategorySelectController.LoadData` (`0x605740`), `RhythmGameUtils.GetSelectableCategoty` (`0x6B72C0`), `TrackSelectController.GetTracks` (`0x617CF0`, `hwa\` 변경 감지 재스캔 지원).
@@ -54,6 +55,7 @@
 - **미스캔 ICF 주소 0 처리 & `JudgeProcessor` 포인터 재사용:** 부팅 ICF 스캔에 없던 동적 주소는 `-1`로 구분해 경고해야 하며, `PlayAssist.EnsureSession`의 `_currentJudgePtr`은 확정 씬 경계(`Result`/`MusicSelect`/`PlayLoading`)에서 초기화하지 않으면 다음 플레이에서 IL2CPP 포인터 재사용 시 판정바·설정이 누락됨.
 - **마라톤 씬 흐름(`Loading`) 누락 & 지연 BGA의 `IsPlaying` 체크:** 실제 씬 전환은 `PlayLoading → Renewal_Play → Loading → Result`이므로 마라톤 유지 조건에 `Loading`을 포함해야 하며, `CustomBga.PlayAfter`는 `EnsureSession` 이전에도 불릴 수 있으므로 `PlayAssist.IsPlaying` 대신 `player.isActiveAndEnabled && Core.IsCustomTrackActive`로 가드.
 - **판정/입력 경로 매 노트 신규 진단 훅 (`ISixtarJudgeData` 인자 등):** 네이티브 크래시 유발(원인 미확인) → 덤프 분석 없이 매 노트 훅 실험 금지.
+- **매 프레임 Unity 객체 `== null` 가드:** `Overlay.Rect`/`Label`이 호출마다 `_root == null`을 보느라 키뷰어를 켜면 프레임당 약 50번 `op_Equality` IL2CPP 호출 → 관리 플래그 + 30프레임마다 확인(2026-11-23).
 - **Harmony 인자 바인딩을 믿고 시그니처 변경을 방치:** Harmony는 패치 인자를 **이름으로만** 묶고 형식을 확인하지 않아, 업데이트로 `int`→`long`처럼 값 형식이 바뀌어도 패치가 붙은 뒤 첫 호출에서 잘못된 값·크래시가 남. `PatchPreflight`(사라진 멤버)와 ICF 검사로는 안 잡힘 → `PatchSignatureCheck`(부팅) + `tools/sigcheck`(오프라인). `ResolveMethod`의 이름·개수 대체 경로도 이제 `[Harmony/Resolve]` 경고를 남김(전에는 조용히 대체).
 - **기타:** `pe_slice` 네임스페이스 필수(`SixtarGate.BMSConverter`), `Cpp2IL`은 `< NUL` 리디렉션 필수, `AllTracks` 직접 주입 금지, 게임 실행 중 `Mods\SixtarGateMod.dll` 잠금.
 
@@ -64,7 +66,7 @@
   dotnet build mod/SixtarGateMod.csproj
   ```
   - 빌드 후 `$(GameDir)\Mods\`가 있으면 `SixtarGateMod.dll`을 자동 복사함(게임 실행 중 잠겨 있으면 경고만 출력). 복사 생략 시 `-p:SkipDeploy=true`.
-- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 71건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동):**
+- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 74건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동):**
   ```powershell
   dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
   ```
@@ -76,5 +78,5 @@
   ```powershell
   dotnet run --project tools/sigcheck -- [mod/bin/Release/net6.0/SixtarGateMod.dll] [게임 폴더]
   ```
-  빌드 `26455233` 기준: 통과 114, 오류 0, 경고 0, 대상 미확인 4(LambdaTranslator 클로저 콜백 — IL2CPP 런타임 필요, 모두 `Il2CppObjectBase __instance`만 받음), 오버로드로 고름 0.
+  빌드 `26455233` 기준(2026-11-23): 통과 114, 오류 0, 경고 0, 대상 미확인 4(LambdaTranslator 클로저 콜백 — IL2CPP 런타임 필요, 모두 `Il2CppObjectBase __instance`만 받음), 오버로드로 고름 0, 바뀐 시그니처로 고름 0.
 - **로그:** `{GameDir}\MelonLoader\Latest.log` (정상 기동: `[Harmony] 패치 118개 모두 적용 완료`), Unity 예외는 `%USERPROFILE%\AppData\LocalLow\Lyrebird Studio\Sixtar Gate STARTRAIL\Player.log`.

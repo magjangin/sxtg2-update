@@ -217,4 +217,59 @@ public class PatchSignatureCheckTests
 
         Assert.Null(PatchSignatureCheck.PickOverload(typeof(NoMatchPatch), cands, out _));
     }
+
+    // ---- 업데이트로 시그니처가 바뀐 대상(인자 형식을 지정한 [HarmonyPatch]가 정확히 맞는 메서드를 못 찾음) ----
+    private class ChangedBase { public void Start(int track, float level) { } }
+    private class ChangedDerived : ChangedBase { }
+
+    private class Changed
+    {
+        // 원래 Goto(string track, int level) → 업데이트로 bool practice 인자가 늘어남
+        public void Goto(string track, int level, bool practice) { }
+        // 원래 Resume(int channel) → 사라지고 뜻이 다른 형제만 남음
+        public void Resume(float time, int channel) { }
+        public void Resume(int channel, bool fade) { }
+        // 원래 Seek(int ms) → 인자 형식이 long으로 바뀜
+        public void Seek(long ms) { }
+    }
+
+    private static class GotoPatch { public static void Prefix(string track, int level) { } }
+    private static class ResumePatch { public static void Prefix(int channel) { } }
+    private static class SeekPatch { public static void Prefix(int ms) { } }
+    private static class StartPatch { public static void Prefix(int track) { } }
+
+    [Fact]
+    public void PickChangedSignature_PicksTheOnlySameNameMethodThatFitsThePatch()
+    {
+        var pick = PatchSignatureCheck.PickChangedSignature(
+            typeof(GotoPatch), PatchSignatureCheck.SameNameMethods(typeof(Changed), nameof(Changed.Goto)), out var note);
+        Assert.NotNull(pick);
+        Assert.Equal(3, pick!.GetParameters().Length);
+        Assert.Contains("고름", note);
+    }
+
+    [Fact]
+    public void PickChangedSignature_RefusesSiblingOverloads_ValueTypeChange_AndMissingName()
+    {
+        // 같은 이름이 여럿: 지정한 오버로드만 사라졌을 수 있음 → 고르지 않음
+        Assert.Null(PatchSignatureCheck.PickChangedSignature(
+            typeof(ResumePatch), PatchSignatureCheck.SameNameMethods(typeof(Changed), nameof(Changed.Resume)), out var n1));
+        Assert.Contains("2개", n1);
+        // 하나뿐이지만 패치가 받는 값 형식이 바뀜(int → long) → 고르지 않음
+        Assert.Null(PatchSignatureCheck.PickChangedSignature(
+            typeof(SeekPatch), PatchSignatureCheck.SameNameMethods(typeof(Changed), nameof(Changed.Seek)), out var n2));
+        Assert.Contains("맞지 않음", n2);
+        // 이름이 없어짐
+        Assert.Null(PatchSignatureCheck.PickChangedSignature(
+            typeof(SeekPatch), PatchSignatureCheck.SameNameMethods(typeof(Changed), "Rewind"), out var n3));
+        Assert.Contains("없음", n3);
+    }
+
+    [Fact]
+    public void SameNameMethods_WalksUpToBaseType()
+    {
+        var cands = PatchSignatureCheck.SameNameMethods(typeof(ChangedDerived), nameof(ChangedBase.Start));
+        Assert.Single(cands);
+        Assert.NotNull(PatchSignatureCheck.PickChangedSignature(typeof(StartPatch), cands, out _));
+    }
 }
