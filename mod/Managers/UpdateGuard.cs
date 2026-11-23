@@ -115,7 +115,7 @@ public static class UpdateGuard
             _fingerprintChangeNote = string.Join("; ", changes);
             Melon<Core>.Logger.Warning($"{LOG_PREFIX} 지난 실행과 달라진 것: {_fingerprintChangeNote}");
             if (risky)
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 메타데이터/Unity 런타임이 바뀌었습니다: 인터롭 형식·필드 오프셋이 달라졌을 수 있습니다. " +
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 메타데이터/Unity 런타임/모드 로더가 바뀌었습니다: 인터롭 형식·필드 오프셋이 달라졌을 수 있습니다. " +
                                            "패치 결과 요약과 [Harmony/Preflight]·[ICFGuard] 경고를 확인하고 tools/version_diff/check_update.ps1을 돌려 보세요.");
         }
         catch (Exception ex)
@@ -151,7 +151,24 @@ public static class UpdateGuard
         d["metadataHeader"] = metaHeader;
         d["gameAssemblyStamp"] = BuildFingerprint.PeTimestamp(ReadHead(Path.Combine(gameRoot, "GameAssembly.dll"), 0x1000));
         d["unityPlayerStamp"] = BuildFingerprint.PeTimestamp(ReadHead(Path.Combine(gameRoot, "UnityPlayer.dll"), 0x1000));
+        d["loaderVersion"] = LoaderVersion();
         return d;
+    }
+
+    /// <summary>MelonLoader와 Il2CppInterop 어셈블리 버전("ML 0.7.3.0 / Interop 1.4.6.0"). 못 읽으면 "?".</summary>
+    private static string LoaderVersion()
+    {
+        try
+        {
+            var ml = typeof(MelonMod).Assembly.GetName().Version;
+            var interop = typeof(Il2CppInterop.Runtime.IL2CPP).Assembly.GetName().Version;
+            return ml == null ? "?" : $"ML {ml} / Interop {interop?.ToString() ?? "?"}";
+        }
+        catch (Exception ex)
+        {
+            Core.DebugLog($"[UpdateGuard] 로더 버전 읽기 실패: {ex.Message}");
+            return "?";
+        }
     }
 
     private static string SizeOf(string file)

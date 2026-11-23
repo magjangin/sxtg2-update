@@ -8,13 +8,53 @@ namespace SixtarGateMod.Tests;
 public class BuildFingerprintTests
 {
     [Fact]
-    public void SameBuild_MatchesWhenAllEightKeysMatch()
+    public void SameBuild_MatchesWhenAllKeysMatch()
     {
         var fp = new Dictionary<string, string>();
         foreach (var (key, _, _) in BuildFingerprint.Keys)
             fp[key] = "val_" + key;
 
         Assert.True(BuildFingerprint.SameBuild(fp, new Dictionary<string, string>(fp)));
+    }
+
+    [Fact]
+    public void SameBuild_IgnoresOptionalKeyMissingFromOldRecord()
+    {
+        var cur = new Dictionary<string, string>();
+        foreach (var (key, _, _) in BuildFingerprint.Keys)
+            cur[key] = "val_" + key;
+        var old = new Dictionary<string, string>(cur);
+        old.Remove("loaderVersion");
+
+        // 키를 더했다는 이유로 기존 실기 확인 기록을 버리지 않음
+        Assert.True(BuildFingerprint.SameBuild(old, cur));
+        Assert.Empty(BuildFingerprint.Diff(old, cur, out _));
+    }
+
+    [Fact]
+    public void SameBuild_FalseAndRiskyWhenLoaderVersionChanges()
+    {
+        var a = new Dictionary<string, string>();
+        foreach (var (key, _, _) in BuildFingerprint.Keys)
+            a[key] = "val_" + key;
+        var b = new Dictionary<string, string>(a) { ["loaderVersion"] = "ML 0.7.4.0 / Interop 1.5.0.0" };
+
+        Assert.False(BuildFingerprint.SameBuild(a, b));
+        var changes = BuildFingerprint.Diff(a, b, out bool risky);
+        Assert.Single(changes);
+        Assert.True(risky);
+    }
+
+    [Fact]
+    public void SameBuild_StillRequiresNonOptionalKeys()
+    {
+        var cur = new Dictionary<string, string>();
+        foreach (var (key, _, _) in BuildFingerprint.Keys)
+            cur[key] = "val_" + key;
+        var old = new Dictionary<string, string>(cur);
+        old.Remove("unityPlayerStamp");
+
+        Assert.False(BuildFingerprint.SameBuild(old, cur));
     }
 
     [Fact]

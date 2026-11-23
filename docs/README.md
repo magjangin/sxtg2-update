@@ -73,7 +73,7 @@ docs/
 - [REVIEW_2026-11-18.md](03-development/REVIEW_2026-11-18.md): 코드 리뷰 — 크기가 같은 변경 감지(PE 링크 시각, 메타데이터 버전·헤더 해시), 커스텀 곡 결과 화면 도달 시 실기 확인 자동 기록(`verifiedPlay`)
 - [REVIEW_2026-11-19.md](03-development/REVIEW_2026-11-19.md): 코드 리뷰 — 패치 인자 ↔ 훅 대상 시그니처 대조(`PatchSignatureCheck`), 오버로드 생김 대응, 오프라인 대조 도구 `tools/sigcheck`
 - [REVIEW_2026-11-22.md](03-development/REVIEW_2026-11-22.md): 빈 `catch` 12곳 정리, `PngDecoder` 픽셀 상한, 테스트 71건(PNG·AtomicFile·소스 규칙), v2.3.1
-- [REVIEW_2026-11-23.md](03-development/REVIEW_2026-11-23.md): 인자 형식을 지정한 훅 대상의 시그니처 변경 대체 해석(`PickChangedSignature`), 대체 해석 시 점검 결과 경고, 매 프레임·매 노트 Unity null 비교 제거, 테스트 74건, v2.3.2
+- [REVIEW_2026-11-23.md](03-development/REVIEW_2026-11-23.md): 인자 형식을 지정한 훅 대상의 시그니처 변경 대체 해석(`PickChangedSignature`), 대체 해석 시 점검 결과 경고, 매 프레임·매 노트 Unity null 비교 제거, 테스트 74건, v2.3.2 / 추가 점검: 로더 버전 지문, CUSTOM 대소문자 무시 비교, 테스트 77건, v2.3.3
 
 **04-game-reference**
 - [MODE_SELECT.md](04-game-reference/MODE_SELECT.md): 모드 7종과 테마 8종

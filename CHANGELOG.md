@@ -2,11 +2,22 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
-## [Unreleased]
+## [2.3.3] - 2026-11-23
+
+### 업데이트 내성
+- 게임 파일 지문에 `loaderVersion`(MelonLoader·Il2CppInterop 어셈블리 버전) 추가. 로더가 바뀌면 인터롭 어셈블리가 다시 만들어져 게임 파일이 그대로여도 동작이 달라질 수 있으므로, "이 PC 실기 확인" 기록을 이어받지 않고 위험 변경으로 경고. 옛 기록에 없는 이 키는 비교하지 않아(선택 키) 업데이트만으로 기존 확인 기록이 사라지지 않음.
+- CUSTOM 카테고리 판정을 `GetTracks`와 같은 대소문자 무시 비교로 통일(`GotoPlayScene`·`CategorySelectController.LoadData`·`GetSelectableCategoty`). 업데이트로 카테고리 문자열 대소문자가 달라져도 커스텀 곡이 공식 곡으로 처리되거나 탭이 두 번 생기지 않음.
+
+### 성능
+- `CustomNoteSkin.Apply`: 풀 노트마다 Unity `==`/`!=`(IL2CPP `op_Equality`) 3회 → 관리 null 비교.
 
 ### 추가
 - `tools/bodycheck`: 게임 DLL 없이 모드 본체를 net6.0으로 컴파일해 .NET 7+ 전용 API·모드 내부 이름 오타·문법 오류를 잡는 검사(Roslyn, 공개 NuGet의 MelonLoader/HarmonyX/Il2CppInterop 참조). 게임 인터롭이 없어 나는 오류와 그 연쇄 오류는 거름. CI에서 단위 테스트 다음에 실행하고 `--self-test`로 검사기 자체도 확인. 모드 DLL은 바뀌지 않음.
 - `tools/release.ps1`: csproj 버전 기준으로 빌드·테스트·시그니처 대조 후 zip을 만들고, `-Publish`면 태그 `v<버전>`과 GitHub 릴리즈(zip 업로드, CHANGELOG 항목을 노트로)를 만듦.
+- 단위 테스트 74건 → 77건(선택 키 무시·로더 버전 변경 위험 판정·필수 키 유지).
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 77건 통과, `tools/sigcheck` 통과 114·오류 0·경고 0·대체 해석 0, `tools/lambdascan` `ALL PASS`. 게임 실기는 미실행.
 
 ## [2.3.2] - 2026-11-23
 
