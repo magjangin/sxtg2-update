@@ -169,8 +169,10 @@ public static class CustomNoteSkin
 
     private static void Apply(RectTransform? target, Sprite? sprite)
     {
-        if (target == null || sprite == null) return;
+        // 관리 null 비교: 방금 읽은 인터롭 필드·GetComponent 결과는 네이티브 null이면 관리 null로 온다. Unity의 ==/!=는
+        // op_Equality IL2CPP 호출이라 풀 노트마다 3번씩 들었다(스프라이트는 이 모드가 만들어 직접 지울 때만 없어짐).
+        if (target is null || sprite is null) return;
         var img = target.GetComponent<Image>() ?? target.GetComponentInChildren<Image>(true);
-        if (img != null) img.sprite = sprite;
+        if (img is not null) img.sprite = sprite;
     }
 }

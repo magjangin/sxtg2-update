@@ -22,7 +22,7 @@
 3. **오프라인 & 서버 종료 대비 (`Features/OfflineBypass.cs`, 66개 훅):** BACKND 초기화 실패 시 `HasInitialized = true`에 도달하지 못해 게임이 멈추는 문제와, BACKND 초기화 생략 시 `UnitySessionModule` 커넥터가 누락되어 곡 시작·종료가 멈추는 문제를 함께 차단(`BackEndChatServer.Initialize` 우회 포함 리뉴얼 42개 + 레거시 24개).
 4. **전곡 & DLC 해금 (`Features/Unlock.cs`):** `ItemUnlockChecker`, `ItemProvideModule`, `TrackData.IsOwned`를 일괄 `true`로 오버라이드.
 5. **업데이트 내성 (`Managers/PatchResilience.cs`, `LambdaTranslator.cs`, `IcfScanner.cs`, `PatchPreflight.cs`, `UpdateGuard.cs`, `AtomicFile.cs`):**
-   - `[assembly: HarmonyDontPatchAll]` + 부팅 시 5단계 검증: ⓪ `PatchSignatureCheck`(Prefix/Postfix/Finalizer 인자와 `__0`/`__1` 위치 인자를 훅 대상 시그니처와 이름·형식으로 대조, 값/포인터 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 스킵, 참조 형식 불일치는 경고. 인자 형식 없는 속성 대상에 업데이트로 오버로드가 생기면 패치 인자 목록으로 맞는 오버로드가 하나일 때만 골라 직접 패치, 인자 형식을 지정한 대상이 업데이트로 없어지면 같은 이름 메서드가 하나뿐이고 패치 인자와 맞을 때만 골라 직접 패치 — 대체 해석이 하나라도 있으면 `업데이트 점검 결과`가 "정상" 대신 실기 확인 요청), ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, 미스캔 주소 `-1` 경고, `[IcfShared]` 2개), ② `PatchPreflight`(패치 메서드·호출 그래프 사전 JIT 및 필드/타입/어셈블리 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(8개 지문 키 비교 + `BinaryFingerprint`로 `BuildState.txt`·`LambdaMap.json`·`IcfCounts.txt` 캐시 무효화 통일 + `[CriticalPatch]` 20개 누락 감지 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
+   - `[assembly: HarmonyDontPatchAll]` + 부팅 시 5단계 검증: ⓪ `PatchSignatureCheck`(Prefix/Postfix/Finalizer 인자와 `__0`/`__1` 위치 인자를 훅 대상 시그니처와 이름·형식으로 대조, 값/포인터 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 스킵, 참조 형식 불일치는 경고. 인자 형식 없는 속성 대상에 업데이트로 오버로드가 생기면 패치 인자 목록으로 맞는 오버로드가 하나일 때만 골라 직접 패치, 인자 형식을 지정한 대상이 업데이트로 없어지면 같은 이름 메서드가 하나뿐이고 패치 인자와 맞을 때만 골라 직접 패치 — 대체 해석이 하나라도 있으면 `업데이트 점검 결과`가 "정상" 대신 실기 확인 요청), ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, 미스캔 주소 `-1` 경고, `[IcfShared]` 2개), ② `PatchPreflight`(패치 메서드·호출 그래프 사전 JIT 및 필드/타입/어셈블리 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(9개 지문 키 비교 — `loaderVersion`(MelonLoader/Il2CppInterop)은 옛 기록에 없으면 건너뛰는 선택 키 + `BinaryFingerprint`로 `BuildState.txt`·`LambdaMap.json`·`IcfCounts.txt` 캐시 무효화 통일 + `[CriticalPatch]` 20개 누락 감지 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
    - `AtomicFile`로 모든 상태/캐시/설정 파일을 `.tmp` → `File.Move` 원자적 교체.
 6. **성능 원칙 (IL2CPP 네이티브 호출 최소화):**
    - `new Rect`, `new Color`, `Mathf.*` 등 Unity 값 형식 헬퍼는 전부 `il2cpp_runtime_invoke` + boxing을 유발하므로 `Overlay.Rgba`/`Box` 및 `MathF`/`Math`만 사용.
@@ -66,7 +66,7 @@
   dotnet build mod/SixtarGateMod.csproj
   ```
   - 빌드 후 `$(GameDir)\Mods\`가 있으면 `SixtarGateMod.dll`을 자동 복사함(게임 실행 중 잠겨 있으면 경고만 출력). 복사 생략 시 `-p:SkipDeploy=true`.
-- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 74건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동, CI는 이어서 `tools/bodycheck`도 실행):**
+- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 77건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동, CI는 이어서 `tools/bodycheck`도 실행):**
   ```powershell
   dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
   ```

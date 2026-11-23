@@ -1,6 +1,6 @@
 # 코드 구조
 
-`mod/` 36개 파일, 9,757줄 (2026-11-23 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(11개 테스트 파일, 74건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+`mod/` 36개 파일, 9,798줄 (2026-11-23 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(11개 테스트 파일, 77건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
 | 파일 | 줄 | 역할 |
 | --- | ---: | --- |
@@ -41,7 +41,7 @@
 | `Managers/AtomicFile.cs` | 35 | 임시 파일(`.tmp`) → `File.Move` 원자적 UTF-8 쓰기 유틸 (`UpdateGuard`·`LambdaTranslator`·`IcfScanner`·`ModConfig` 공용) |
 | `Models/CustomAlbumInfo.cs` | 28 | 앨범 정보 |
 
-## 순수 모듈 테스트 (`tests/SixtarGateMod.Tests/`, 74건)
+## 순수 모듈 테스트 (`tests/SixtarGateMod.Tests/`, 77건)
 
 | 파일 | 건수 | 대상 |
 | --- | ---: | --- |

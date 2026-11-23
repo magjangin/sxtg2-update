@@ -25,7 +25,16 @@ public static class BuildFingerprint
         ("metadataHeader", "global-metadata.dat 헤더(섹션 표)", true),
         ("unityPlayerSize", "UnityPlayer.dll 크기", true),
         ("unityPlayerStamp", "UnityPlayer.dll 링크 시각(PE)", true),
+        // 2026-11-23: MelonLoader·Il2CppInterop이 바뀌면 인터롭 어셈블리가 다시 만들어지고 트램펄린·필드 접근 방식이
+        // 달라질 수 있다. 게임 파일이 그대로여도 "이 PC 실기 확인"을 그대로 믿으면 안 된다.
+        ("loaderVersion", "MelonLoader/Il2CppInterop 버전", true),
     };
+
+    /// <summary>
+    /// 나중에 추가된 키: 한쪽 기록에 없으면 <see cref="SameBuild"/>에서도 비교하지 않는다(키를 더했다는 이유만으로 기존
+    /// 실기 확인 기록을 버리지 않게). 양쪽에 다 있으면 다른 키처럼 같아야 한다.
+    /// </summary>
+    private static readonly HashSet<string> OptionalKeys = new(StringComparer.Ordinal) { "loaderVersion" };
 
     /// <summary>이 지문의 빌드를 실기 플레이(커스텀 곡 → 결과 화면, 게임 내부 예외 0)로 확인한 기록. 값은 "날짜 곡 제목".</summary>
     public const string VerifiedPlayKey = "verifiedPlay";
@@ -55,7 +64,12 @@ public static class BuildFingerprint
     {
         foreach (var (key, _, _) in Keys)
         {
-            if (!current.TryGetValue(key, out string? now) || !previous.TryGetValue(key, out string? before)) return false;
+            bool hasNow = current.TryGetValue(key, out string? now), hasBefore = previous.TryGetValue(key, out string? before);
+            if (!hasNow || !hasBefore)
+            {
+                if (OptionalKeys.Contains(key)) continue;
+                return false;
+            }
             if (now != before) return false;
         }
         foreach (var key in RequiredBinaryKeys)

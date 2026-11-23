@@ -14,7 +14,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using SixtarGateMod.Managers;
 using SixtarGateMod.Features;
 
-[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.2", "화영왕 (Hwa-young-wang)")]
+[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.3", "화영왕 (Hwa-young-wang)")]
 [assembly: MelonGame("Lyrebird Studio", "Sixtar Gate STARTRAIL")]
 // OnInitializeMelon calls PatchAll itself; without this MelonLoader auto-patches too and every hook runs twice.
 [assembly: HarmonyDontPatchAll]
@@ -68,7 +68,7 @@ public class Core : MelonMod
     public override void OnInitializeMelon()
     {
         var ver = typeof(Core).Assembly.GetName().Version;
-        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "2.3.2";
+        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "2.3.3";
         LoggerInstance.Msg("==========================================================");
         LoggerInstance.Msg($" Sixtar Gate: STARTRAIL 커스텀 차트 & 미디어 로더 v{verText}");
         LoggerInstance.Msg(" 제작: 화영왕 (Hwa-young-wang)");
@@ -157,6 +157,13 @@ public class Core : MelonMod
 
     #region --- Dedicated CUSTOM Category & Custom 1-Note Chart Injection ---
 
+    private static bool ContainsIgnoreCase(Il2CppSystem.Collections.Generic.List<string> list, string value)
+    {
+        for (int i = 0; i < list.Count; i++)
+            if (string.Equals(list[i], value, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     // 1. CategorySelectController: Register "CUSTOM" category to category tabs list
     [HarmonyPatch(typeof(CategorySelectController), "LoadData")]
     [CriticalPatch("곡 선택 상단 CUSTOM 카테고리 탭 생성")]
@@ -167,7 +174,7 @@ public class Core : MelonMod
             try
             {
                 var categories = CategorySelectController.Categories;
-                if (categories != null && !categories.Contains(CUSTOM_CATEGORY_NAME))
+                if (categories != null && !ContainsIgnoreCase(categories, CUSTOM_CATEGORY_NAME))
                 {
                     categories.Add(CUSTOM_CATEGORY_NAME);
                     Melon<Core>.Logger.Msg($"[CustomCategory] 카테고리 목록에 '{CUSTOM_CATEGORY_NAME}' 탭 추가 완료");
@@ -194,7 +201,7 @@ public class Core : MelonMod
             if (__result == null) return;
             for (int i = 0; i < __result.Length; i++)
             {
-                if (__result[i] == CUSTOM_CATEGORY_NAME) return;
+                if (string.Equals(__result[i], CUSTOM_CATEGORY_NAME, StringComparison.OrdinalIgnoreCase)) return;
             }
 
             var newArr = new Il2CppStringArray(__result.Length + 1);
@@ -271,8 +278,9 @@ public class Core : MelonMod
             CurrentPlayStyleIsLunar = playStyle == EPlayStyle.LIGHT;
             PlayAssist.EndPlay(resetSessionPointer: true);
             // Null-safe: an exception thrown from this prefix would abort GotoPlayScene itself (no song starts).
-            if (track != null && (track.Category == CUSTOM_CATEGORY_NAME
-                                  || (track.TrackID?.StartsWith("CUSTOM_", StringComparison.Ordinal) ?? false)))
+            // GetTracks와 같은 비교(대소문자 무시): 업데이트로 카테고리 문자열 대소문자가 바뀌어도 커스텀 곡이 공식 곡으로 새지 않게
+            if (track != null && (string.Equals(track.Category, CUSTOM_CATEGORY_NAME, StringComparison.OrdinalIgnoreCase)
+                                  || (track.TrackID?.StartsWith("CUSTOM_", StringComparison.OrdinalIgnoreCase) ?? false)))
             {
                 IsCustomTrackActive = true;
                 if (CustomTrackManager.FindAlbum(track.TrackID) is { } album)

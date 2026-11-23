@@ -76,6 +76,8 @@
 
 36. 업데이트 내성·병목·v2.3.2 (2026-11-23, [상세](03-development/REVIEW_2026-11-23.md)): **업데이트 내성** 인자 형식을 지정한 `[HarmonyPatch]` 대상이 업데이트로 인자가 늘거나 형식이 바뀌어 없어지면 같은 이름 메서드가 하나뿐이고 패치 인자와 맞을 때만 골라 직접 붙임(`PickChangedSignature`, 전에는 필수 패치도 그대로 빠짐), 대체 해석이 있으면 `업데이트 점검 결과`가 "정상" 대신 실기 확인 요청, `tools/sigcheck` 동기화. **병목** 오버레이의 그리기 호출마다 하던 Unity `== null`(IL2CPP `op_Equality`, 키뷰어를 켜면 프레임당 약 50회)과 매 프레임 화면 크기 조회를 관리 플래그·30프레임 간격으로, 판정바 라벨 지연 생성, 노트 스폰·목록 행 자켓 훅의 Unity null 비교 제거. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 74건, sigcheck 통과 114·오류 0·대체 해석 0. 실기는 미실행.
 
+37. 로더 지문·카테고리 비교 통일·v2.3.3 (2026-11-23, [상세](03-development/REVIEW_2026-11-23.md) 5장): **업데이트 내성** 지문에 `loaderVersion`(MelonLoader/Il2CppInterop 버전, 위험 변경) 추가 — 옛 기록에 없으면 비교하지 않는 선택 키, CUSTOM 카테고리 비교를 대소문자 무시로 통일. **병목** `CustomNoteSkin.Apply` Unity null 비교 제거. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 77건, sigcheck 통과 114·오류 0·대체 해석 0, lambdascan `ALL PASS`. 실기는 미실행.
+
 ## 알려진 한계
 
 - 오른쪽 곡 목록에서 MAX COMBO가 `---`로 나옵니다. 직접 채우는 시도를 했으나 화면에 반영되지 않아 뺐습니다.
