@@ -26,6 +26,20 @@ dotnet build mod/SixtarGateMod.csproj
 dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
 ```
 
+## 모드 본체 컴파일 검사 (게임 DLL 불필요, 2026-11-23)
+
+```powershell
+dotnet run --project tools/bodycheck -c Release            # 검사
+dotnet run --project tools/bodycheck -c Release -- --self-test   # 검사기가 일부러 넣은 오류를 잡는지 확인
+dotnet run --project tools/bodycheck -c Release -- --interop "<게임>\MelonLoader\Il2CppAssemblies"   # 로컬 전체 검사
+```
+
+단위 테스트는 순수 모듈만 net8.0으로 컴파일하므로, 모드 본체(net6.0)에서만 깨지는 오류(.NET 7+ 전용 API, 모드 내부 메서드 이름 오타, 문법 오류)는 게임이 있는 PC에서 빌드할 때까지 보이지 않았습니다. `tools/bodycheck`는 Roslyn으로 `mod/**/*.cs` 전체를 `SixtarGateMod.csproj`와 같은 설정으로 컴파일합니다. 참조는 net6.0 참조 어셈블리와 공개 NuGet의 MelonLoader 0.7.3·HarmonyX 2.10.2·Il2CppInterop 1.5.1입니다. CI에서 단위 테스트 다음에 돌고, 실패하면 종료 코드 1입니다.
+
+- 같은 소스를 net8.0 참조로도 컴파일해, net6에서만 나는 오류를 **.NET 7+ API**로 보고합니다.
+- 게임 인터롭이 없어 생기는 오류(형식·네임스페이스를 못 찾음, `SixtarGlobal.X`처럼 못 찾은 대문자 이름의 멤버 접근)와, 못 찾은 게임 형식이 낀 문장에서 나는 연쇄 오류는 거릅니다(2026-11-23 기준 각각 844건, 92건). 나머지는 전부 보고합니다.
+- **한계:** 게임 API의 멤버 이름·시그니처는 검사하지 못합니다(로컬 빌드와 `tools/sigcheck` 몫). 게임 형식이 낀 문장 안의 다른 실수도 같이 가려지고, 모드 자기 형식 이름의 오타는 "형식을 못 찾음"으로 분류돼 걸러집니다. NuGet의 MelonLoader/Il2CppInterop은 게임 폴더의 것과 빌드가 다를 수 있습니다. `--interop` 전체 검사는 게임 PC에서 아직 돌려 보지 않았습니다.
+
 ## 배포
 
 `$(GameDir)\Mods` 폴더가 존재하면 빌드 후 자동으로 `SixtarGateMod.dll`을 복사합니다(게임 실행 중 DLL이 잠겨 있으면 경고만 출력하고 빌드는 성공). 자동 복사를 건너뛰려면 `-p:SkipDeploy=true`를 넘기세요.

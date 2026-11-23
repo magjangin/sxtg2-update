@@ -26,6 +26,8 @@ tools/lambdascan/bin/
 tools/lambdascan/obj/
 tools/sigcheck/bin/
 tools/sigcheck/obj/
+tools/bodycheck/bin/
+tools/bodycheck/obj/
 
 # Release output (tools/release.ps1)
 dist/
