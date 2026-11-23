@@ -2,6 +2,11 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [Unreleased]
+
+### 추가
+- `tools/bodycheck`: 게임 DLL 없이 모드 본체를 net6.0으로 컴파일해 .NET 7+ 전용 API·모드 내부 이름 오타·문법 오류를 잡는 검사(Roslyn, 공개 NuGet의 MelonLoader/HarmonyX/Il2CppInterop 참조). 게임 인터롭이 없어 나는 오류와 그 연쇄 오류는 거름. CI에서 단위 테스트 다음에 실행하고 `--self-test`로 검사기 자체도 확인. 모드 DLL은 바뀌지 않음.
+
 ## [2.3.2] - 2026-11-23
 
 ### 업데이트 내성

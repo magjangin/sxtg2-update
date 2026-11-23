@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    게임 DLL 없이 모드 본체(mod/**/*.cs)를 net6.0 기준으로 컴파일해 보는 검사.
+    CI(ubuntu, 게임 없음)에서 "단위 테스트(net8)는 통과하는데 모드 본체(net6) 빌드만 깨지는" 오류를 잡는다.
+
+    참조: net6.0 참조 어셈블리(Microsoft.NETCore.App.Ref) + 공개 NuGet의 MelonLoader 0.7.3 / HarmonyX / Il2CppInterop.
+    게임 인터롭(Assembly-CSharp, UnityEngine.*, Il2Cppmscorlib 등)은 없으므로 그 심볼을 못 찾는 오류는 걸러 낸다.
+    판정 방법과 한계는 Program.cs 맨 위 주석 참고.
+
+    아래 PackageDownload는 의존성 해석 없이 패키지 파일만 받는다(도구 자체의 실행 의존성이 아님).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 모드 본체 대상 프레임워크(net6.0)와, .NET 7+ 전용 API를 구분하기 위한 비교용(net8.0) 참조 어셈블리 -->
+    <PackageDownload Include="Microsoft.NETCore.App.Ref" Version="[6.0.36];[8.0.11]" />
+    <!-- 게임 폴더의 MelonLoader\net6 와 같은 계열의 공개 패키지. 버전은 MelonLoader 0.7.3 nuspec 기준 -->
+    <PackageDownload Include="LavaGang.MelonLoader" Version="[0.7.3]" />
+    <PackageDownload Include="HarmonyX" Version="[2.10.2]" />
+    <PackageDownload Include="Il2CppInterop.Runtime" Version="[1.5.1]" />
+    <PackageDownload Include="Il2CppInterop.Common" Version="[1.5.1]" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>NuGetPackageRoot</_Parameter1>
+      <_Parameter2>$(NuGetPackageRoot)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

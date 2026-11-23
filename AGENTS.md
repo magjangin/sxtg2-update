@@ -66,10 +66,11 @@
   dotnet build mod/SixtarGateMod.csproj
   ```
   - 빌드 후 `$(GameDir)\Mods\`가 있으면 `SixtarGateMod.dll`을 자동 복사함(게임 실행 중 잠겨 있으면 경고만 출력). 복사 생략 시 `-p:SkipDeploy=true`.
-- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 74건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동):**
+- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 74건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동, CI는 이어서 `tools/bodycheck`도 실행):**
   ```powershell
   dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
   ```
+- **모드 본체 net6 컴파일 검사 (게임 DLL 불필요, CI 연동):** `dotnet run --project tools/bodycheck -c Release` (`--self-test`로 검사기 자체 확인, `--interop <Il2CppAssemblies>`로 로컬 전체 검사). .NET 7+ API·모드 내부 오타를 잡고 게임 인터롭에 걸린 오류는 거름. 게임 API 검사는 못 함 → [`BUILD_AND_DEPLOY.md`](docs/03-development/BUILD_AND_DEPLOY.md).
 - **기계어 대조 오프라인 시험 (`GameAssembly.dll` 필요):**
   ```powershell
   dotnet run --project tools/lambdascan -- "<게임>\GameAssembly.dll" [caplens.txt]

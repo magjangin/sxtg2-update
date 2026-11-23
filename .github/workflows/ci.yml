@@ -16,3 +16,9 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Run pure module unit tests
         run: dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj --configuration Release
+      # 게임 DLL 없이 모드 본체(mod/**/*.cs)를 net6.0으로 컴파일해 .NET 7+ API·모드 내부 오타 등을 잡는다.
+      # 게임 인터롭에 걸린 오류는 거르므로 게임 API 사용 검사는 로컬 빌드와 tools/sigcheck 몫이다.
+      - name: Check mod body compiles against net6.0 (without game DLLs)
+        run: dotnet run --project tools/bodycheck --configuration Release
+      - name: Self-test the body check (it must catch planted errors)
+        run: dotnet run --project tools/bodycheck --configuration Release --no-build -- --self-test

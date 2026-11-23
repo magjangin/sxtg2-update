@@ -26,3 +26,5 @@ tools/lambdascan/bin/
 tools/lambdascan/obj/
 tools/sigcheck/bin/
 tools/sigcheck/obj/
+tools/bodycheck/bin/
+tools/bodycheck/obj/
