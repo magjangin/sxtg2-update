@@ -22,6 +22,9 @@ public readonly record struct Box(float X, float Y, float W, float H)
 /// Color.white, ==) is an il2cpp_runtime_invoke that boxes its result, so overlay code uses Box / Rgba / MathF only.
 /// Each pooled object keeps a managed copy of what it shows and only crosses into IL2CPP when that changes, and
 /// sibling order (= draw order) is rewritten only on frames whose draw sequence differs from the previous one.
+/// Unity object null checks (<c>_root == null</c>) are IL2CPP calls too (UnityEngine.Object.op_Equality), so the
+/// per-call guards use a managed flag and the canvas liveness / screen size / canvas scale are re-read only every
+/// <see cref="RecheckFrames"/> frames (2026-11-23; before: 3 + one per Rect/Label = ~50 IL2CPP calls a frame with the key viewer on).
 /// </summary>
 public static class Overlay
 {
@@ -61,6 +64,10 @@ public static class Overlay
     private static Font? _font;
     private static Sprite? _whiteSprite;
     private static bool _failed;
+    /// <summary>캔버스를 만들었고 아직 살아 있다고 본다(관리 코드 플래그: Rect/Label마다 네이티브 null 비교를 하지 않음).</summary>
+    private static bool _ready;
+    private const int RecheckFrames = 30;
+    private static int _recheckCountdown;
 
     public static readonly Color White = Rgba(1f, 1f, 1f, 1f);
     public static float ScreenWidth { get; private set; }
@@ -75,13 +82,19 @@ public static class Overlay
         if (_failed) return false;
         try
         {
-            if (_root == null) Create();
+            // 캔버스 생존·화면 크기·캔버스 배율은 RecheckFrames마다 한 번만 읽는다(창 크기 변경은 최대 0.5초 늦게 반영).
+            if (!_ready || --_recheckCountdown <= 0)
+            {
+                _recheckCountdown = RecheckFrames;
+                if (_root == null) Create(); // DontDestroyOnLoad라 보통 살아 있음: 누가 파괴했으면 다시 만든다
+                _ready = true;
+                float scale = _rootRect!.localScale.x;
+                if (scale <= 0f) scale = 1f;
+                float w = Screen.width, h = Screen.height;
+                if (scale != _scale || h != _screenH || w != ScreenWidth) { _scale = scale; _screenH = h; ScreenWidth = w; _layout++; }
+            }
             _imageIndex = _textIndex = 0;
             Drawn.Clear();
-            float scale = _rootRect!.localScale.x;
-            if (scale <= 0f) scale = 1f;
-            float w = Screen.width, h = Screen.height;
-            if (scale != _scale || h != _screenH || w != ScreenWidth) { _scale = scale; _screenH = h; ScreenWidth = w; _layout++; }
             return true;
         }
         catch (Exception ex)
@@ -94,7 +107,7 @@ public static class Overlay
 
     public static void End()
     {
-        if (_root == null) return;
+        if (!_ready) return;
         Hide(Images, _imageIndex);
         Hide(Texts, _textIndex);
 
@@ -108,7 +121,7 @@ public static class Overlay
 
     public static void Rect(Box b, Color color, Sprite? sprite = null)
     {
-        if (_root == null) return;
+        if (!_ready) return;
         if (_imageIndex == Images.Count)
         {
             var img = NewChild("Rect").AddComponent<Image>();
@@ -123,7 +136,7 @@ public static class Overlay
 
     public static void Label(Box b, string text, Color color, int fontSize, TextAnchor anchor, bool outline)
     {
-        if (_root == null || _font == null) return;
+        if (!_ready || _font is null) return;
         if (_textIndex == Texts.Count)
         {
             var go = NewChild("Label");
@@ -150,7 +163,7 @@ public static class Overlay
     /// <summary>Hides every pooled object at once (play ended, or no overlay feature is on).</summary>
     public static void HideAll()
     {
-        if (_root == null) return;
+        if (!_ready) return;
         Hide(Images, 0);
         Hide(Texts, 0);
         Drawn.Clear();
@@ -191,6 +204,7 @@ public static class Overlay
 
     private static void Create()
     {
+        _ready = false;
         Images.Clear();
         Texts.Clear();
         Drawn.Clear();

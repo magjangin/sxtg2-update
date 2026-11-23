@@ -178,7 +178,7 @@ public static class UpdateGuard
     /// 패치 적용이 끝난 뒤 판정 한 줄을 찍고 이번 지문을 저장한다(PatchResilience.ApplyAllPatches 끝에서 호출).
     /// 지문은 패치가 모두 붙었을 때만 새로 기록한다: 일부가 빠진 상태를 기준으로 삼으면 다음 부팅에서 경고가 사라진다.
     /// </summary>
-    public static void ReportPatchSummary(int applied, int skippedIcf, int skippedPreflight, int failed, int criticalMissing)
+    public static void ReportPatchSummary(int applied, int skippedIcf, int skippedPreflight, int failed, int criticalMissing, int fallbackResolved = 0)
     {
         try
         {
@@ -189,6 +189,9 @@ public static class UpdateGuard
                 verdict = $"문제 있음: 필수 패치 {criticalMissing}개가 빠졌습니다. 게임 업데이트로 모드가 깨졌을 가능성이 큽니다 (모드 수정 필요)";
             else if (!allApplied)
                 verdict = $"일부 패치 빠짐 (ICF {skippedIcf}, 사전 JIT {skippedPreflight}, 실패 {failed}): 해당 기능만 동작하지 않습니다";
+            else if (fallbackResolved > 0)
+                verdict = $"패치는 전부 붙었지만 {fallbackResolved}개는 업데이트로 바뀐 대상을 대체 해석으로 찾았습니다([Harmony/Resolve] 경고): " +
+                          "커스텀 곡 1곡을 결과 화면까지 플레이해 확인하고 해당 [HarmonyPatch]를 새 시그니처로 고치세요";
             else if (ListVerified && !_fingerprintChanged)
                 verdict = "정상 (검증된 빌드, 패치 전부 적용" + (_locallyVerified != null ? $", 이 PC 실기 확인: {_locallyVerified})" : ")");
             else if (_locallyVerified != null)
@@ -197,7 +200,7 @@ public static class UpdateGuard
                 verdict = "패치는 전부 붙었지만 이 빌드의 동작은 검증되지 않았습니다: 커스텀 곡 1곡을 결과 화면까지 플레이해 확인하세요" +
                           (_fingerprintChanged ? $" (달라진 것: {_fingerprintChangeNote})" : "");
 
-            if (criticalMissing > 0 || !allApplied || !verified)
+            if (criticalMissing > 0 || !allApplied || fallbackResolved > 0 || !verified)
                 Melon<Core>.Logger.Warning($"{LOG_PREFIX} 업데이트 점검 결과: {verdict}");
             else
                 Melon<Core>.Logger.Msg($"{LOG_PREFIX} 업데이트 점검 결과: {verdict}");

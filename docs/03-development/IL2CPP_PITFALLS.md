@@ -38,6 +38,14 @@ print(c[0x6772E0])   # 1이면 안전
 
 `Color`, `Vector2`의 `r g b a`, `x y`는 public 필드라 직접 접근은 무료입니다.
 
+**Unity 객체 null 비교도 네이티브 호출입니다.** `GameObject`, `Image`, `Sprite`, `NoteObject` 같은 `UnityEngine.Object` 파생 형식의 `==`/`!=`는 인터롭이 만든 `op_Equality`(→ `il2cpp_runtime_invoke`)라, 파괴 여부까지 보는 대신 호출마다 비용이 듭니다. 2026-11-23 감사에서 오버레이(`Overlay.Rect`/`Label`마다 `_root == null`, 키뷰어를 켜면 프레임당 약 50회), 판정바 모양 캐시, 노트 스폰 Postfix, `RandomNoteSkin.Copy`, 곡 목록 행 훅에서 찾아 아래 규칙으로 바꿨습니다.
+
+| 상황 | 쓰는 비교 |
+| --- | --- |
+| 이번 플레이/세션 동안 우리가 만들거나 받아 둔 객체(풀 노트 Image, `DontUnloadUnusedAsset` 스프라이트, Harmony가 넘긴 `__result`) | `is null` / `is not null` (관리 비교, 무료) |
+| 씬 전환 등으로 파괴됐을 수 있는 객체 | 경계에서 한 번(씬 로드, N프레임마다) `== null` 후 관리 플래그로 기억 |
+| 파괴된 객체에 실수로 접근 | 인터롭이 예외를 던지므로 호출부 `try/catch`(오버레이는 `Core.OnLateUpdate`가 한 번만 경고) |
+
 ## 3. 패치해도 안 불리는 함수
 
 - `JudgeProcessor` 생성자: 적용 오류는 없는데 한 번도 안 불림 → 인스턴스 메서드에서 포인터가 바뀌면 지연 초기화

@@ -138,7 +138,9 @@ public static class CustomNoteSkin
 
         public static void Postfix(StartrailPatternRenderer __instance, LaneIndex index, NoteObject __result)
         {
-            if (__result == null) return;
+            // 노트가 나올 때마다 불린다: 두 기능이 다 꺼졌으면 Unity null 비교(IL2CPP 호출)도 하지 않음
+            if (!ModConfig.RandomNoteSkin && !ModConfig.CustomNotes) return;
+            if (__result is null) return;
             if (ModConfig.RandomNoteSkin) RandomNoteSkin.OnNoteSpawned(__instance, index, __result);
             else if (ModConfig.CustomNotes && EnsureLoaded()) ApplyCustom(index, __result);
         }

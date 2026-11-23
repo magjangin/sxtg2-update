@@ -79,6 +79,54 @@ public static class PatchSignatureCheck
         return pick;
     }
 
+    /// <summary>
+    /// 인자 형식을 지정한 <c>[HarmonyPatch(typeof(X), "M", new[] { ... })]</c>의 대상이 업데이트로 시그니처가 바뀌어
+    /// 정확히 맞는 메서드가 없을 때(예: <c>GotoPlayScene(ITrack, ELevels, EPlayStyle)</c>에 인자가 하나 늘어남)의 대체 해석
+    /// (2026-11-23). 같은 이름 메서드가 <b>하나뿐</b>이고 그 메서드가 패치 인자 대조를 오류 없이 통과할 때만 고른다.
+    /// 같은 이름이 여럿 남아 있으면 지정했던 오버로드만 사라지고 뜻이 다른 형제가 남은 것일 수 있어 고르지 않는다
+    /// (예: <c>Resume(channel)</c>이 없어지고 <c>Resume(time, channel)</c>만 남음).
+    /// </summary>
+    public static MethodInfo? PickChangedSignature(Type patchType, IReadOnlyList<MethodInfo> candidates, out string note)
+    {
+        if (candidates.Count == 0)
+        {
+            note = "같은 이름의 메서드가 없음(이름이 바뀌었거나 삭제됨)";
+            return null;
+        }
+        if (candidates.Count > 1)
+        {
+            note = $"같은 이름 메서드가 {candidates.Count}개라 고르지 않음(지정한 오버로드만 사라졌을 수 있음)";
+            return null;
+        }
+        var only = candidates[0];
+        var w = new List<string>();
+        string? error = Check(patchType, new MethodBase[] { only }, w);
+        if (error != null)
+        {
+            note = $"남은 메서드 ({ParamList(only.GetParameters())})가 패치 인자와 맞지 않음: {error}";
+            return null;
+        }
+        note = $"인자 형식이 바뀐 메서드 ({ParamList(only.GetParameters())})를 패치 인자로 확인해 고름" +
+               (w.Count > 0 ? $" (경고 {w.Count}개)" : "");
+        return only;
+    }
+
+    /// <summary>
+    /// <paramref name="declType"/>부터 기반 형식으로 올라가며 이름이 같은 비제네릭 메서드를 모은다(처음 찾은 형식에서 멈춤).
+    /// 부팅 시 해석(<c>PatchResilience</c>)과 오프라인 대조(<c>tools/sigcheck</c>)가 같은 후보를 쓰도록 여기 둔다.
+    /// </summary>
+    public static List<MethodInfo> SameNameMethods(Type declType, string methodName)
+    {
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+                                 BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var candidates = new List<MethodInfo>();
+        for (Type? t = declType; t != null && candidates.Count == 0; t = t.BaseType)
+            foreach (var m in t.GetMethods(all))
+                if (string.Equals(m.Name, methodName, StringComparison.Ordinal) && !m.IsGenericMethodDefinition)
+                    candidates.Add(m);
+        return candidates;
+    }
+
     /// <summary>패치 메서드 하나를 대상 하나와 대조. 오류 사유 또는 null.</summary>
     public static string? CheckMethod(MethodBase target, MethodInfo patch, List<string> warnings)
     {

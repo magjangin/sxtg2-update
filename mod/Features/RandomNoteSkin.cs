@@ -160,7 +160,7 @@ public static class RandomNoteSkin
         {
             var src = from[i];
             var dst = to[i];
-            if (!src.Valid || dst == null) continue;
+            if (!src.Valid || dst is null) continue; // dst는 이 플레이의 풀 노트 Image(GetComponentsInChildren 결과)
             dst.sprite = src.Sprite;
             dst.type = src.Type;
             dst.color = src.Color;
@@ -184,7 +184,7 @@ public static class RandomNoteSkin
                 _ui = renderer.UIRenderer;
             }
             var ui = _ui;
-            if (ui == null) return;
+            if (ui is null) return; // 관리 코드 비교(노트마다 IL2CPP 호출 없음): _ui는 플레이마다 새로 읽고 EndPlay에서 비움
             EnsureCatalog(ui);
 
             // The lane prefab is fixed for the whole play; resolve its suffix once per lane.

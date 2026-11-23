@@ -26,13 +26,15 @@ var asm = Assembly.LoadFrom(modDll);
 var check = asm.GetType("SixtarGateMod.Managers.PatchSignatureCheck")?.GetMethod("Check");
 if (check == null) { Console.Error.WriteLine("이 모드 DLL에는 PatchSignatureCheck가 없습니다."); return 2; }
 var pickOverload = check.DeclaringType!.GetMethod("PickOverload");
+var pickChanged = check.DeclaringType!.GetMethod("PickChangedSignature");
+var sameName = check.DeclaringType!.GetMethod("SameNameMethods");
 
 Type[] types;
 try { types = asm.GetTypes(); }
 catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray()!; }
 
 const BindingFlags Flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-int ok = 0, errors = 0, warnings = 0, unresolved = 0, overloaded = 0;
+int ok = 0, errors = 0, warnings = 0, unresolved = 0, overloaded = 0, changed = 0;
 foreach (var t in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
 {
     if (t.GetCustomAttributes(typeof(HarmonyPatch), false).Length == 0) continue;
@@ -87,6 +89,17 @@ foreach (var t in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
                 Console.WriteLine($"  오버로드     {t.Name}: {args2[2]}");
                 if (r != null) overloaded++;
             }
+            // 부팅 시와 같은 해석(PatchResilience.PickChangedSignatureForPatch): 지정한 인자 형식의 메서드가 없으면
+            // 같은 이름이 하나뿐이고 패치 인자와 맞을 때 그것을 고름(2026-11-23)
+            if (r == null && kind == MethodType.Normal && argTypes != null && decl != null && name != null
+                && pickChanged != null && sameName != null)
+            {
+                var cands = (List<MethodInfo>)sameName.Invoke(null, new object[] { decl, name })!;
+                var args3 = new object?[] { t, cands, null };
+                r = (MethodInfo?)pickChanged.Invoke(null, args3);
+                Console.WriteLine($"  시그니처변경 {t.Name}: {decl.Name}.{name}({string.Join(", ", argTypes.Select(a => a.Name))}) 없음 — {args3[2]}");
+                if (r != null) changed++;
+            }
             if (r != null) targets.Add(r);
         }
     }
@@ -114,5 +127,5 @@ foreach (var t in types.OrderBy(t => t.FullName, StringComparer.Ordinal))
     else ok++;
 }
 
-Console.WriteLine($"패치 시그니처 대조: 통과 {ok}, 오류 {errors}, 경고 {warnings}, 대상 미확인(클로저·런타임 필요) {unresolved}, 오버로드로 고름 {overloaded}");
+Console.WriteLine($"패치 시그니처 대조: 통과 {ok}, 오류 {errors}, 경고 {warnings}, 대상 미확인(클로저·런타임 필요) {unresolved}, 오버로드로 고름 {overloaded}, 바뀐 시그니처로 고름 {changed}");
 return errors > 0 ? 1 : 0;

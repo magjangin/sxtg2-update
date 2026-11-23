@@ -68,7 +68,7 @@ public static class NoteEffects
     /// <summary>Called once per frame: reads the renderer's scroll scale once instead of once per visible note.</summary>
     public static void OnFrame()
     {
-        if (_notePatchesActive && ModConfig.AnyLaneCover && _renderer != null)
+        if (_notePatchesActive && ModConfig.AnyLaneCover && _renderer is not null)
             _laneScale = _renderer._scrollSpeed * _renderer._noteDistanceInterval;
     }
 

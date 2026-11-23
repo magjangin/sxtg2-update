@@ -70,13 +70,16 @@ public static class CustomJackets
 
     private static void ApplyListThumbnail(TrackObject? owner, ITrack? track)
     {
-        var thumb = owner?.thumbnail;
-        if (owner == null || thumb == null || track == null) return;
+        // 목록을 스크롤하면 행마다 두 번(SetTrack + 번들 콜백) 불린다. 공식 곡 행은 곡 ID 기록과 사전 조회만 하고 끝내도록
+        // thumbnail 필드 읽기(래퍼 생성)와 Unity null 비교(IL2CPP 호출)는 커스텀 자켓이 있을 때만 한다(2026-11-23).
+        if (owner is null || track is null) return;
         string trackId = track.TrackID ?? "";
         IntPtr ownerPtr = owner.Pointer;
         _rowTrackIds[ownerPtr] = trackId;
         var album = CustomTrackManager.FindAlbum(trackId);
         if (album == null || !album.HasCustomJacket) return;
+        var thumb = owner.thumbnail;
+        if (thumb == null) return;
         MediaOverrideManager.RequestAlbumSprite(album, sprite =>
         {
             if (owner == null || thumb == null) return;
