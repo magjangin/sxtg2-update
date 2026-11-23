@@ -57,6 +57,7 @@
 - **판정/입력 경로 매 노트 신규 진단 훅 (`ISixtarJudgeData` 인자 등):** 네이티브 크래시 유발(원인 미확인) → 덤프 분석 없이 매 노트 훅 실험 금지.
 - **매 프레임 Unity 객체 `== null` 가드:** `Overlay.Rect`/`Label`이 호출마다 `_root == null`을 보느라 키뷰어를 켜면 프레임당 약 50번 `op_Equality` IL2CPP 호출 → 관리 플래그 + 30프레임마다 확인(2026-11-23).
 - **Harmony 인자 바인딩을 믿고 시그니처 변경을 방치:** Harmony는 패치 인자를 **이름으로만** 묶고 형식을 확인하지 않아, 업데이트로 `int`→`long`처럼 값 형식이 바뀌어도 패치가 붙은 뒤 첫 호출에서 잘못된 값·크래시가 남. `PatchPreflight`(사라진 멤버)와 ICF 검사로는 안 잡힘 → `PatchSignatureCheck`(부팅) + `tools/sigcheck`(오프라인). `ResolveMethod`의 이름·개수 대체 경로도 이제 `[Harmony/Resolve]` 경고를 남김(전에는 조용히 대체).
+- **`tools/release.ps1`의 네이티브 stderr 오판 (2026-11-23):** Windows PowerShell 5.1에서 출력을 `2>&1`/파이프로 받으면 `git push`의 정상 stderr(`To https://…`)가 `ErrorActionPreference=Stop` 아래 예외가 되어, 태그는 원격에 올라갔는데 "푸시 실패"로 로컬 태그를 지움 → `Invoke-Native`는 함수 안에서 `Continue`로 두고 종료 코드로만 판정. 같은 증상이면 `git ls-remote --tags origin v<버전>`으로 확인 후 `gh release create`만 다시.
 - **기타:** `pe_slice` 네임스페이스 필수(`SixtarGate.BMSConverter`), `Cpp2IL`은 `< NUL` 리디렉션 필수, `AllTracks` 직접 주입 금지, 게임 실행 중 `Mods\SixtarGateMod.dll` 잠금.
 
 ## 6. 빌드, 테스트 및 배포 경로
