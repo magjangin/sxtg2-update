@@ -2,10 +2,19 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
-## [Unreleased]
+## [2.3.4] - 2026-11-24
+
+### 성능
+- `hwa\` 변경 감지 재스캔이 바뀐 곡 폴더만 다시 읽음: 폴더별 지문(파일 이름·크기·수정 시각)이 지난 스캔과 같으면 곡 정보·BMS를 다시 해석하지 않고 앨범을 재사용. 전에는 곡 하나만 추가해도 CUSTOM 탭 진입 순간 메인 스레드에서 모든 곡을 다시 해석했음.
+- 자켓 캐시 조회의 Unity `!= null`(IL2CPP `op_Equality`) 제거(곡 목록 스크롤 중 커스텀 곡 행마다 2회).
 
 ### 수정
+- 커스텀 곡 자켓 그림을 바꿔도(같은 파일명 포함) 게임을 다시 켜야 반영되던 한계: 자켓 캐시 키에 파일 크기·수정 시각(`CustomAlbumInfo.JacketStamp`)을 넣어 CUSTOM 탭 재진입(재스캔) 뒤 새로 읽음.
+- 곡 폴더를 읽지 못하면 조용히 건너뛰던 것을 `[CustomTrackManager] 폴더 읽기 실패` 경고로.
 - `tools/release.ps1`: 출력을 `2>&1`/파이프로 받으면 `git push`의 정상 stderr를 오류로 보고 "태그 푸시 실패"로 로컬 태그를 지우던 문제(Windows PowerShell 5.1). 종료 코드로만 판정. 모드 DLL은 바뀌지 않음.
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 77건, `tools/bodycheck` 통과, `tools/sigcheck` 통과 114·오류 0·대체 해석 0, `tools/lambdascan` `ALL PASS`. 게임 실기는 미실행.
 
 ## [2.3.3] - 2026-11-23
 

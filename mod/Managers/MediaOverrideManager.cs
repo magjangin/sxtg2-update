@@ -23,21 +23,42 @@ public static class MediaOverrideManager
     private static bool _preloading;
 
     /// <summary>
+    /// 스프라이트 캐시·대기·실패 기록의 키: 곡 ID + 자켓 파일 지문(크기·수정 시각). 자켓 그림을 바꾸면 hwa 재스캔 뒤 키가
+    /// 달라져 새로 읽는다. 같은 곡의 옛 키 항목은 새 스프라이트를 넣을 때 캐시에서 뺀다(화면에 아직 쓰일 수 있어 파괴는 안 함).
+    /// </summary>
+    private static string KeyOf(CustomAlbumInfo album) => album.TrackId + "|" + album.JacketStamp;
+    private static readonly Dictionary<string, string> CurrentKeyByTrack = new(StringComparer.OrdinalIgnoreCase);
+
+    private static void Store(CustomAlbumInfo album, string key, Sprite sprite)
+    {
+        if (CurrentKeyByTrack.TryGetValue(album.TrackId, out var old) && !string.Equals(old, key, StringComparison.OrdinalIgnoreCase))
+            SpriteCache.Remove(old);
+        CurrentKeyByTrack[album.TrackId] = key;
+        SpriteCache[key] = sprite;
+    }
+
+    // 관리 null 비교: 캐시 스프라이트는 DontUnloadUnusedAsset이고 이 모드가 파괴하지 않는다. Unity의 !=는 IL2CPP
+    // op_Equality라 목록 스크롤 중 행마다 들었다.
+    private static bool TryCached(string key, out Sprite sprite)
+        => SpriteCache.TryGetValue(key, out sprite!) && sprite is not null;
+
+    /// <summary>
     /// Synchronous jacket (decodes on the main thread on a cache miss). Used by the play-flow screens, which normally
     /// hit the cache because the song was shown in the music select first.
     /// </summary>
     public static Sprite? GetOrCreateAlbumSprite(CustomAlbumInfo album)
     {
         if (album == null || !album.HasCustomJacket) return null;
-        if (SpriteCache.TryGetValue(album.TrackId, out var cached) && cached != null)
+        string key = KeyOf(album);
+        if (TryCached(key, out var cached))
             return cached;
-        if (Failed.Contains(album.TrackId)) return null;
+        if (Failed.Contains(key)) return null;
 
         var sprite = LoadSpriteFromFile(album.JacketPath!);
-        if (sprite != null) SpriteCache[album.TrackId] = sprite;
+        if (sprite != null) Store(album, key, sprite);
         else
         {
-            Failed.Add(album.TrackId);
+            Failed.Add(key);
             Melon<Core>.Logger.Error($"{LOG_PREFIX} 스프라이트 생성 실패: '{album.JacketPath}' (이 곡은 기본 자켓 유지)");
         }
         return sprite;
@@ -50,19 +71,20 @@ public static class MediaOverrideManager
     public static void RequestAlbumSprite(CustomAlbumInfo album, Action<Sprite> onReady)
     {
         if (album == null || !album.HasCustomJacket) return;
-        if (SpriteCache.TryGetValue(album.TrackId, out var cached) && cached != null)
+        string key = KeyOf(album);
+        if (TryCached(key, out var cached))
         {
             onReady(cached);
             return;
         }
-        if (Failed.Contains(album.TrackId)) return;
-        if (Pending.TryGetValue(album.TrackId, out var waiting))
+        if (Failed.Contains(key)) return;
+        if (Pending.TryGetValue(key, out var waiting))
         {
             waiting.Add(onReady);
             return;
         }
-        Pending[album.TrackId] = new List<Action<Sprite>> { onReady };
-        MelonCoroutines.Start(LoadAsync(album));
+        Pending[key] = new List<Action<Sprite>> { onReady };
+        MelonCoroutines.Start(LoadAsync(album, key));
     }
 
     /// <summary>Clears failed jacket records so newly fixed image files can be retried after a folder refresh.</summary>
@@ -84,12 +106,13 @@ public static class MediaOverrideManager
         {
             foreach (var album in albums)
             {
-                if (!album.HasCustomJacket || SpriteCache.ContainsKey(album.TrackId) || Failed.Contains(album.TrackId)) continue;
+                string key = KeyOf(album);
+                if (!album.HasCustomJacket || SpriteCache.ContainsKey(key) || Failed.Contains(key)) continue;
                 bool done = false;
                 RequestAlbumSprite(album, _ => done = true);
                 float waitUntil = Time.realtimeSinceStartup + 10f;
-                while (!done && Pending.ContainsKey(album.TrackId) && Time.realtimeSinceStartup < waitUntil) yield return null;
-                if (SpriteCache.ContainsKey(album.TrackId)) loaded++;
+                while (!done && Pending.ContainsKey(key) && Time.realtimeSinceStartup < waitUntil) yield return null;
+                if (SpriteCache.ContainsKey(key)) loaded++;
             }
             Core.DebugLog($"{LOG_PREFIX} 자켓 {loaded}장 미리 로드 ({(DateTime.Now - started).TotalSeconds:F1}초)");
         }
@@ -131,7 +154,7 @@ public static class MediaOverrideManager
     // PNG bytes are read and decoded on a worker thread (Loaders/PngDecoder); the main thread only uploads the
     // finished RGBA buffer. Unity's own async path is unusable here: DownloadHandlerTexture's constructor is
     // stripped from the game build ("Method not found").
-    private static System.Collections.IEnumerator LoadAsync(CustomAlbumInfo album)
+    private static System.Collections.IEnumerator LoadAsync(CustomAlbumInfo album, string key)
     {
         Sprite? sprite = null;
         try
@@ -169,12 +192,12 @@ public static class MediaOverrideManager
                 sprite ??= LoadSpriteFromFile(album.JacketPath!);
             }
 
-            if (sprite != null) SpriteCache[album.TrackId] = sprite;
-            else Failed.Add(album.TrackId);
+            if (sprite != null) Store(album, key, sprite);
+            else Failed.Add(key);
         }
         finally
         {
-            if (Pending.Remove(album.TrackId, out var callbacks) && sprite != null)
+            if (Pending.Remove(key, out var callbacks) && sprite != null)
             {
                 foreach (var cb in callbacks)
                 {

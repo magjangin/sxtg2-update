@@ -37,7 +37,7 @@
 - **오디오 (`Core.cs`, `Managers/CustomAudioManager.cs`):** `SoundModuleForFMOD.Play` (`0x7E11E0`) → FMOD Core `createStream` 직접 재생 및 `Stop`/`Pause`/`Resume`/`GetTimelinePosition`/`set_CurrectionVolume`/`ChangeVolume` 연동.
 - **BGA & 자켓 (`Features/CustomBga.cs`, `Features/CustomJackets.cs`):** `BackgroundUIProcessor` URL 재적용·`PlayBGA`/`PauseBGA`/`IsVideoPlayable` 대체; `TrackInfoViewer.Set`, `TrackObject.SetTrack`/`<LoadThumbnail>b__1`, `PlayLoadingManager`, `Pause.TrackInfoViewerModule`, `Result.TrackInfoModule`/`TravelBackgroundModule` 비동기/지연 자켓 적용.
 - **플레이 보조 & 오버레이 (`Features/PlayAssist.cs`, `Overlay.cs`, `JudgmentBar.cs`, `KeyViewer.cs`, `NoteEffects.cs`, `CustomNoteSkin.cs`, `RandomNoteSkin.cs`, `CustomMarathon.cs`):** `JudgeProcessor.Judge`/`OnTickEvent`/`SetPressedState`, `ScoreProcessor.UpdateScore`, `PlayRecordModule.Record*`, `StartrailPatternRenderer.GetNoteObejct`/`Register`, `AttendanceController` 팝업 생략.
-- **메타데이터 & 설정 (`Loaders/TrackInfoParser.cs`, `TextDecoder.cs`, `Managers/ModConfig.cs`):** `{게임}\hwa\` 스캔(`info.txt` → BMS `#TITLE`/`#ARTIST` → 폴더명), `{게임}\SaveCustomKey\config.txt` 동적 리로드(읽기 성공 후에만 수정 시각 기록), `hwa\` 변경 감지는 곡 폴더 안 파일 크기·수정 시각까지(1초 간격).
+- **메타데이터 & 설정 (`Loaders/TrackInfoParser.cs`, `TextDecoder.cs`, `Managers/ModConfig.cs`):** `{게임}\hwa\` 스캔(`info.txt` → BMS `#TITLE`/`#ARTIST` → 폴더명), `{게임}\SaveCustomKey\config.txt` 동적 리로드(읽기 성공 후에만 수정 시각 기록), `hwa\` 변경 감지는 곡 폴더 안 파일 크기·수정 시각까지(1초 간격), 재스캔은 폴더 지문이 같은 곡을 재사용(증분), 자켓 캐시 키 = 곡 ID + 자켓 파일 크기·수정 시각.
 
 ## 5. 시도했다가 실패한 것들 (Dead Ends / Failed Attempts)
 - **IL2CPP 동일 코드 접기(ICF) 미확인 패치:** 공유 주소 패치 시 엉뚱한 `this`로 실행됨 (`OpenPopup` 5192개, `SetTickData` 102개, `set_IsAutoJudge` 44개, `set_TrackEndTiming` 11개, `_Set_b__3_1` 11개 등). 반드시 `IcfScanner`/`script.json` 확인.
