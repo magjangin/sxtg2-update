@@ -25,4 +25,10 @@ public class CustomAlbumInfo
     public bool HasCustomPreview => PreviewPath != null;
     public bool HasCustomBga => BgaPath != null;
     public bool HasCustomJacket => JacketPath != null;
+
+    /// <summary>
+    /// 자켓 파일 크기·수정 시각("길이:틱"). 자켓 스프라이트 캐시 키에 들어가서, 같은 곡의 그림을 바꾸면(같은 파일명이어도)
+    /// hwa 재스캔 뒤 새로 읽힌다(2026-11-24 전에는 곡 ID만 키여서 게임을 다시 켜야 했음).
+    /// </summary>
+    public string JacketStamp { get; set; } = "";
 }

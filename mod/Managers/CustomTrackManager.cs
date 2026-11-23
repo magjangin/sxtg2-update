@@ -101,7 +101,7 @@ public static class CustomTrackManager
         MediaOverrideManager.ClearFailed();
         var entries = ModLog.RunCaptured(ScanHwaFolder);
         ModLog.Flush(entries);
-        Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더 변경 감지 → 커스텀 곡 다시 스캔 ({Albums.Count}곡)");
+        Melon<Core>.Logger.Msg($"{LOG_PREFIX} 'hwa' 폴더 변경 감지 → 커스텀 곡 다시 스캔 ({Albums.Count}곡, 바뀌지 않은 폴더 {_reusedLastScan}곡은 다시 읽지 않음)");
         return true;
     }
 
@@ -137,10 +137,12 @@ public static class CustomTrackManager
     }
 
     /// <summary>폴더 안 파일들의 이름·크기·수정 시각을 순서와 무관하게 접는다(파일 시스템마다 열거 순서가 달라서).</summary>
-    private static long FoldFiles(DirectoryInfo dir)
+    private static long FoldFiles(DirectoryInfo dir) => FoldFiles(dir, dir.EnumerateFiles());
+
+    private static long FoldFiles(DirectoryInfo dir, IEnumerable<FileInfo> files)
     {
         long sum = dir.LastWriteTimeUtc.Ticks, xor = 0;
-        foreach (var f in dir.EnumerateFiles())
+        foreach (var f in files)
         {
             long h = StringComparer.OrdinalIgnoreCase.GetHashCode(f.Name);
             h = h * 1_000_003 + f.Length;
@@ -151,38 +153,71 @@ public static class CustomTrackManager
         return sum * 31 + xor;
     }
 
+    /// <summary>
+    /// 곡 폴더 경로 → (그 폴더의 파일 지문, 충돌 번호 붙이기 전 곡 ID, 앨범). 다시 스캔할 때 지문이 같은 폴더는
+    /// info.txt·BMS를 다시 읽지 않고 앨범을 그대로 쓴다. 전에는 곡 하나만 추가해도 CUSTOM 탭에 들어가는 순간
+    /// 메인 스레드에서 모든 곡의 곡 정보와 BMS를 다시 해석했다(2026-11-24).
+    /// </summary>
+    private static Dictionary<string, (long Stamp, string BaseId, CustomAlbumInfo Album)> _folderCache = new(StringComparer.OrdinalIgnoreCase);
+    private static int _reusedLastScan;
+
     // 작업 스레드에서 돈다: Unity/IL2CPP를 부르지 않고, 로그는 ModLog로(메인 스레드에서 출력), 공개 속성 대신 필드에 쓴다.
     private static void ScanHwaFolder()
     {
         Albums.Clear();
         ById.Clear();
+        _reusedLastScan = 0;
         _lastHwaStamp = ComputeHwaStamp();
 
         if (!Directory.Exists(HwaFolderPath))
+        {
+            _folderCache.Clear();
             return;
+        }
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var subDirs = Directory.GetDirectories(HwaFolderPath);
-        Array.Sort(subDirs, StringComparer.OrdinalIgnoreCase);
-        var albumFolders = new List<string>(1 + subDirs.Length) { HwaFolderPath };
+        var root = new DirectoryInfo(HwaFolderPath);
+        var subDirs = root.GetDirectories();
+        Array.Sort(subDirs, (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.FullName, b.FullName));
+        var albumFolders = new List<DirectoryInfo>(1 + subDirs.Length) { root };
         albumFolders.AddRange(subDirs);
 
+        var previous = _folderCache;
+        var nextCache = new Dictionary<string, (long Stamp, string BaseId, CustomAlbumInfo Album)>(StringComparer.OrdinalIgnoreCase);
         int scanCount = 0;
-        foreach (var folder in albumFolders)
+        foreach (var dir in albumFolders)
         {
-            // 폴더당 1회만 디렉터리를 읽고 정렬된 파일 목록을 메모리에서 재사용(곡 정보·차트·미디어 탐색 공용).
-            string[] files = GetSortedFiles(folder);
+            string folder = dir.FullName;
+            // 폴더당 1회만 디렉터리를 읽고 정렬된 파일 목록을 메모리에서 재사용(곡 정보·차트·미디어 탐색·폴더 지문 공용).
+            FileInfo[] infos = GetSortedFiles(dir);
+            string[] files = new string[infos.Length];
+            for (int i = 0; i < infos.Length; i++) files[i] = infos[i].FullName;
             string? bmsFile = FindFirstByExtension(files, BMS_EXTENSIONS);
             if (string.IsNullOrEmpty(bmsFile))
                 continue;
 
             try
             {
-                var album = BuildAlbumInfo(folder, bmsFile, files);
+                long stamp = FoldFiles(dir, infos);
+                CustomAlbumInfo album;
+                string baseId;
+                if (previous.TryGetValue(folder, out var hit) && hit.Stamp == stamp)
+                {
+                    album = hit.Album;
+                    baseId = hit.BaseId;
+                    album.TrackId = baseId; // 충돌 번호는 아래에서 이번 스캔 순서로 다시 붙인다
+                    _reusedLastScan++;
+                }
+                else
+                {
+                    album = BuildAlbumInfo(folder, bmsFile, files);
+                    album.JacketStamp = StampOf(infos, album.JacketPath);
+                    baseId = album.TrackId;
+                }
+                nextCache[folder] = (stamp, baseId, album);
                 // "A B" and "A_B" folders map to the same ID; keep both by numbering the later one.
                 if (ById.ContainsKey(album.TrackId))
                 {
-                    string baseId = album.TrackId;
                     int n = 2;
                     while (ById.ContainsKey($"{baseId}_{n}")) n++;
                     album.TrackId = $"{baseId}_{n}";
@@ -199,7 +234,18 @@ public static class CustomTrackManager
             }
         }
 
-        ModLog.Msg($"{LOG_PREFIX} 검색 완료: 커스텀 곡 {scanCount}곡 발견 ({sw.Elapsed.TotalMilliseconds:F0}ms, 작업 스레드)");
+        _folderCache = nextCache;
+        ModLog.Msg($"{LOG_PREFIX} 검색 완료: 커스텀 곡 {scanCount}곡 발견 ({sw.Elapsed.TotalMilliseconds:F0}ms" +
+                   (_reusedLastScan > 0 ? $", {_reusedLastScan}곡은 바뀌지 않아 재사용)" : ")"));
+    }
+
+    private static string StampOf(FileInfo[] infos, string? path)
+    {
+        if (path == null) return "";
+        foreach (var f in infos)
+            if (string.Equals(f.FullName, path, StringComparison.OrdinalIgnoreCase))
+                return $"{f.Length}:{f.LastWriteTimeUtc.Ticks}";
+        return "";
     }
 
     private static CustomAlbumInfo BuildAlbumInfo(string folder, string bmsFile, string[] files)
@@ -286,18 +332,20 @@ public static class CustomTrackManager
     public static CustomAlbumInfo? FindAlbum(string? trackId)
         => !string.IsNullOrEmpty(trackId) && AlbumsByTrackId.TryGetValue(trackId, out var album) ? album : null;
 
-    private static string[] GetSortedFiles(string folder)
+    private static FileInfo[] GetSortedFiles(DirectoryInfo dir)
     {
         try
         {
-            string[] files = Directory.GetFiles(folder, "*", SearchOption.TopDirectoryOnly);
+            // 열거 결과의 FileInfo가 크기·수정 시각을 이미 들고 있어 폴더·자켓 지문에 파일별 stat이 따로 들지 않는다.
+            FileInfo[] files = dir.GetFiles("*", SearchOption.TopDirectoryOnly);
             // Directory order is only alphabetical on NTFS (exFAT/FAT32 return creation order): sort once here.
-            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+            Array.Sort(files, (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.FullName, b.FullName));
             return files;
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return Array.Empty<string>();
+            ModLog.Warning($"{LOG_PREFIX} 폴더 읽기 실패 '{dir.Name}': {ex.Message}");
+            return Array.Empty<FileInfo>();
         }
     }
 
