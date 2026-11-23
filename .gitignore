@@ -26,3 +26,6 @@ tools/lambdascan/bin/
 tools/lambdascan/obj/
 tools/sigcheck/bin/
 tools/sigcheck/obj/
+
+# Release output (tools/release.ps1)
+dist/
