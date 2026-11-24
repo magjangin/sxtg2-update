@@ -152,8 +152,9 @@ public static class PatchPreflight
                 int token = BitConverter.ToInt32(il, i);
                 if (TryResolveToken(m.Module, op.OperandType, token, typeArgs, methodArgs, out MethodBase? callee, ref resolveError) && callee != null)
                 {
-                    // 제네릭 인스턴스는 정의로 바꿔 IL을 따라감(JIT 검사는 정의에서 건너뜀)
-                    if (callee is MethodInfo mi && mi.IsGenericMethod && !mi.IsGenericMethodDefinition)
+                    // 닫힌 제네릭 인스턴스는 그대로 유지해 실제 타입 인자로 사전 JIT(PrepareMethod)를 실행한다.
+                    // 오픈 제네릭 파라미터가 남아 있는 경우만 정의로 바꿔 IL 토큰을 따라간다.
+                    if (callee is MethodInfo mi && mi.IsGenericMethod && !mi.IsGenericMethodDefinition && mi.ContainsGenericParameters)
                         callee = mi.GetGenericMethodDefinition();
                     result.Add(callee);
                 }

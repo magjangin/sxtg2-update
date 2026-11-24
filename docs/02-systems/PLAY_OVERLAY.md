@@ -8,7 +8,7 @@
 그래서 `Canvas`(ScreenSpaceOverlay, sortingOrder 32000) 하나에 `Image`/`Text`를 풀링해 즉시모드처럼 씁니다.
 
 ```text
-Overlay.Begin()           프레임마다 1번: 화면 크기, 캔버스 배율 읽기
+Overlay.Begin()           캔버스 생존·화면 크기·캔버스 배율은 30프레임마다만 읽음(2026-11-23)
 Overlay.Rect(Box, Color, Sprite?)
 Overlay.Label(Box, text, Color, size, anchor, outline)
 Overlay.End()             이번에 안 쓴 풀 객체 숨기기, 그리기 순서 맞추기
@@ -27,7 +27,9 @@ Overlay.End()             이번에 안 쓴 풀 객체 숨기기, 그리기 순�
 | 풀 객체 갱신 | 각 객체가 위치·색·스프라이트·글자·크기·정렬·외곽선·활성 상태를 관리 코드로 기억, 바뀔 때만 IL2CPP 호출 |
 | 그리기 순서 | 전에는 요소마다 매 프레임 `SetAsLastSibling`(캔버스 재빌드). 지금은 그리는 순서가 지난 프레임과 다를 때만 |
 | 판정바 모양 텍스처 | 픽셀당 `SetPixel` 대신 RGBA 배열 한 번 업로드 |
-| 판정바 글자 | 판정 들어올 때 한 번 만들고 재사용 |
+| 판정바 글자 | 그릴 때 한 번 지연 생성하고 재사용(2026-11-23) |
+| Unity 객체 null 비교 | Rect/Label마다의 `_root == null`(IL2CPP `op_Equality`)을 관리 플래그 `_ready`로. `HideAll()`은 매 프레임 경로가 아니라 파괴된 캔버스를 확인(v2.3.5) |
+| 외곽선 | 풀 객체가 외곽선 없음 → 있음으로 재사용될 때도 `effectColor` 알파를 갱신(v2.3.5) |
 | 마라톤 배너 글자 | 남은 초가 바뀔 때만 다시 만듦 |
 
 **그리기 순서가 왜 중요한가:** 풀 객체를 호출 순서대로 재사용하면 형제 순서(=렌더 순서)와 어긋나서, 나중에 생긴 반투명 키 상자가 키 글자를 덮어 글자가 회색↔흰색으로 깜빡였습니다.

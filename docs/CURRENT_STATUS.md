@@ -25,7 +25,7 @@
 | 전곡·DLC 해금 | 실기 확인 | |
 | 출석 보상 창 자동 표시 끄기 | 실기 확인 | 로그 `[Attendance] Skipped ...` |
 
-## 최근 변경 (2026-10-30 ~ 2026-11-22, `#n` = PR 번호)
+## 최근 변경 (2026-10-30 ~ 2026-11-24, `#n` = PR 번호)
 
 1. **#1** AllPerfect가 안 누른 롱노트 틱에 레인 불빛을 켜던 문제 수정
 2. **#2** README, 성능 정리(오버레이 IL2CPP 호출 제거, 디스크 접근 제거, 차트 캐시), 죽은 훅 제거 (4,217 → 3,746줄)
@@ -40,7 +40,7 @@
 11. **#11** 업데이트 내성 강화(`Managers/PatchResilience.cs`): 컴파일러 생성 클로저·코루틴(`__c__DisplayClass*`, `_*_d__*`, `_b__*`) 하드코딩 전면 제거 및 시그니처 기반 동적 탐색, 게임 오타 메서드 양방향 해석, 런타임 ICF 자명 스텁(1~3바이트) 가드, `TrackData` 속성 전체 자동 복제 (2026-10-31)
 12. **#12** 오프라인 커스텀 곡 플레이 및 결과 화면 복구 (`OfflineBypass.cs` UnitySession 커넥터 등록 3개 훅), 모드 로그 한국어화(102개 문장), 실행 시 Steam 빌드 확인 및 Unity 예외 전달(`Managers/UpdateGuard.cs`), 업데이트 비교 도구(`tools/version_diff`) 추가 (2026-11-07)
 13. **#13** 이중래퍼 람다 번역가(`Managers/LambdaTranslator.cs`): O(1) Fast-Path 캐시(`UserData/SixtarGateMod.LambdaMap.json`) + x64 기계어 대상 필드 변위 기반 스마트 구조 번역 (2026-11-07)
-14. `04c94da` (main 직접 커밋) 중국어 간체·번체 메타데이터 키와 BMS `#TITLE`/`#ARTIST` 폴백 (2026-11-07). 실제로 읽히는 조건(반각 콜론·UTF-8)은 아래 알려진 한계 참고
+14. `04c94da` (main 직접 커밋) 중국어 간체·번체 메타데이터 키와 BMS `#TITLE`/`#ARTIST` 폴백 (2026-11-07). 전각 콜론·비 UTF-8 지원은 #16에서 해결됨
 15. `35bde96` (main 직접 커밋) 메모리 누수 방지: 공식 곡 전환 시 커스텀 오디오 스트림 해제, 디코딩/업로드 실패 텍스처 파괴, `NoteEffects` 동적 패치 해제, `JudgmentBar`·`KeyViewer` 리셋 (2026-11-07)
 16. `1e3e64f` (main 직접 커밋) `TrackInfoParser.NormalizeMetadataText`: 영문 축약형 사이 공백·전각 공백 교정 (2026-11-07)
 17. **#14** 제목/아티스트 우선순위 수정: `info.txt` → BMS `#TITLE` → 폴더 이름. BMS 폴백은 `info.txt`에서 값을 못 읽었을 때만 (CUSTOM 목록 15곡 중 14곡이 `test`로 나오던 문제, 2026-11-08 실기 확인)
@@ -78,6 +78,7 @@
 
 37. 로더 지문·카테고리 비교 통일·v2.3.3 (2026-11-23, [상세](03-development/REVIEW_2026-11-23.md) 5장): **업데이트 내성** 지문에 `loaderVersion`(MelonLoader/Il2CppInterop 버전, 위험 변경) 추가 — 옛 기록에 없으면 비교하지 않는 선택 키, CUSTOM 카테고리 비교를 대소문자 무시로 통일. **병목** `CustomNoteSkin.Apply` Unity null 비교 제거. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 77건, sigcheck 통과 114·오류 0·대체 해석 0, lambdascan `ALL PASS`. 실기는 미실행.
 38. 증분 재스캔·자켓 교체 반영·v2.3.4 (2026-11-24, [상세](03-development/REVIEW_2026-11-24.md)): **병목** `hwa\` 재스캔이 폴더별 지문이 같은 곡은 재사용(곡 하나 추가에 전 곡 BMS 재해석 → 바뀐 폴더만), 자켓 캐시 조회의 Unity null 비교 제거. **한계 해소** 자켓 캐시 키에 파일 크기·수정 시각을 넣어 그림 교체가 재시작 없이 반영. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 77건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
+39. 전 파일 심층 감사·업데이트 내성·병목·문서 현행화·v2.3.5 (2026-11-24, [상세](03-development/REVIEW_2026-11-24.md) 6장): **업데이트 내성** `CustomAudioManager` `CurrectionVolume` 동적 getter 통일, `UpdateGuard` `ListVerified` 변경 시 2번째 부팅 검증 우회 방지, `PatchPreflight` 닫힌 제네릭 사전 JIT, `PatchSignatureCheck`(`ref object`·`bool`↔`byte`·`___field`) + `NoteEffects` 동적 시그니처 검사, `IcfScanner` 미발견 `-1`, `X64Decoder`(`vzeroupper`/SIB index/`0x3C`)·`LambdaTranslator`(`VirtualQuery`). **병목/수정** `PngDecoder` RGBA 행 단위 복사·손상 zlib `false` 반환, `CustomTrackManager` 단일 순회 지문, `MediaOverrideManager` 중복 텍스처 방지·JPG 바이트 재사용, `Overlay.HideAll` 파괴 캔버스 가드·`CustomMarathon.Update` 분리·`CustomBga` 세대 카운터, `BmsParser` 네이티브 채널/`Infinity`/`#TITLE` 구분자, `release.ps1`·`check_update.ps1` stderr 안전 처리. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 94건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
 
 ## 알려진 한계
 

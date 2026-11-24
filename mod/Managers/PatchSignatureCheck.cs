@@ -156,13 +156,28 @@ public static class PatchSignatureCheck
             {
                 if (target is not MethodInfo mi || mi.ReturnType == typeof(void))
                     return "반환값이 없는(void) 대상인데 패치가 __result를 받음";
-                string? why = Compare(pt, Strip(mi.ReturnType), "__result", target, warnings);
+                string? why = Compare(pt, Strip(mi.ReturnType), p.ParameterType.IsByRef, "__result", target, warnings);
                 if (why != null) return why;
                 continue;
             }
 
-            // ___field(필드 주입)는 대상 인자와 무관
-            if (name.StartsWith("___", StringComparison.Ordinal)) continue;
+            // ___field(필드 주입): 대상 클래스에 해당 필드/프로퍼티가 존재하는지 확인
+            if (name.StartsWith("___", StringComparison.Ordinal))
+            {
+                string fieldName = name.Substring(3);
+                if (fieldName.Length == 0)
+                    return "빈 필드 주입 인자 '___'";
+                Type? decl = target.DeclaringType;
+                if (decl != null)
+                {
+                    Type? memberType = FindInjectedMemberType(decl, fieldName);
+                    if (memberType == null)
+                        return $"필드 주입 '{name}'의 대상 멤버 '{fieldName}'가 {decl.Name}에 없음";
+                    string? fieldErr = Compare(pt, memberType, p.ParameterType.IsByRef, name, target, warnings);
+                    if (fieldErr != null) return fieldErr;
+                }
+                continue;
+            }
 
             // __0, __1 등 위치 인자: 대상의 idx번째 인자 형식과 대조
             if (name.StartsWith("__", StringComparison.Ordinal))
@@ -171,7 +186,7 @@ public static class PatchSignatureCheck
                 {
                     if (idx >= targetParams.Length)
                         return $"위치 인자 '{name}'가 대상 인자 수({targetParams.Length})를 벗어남 (대상 인자: {ParamList(targetParams)})";
-                    string? posErr = Compare(pt, Strip(targetParams[idx].ParameterType), name, target, warnings);
+                    string? posErr = Compare(pt, Strip(targetParams[idx].ParameterType), p.ParameterType.IsByRef, name, target, warnings);
                     if (posErr != null) return posErr;
                 }
                 else
@@ -187,16 +202,36 @@ public static class PatchSignatureCheck
             if (tp == null)
                 return $"대상에 '{name}' 인자가 없음 (대상 인자: {ParamList(targetParams)})";
 
-            string? err = Compare(pt, Strip(tp.ParameterType), name, target, warnings);
+            string? err = Compare(pt, Strip(tp.ParameterType), p.ParameterType.IsByRef, name, target, warnings);
             if (err != null) return err;
         }
         return null;
     }
 
-    private static string? Compare(Type patchType, Type targetType, string name, MethodBase target, List<string> warnings)
+    private static Type? FindInjectedMemberType(Type decl, string name)
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+        for (Type? t = decl; t != null; t = t.BaseType)
+        {
+            var f = t.GetField(name, flags | BindingFlags.DeclaredOnly);
+            if (f != null) return f.FieldType;
+            // Il2CppInterop은 네이티브 필드를 프로퍼티로 노출한다
+            var prop = t.GetProperty(name, flags | BindingFlags.DeclaredOnly)
+                    ?? t.GetProperty($"_{name}_k__BackingField", flags | BindingFlags.DeclaredOnly);
+            if (prop != null) return prop.PropertyType;
+        }
+        return null;
+    }
+
+    private static string? Compare(Type patchType, Type targetType, bool patchByRef, string name, MethodBase target, List<string> warnings)
     {
         if (patchType == targetType) return null;
-        if (patchType == typeof(object)) return null; // object로 받는 패치(박싱)는 Harmony가 처리
+        if (patchType == typeof(object))
+        {
+            if (patchByRef && targetType.IsValueType)
+                return $"'{name}' ref object로 값 형식 {targetType.Name}을 받을 수 없음";
+            return null; // 값 전달 object(박싱) 또는 참조 형식 object는 Harmony가 처리
+        }
 
         if (patchType.IsPointer || targetType.IsPointer)
             return $"'{name}' 포인터 형식이 바뀜: 패치 {patchType.Name} ↔ 대상 {targetType.Name}";
@@ -224,8 +259,8 @@ public static class PatchSignatureCheck
         if (t.IsEnum) t = Enum.GetUnderlyingType(t);
         return Type.GetTypeCode(t) switch
         {
-            TypeCode.Boolean or TypeCode.Byte or TypeCode.SByte => 1,
-            TypeCode.Int16 or TypeCode.UInt16 or TypeCode.Char => 2,
+            TypeCode.Byte or TypeCode.SByte => 1,
+            TypeCode.Int16 or TypeCode.UInt16 => 2,
             TypeCode.Int32 or TypeCode.UInt32 => 4,
             TypeCode.Int64 or TypeCode.UInt64 => 8,
             _ => 0,

@@ -167,29 +167,44 @@ public static class CustomTrackManager
         Albums.Clear();
         ById.Clear();
         _reusedLastScan = 0;
-        _lastHwaStamp = ComputeHwaStamp();
 
         if (!Directory.Exists(HwaFolderPath))
         {
             _folderCache.Clear();
+            _lastHwaStamp = 0;
             return;
         }
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var root = new DirectoryInfo(HwaFolderPath);
         var subDirs = root.GetDirectories();
-        Array.Sort(subDirs, (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.FullName, b.FullName));
+        Array.Sort(subDirs, (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name));
         var albumFolders = new List<DirectoryInfo>(1 + subDirs.Length) { root };
         albumFolders.AddRange(subDirs);
 
         var previous = _folderCache;
         var nextCache = new Dictionary<string, (long Stamp, string BaseId, CustomAlbumInfo Album)>(StringComparer.OrdinalIgnoreCase);
         int scanCount = 0;
-        foreach (var dir in albumFolders)
+        // 단일 순회에서 ComputeHwaStamp()와 완전히 같은 공식으로 전체 지문을 함께 계산해 중복 디렉터리 열거를 없앤다.
+        long totalStamp = 17;
+        for (int di = 0; di < albumFolders.Count; di++)
         {
+            var dir = albumFolders[di];
             string folder = dir.FullName;
             // 폴더당 1회만 디렉터리를 읽고 정렬된 파일 목록을 메모리에서 재사용(곡 정보·차트·미디어 탐색·폴더 지문 공용).
             FileInfo[] infos = GetSortedFiles(dir);
+            long stamp = FoldFiles(dir, infos);
+            if (di == 0)
+            {
+                totalStamp = totalStamp * 31 + stamp;
+                totalStamp = totalStamp * 31 + subDirs.Length;
+            }
+            else
+            {
+                totalStamp = totalStamp * 31 + StringComparer.OrdinalIgnoreCase.GetHashCode(dir.Name);
+                totalStamp = totalStamp * 31 + stamp;
+            }
+
             string[] files = new string[infos.Length];
             for (int i = 0; i < infos.Length; i++) files[i] = infos[i].FullName;
             string? bmsFile = FindFirstByExtension(files, BMS_EXTENSIONS);
@@ -198,7 +213,6 @@ public static class CustomTrackManager
 
             try
             {
-                long stamp = FoldFiles(dir, infos);
                 CustomAlbumInfo album;
                 string baseId;
                 if (previous.TryGetValue(folder, out var hit) && hit.Stamp == stamp)
@@ -234,6 +248,7 @@ public static class CustomTrackManager
             }
         }
 
+        _lastHwaStamp = totalStamp;
         _folderCache = nextCache;
         ModLog.Msg($"{LOG_PREFIX} 검색 완료: 커스텀 곡 {scanCount}곡 발견 ({sw.Elapsed.TotalMilliseconds:F0}ms" +
                    (_reusedLastScan > 0 ? $", {_reusedLastScan}곡은 바뀌지 않아 재사용)" : ")"));

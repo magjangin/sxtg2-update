@@ -44,6 +44,20 @@ dotnet run --project tools/bodycheck -c Release -- --interop "<게임>\MelonLoad
 
 `$(GameDir)\Mods` 폴더가 존재하면 빌드 후 자동으로 `SixtarGateMod.dll`을 복사합니다(게임 실행 중 DLL이 잠겨 있으면 경고만 출력하고 빌드는 성공). 자동 복사를 건너뛰려면 `-p:SkipDeploy=true`를 넘기세요.
 
+## 릴리즈 (`tools/release.ps1`)
+
+게임 DLL이 있어야 빌드되므로 GitHub Actions가 아니라 게임이 설치된 PC에서 실행합니다.
+
+```powershell
+.\tools\release.ps1            # 버전 일치 확인 → Release 빌드 → 단위 테스트 → sigcheck → dist\SixtarGateMod-v<버전>.zip + 노트 초안
+.\tools\release.ps1 -Publish   # 위 + main = origin/main·깨끗한 트리 확인 → 태그 v<버전> 푸시 → gh release create
+```
+
+- 버전 기준은 csproj `<Version>`. `Core.cs` `MelonInfo`와 `CHANGELOG.md` `## [<버전>]`이 다르면 중단합니다(`SourceHygieneTests`도 csproj·MelonInfo 일치를 강제).
+- 이미 있는 태그면 중단하므로 먼저 세 곳의 버전을 올립니다.
+- 네이티브 명령은 종료 코드로만 판정합니다(Windows PowerShell 5.1이 정상 stderr를 예외로 바꾸는 문제, v2.3.3·v2.3.5). `-Publish` 없이 돌릴 때는 오프라인이어도 `git fetch` 실패를 경고로만 남깁니다.
+- `tools/sigcheck`는 `mod/Directory.Build.props.user`의 `<GameDir>`도 읽습니다(v2.3.5).
+
 ## 확인
 
 1. 게임 실행

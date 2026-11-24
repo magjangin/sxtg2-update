@@ -21,7 +21,8 @@ mod/
 │   ├── CustomMusicSelect.cs  결과 → 목록 복귀 시 커서 위치
 │   └── AttendancePopup.cs    출석 보상 창 자동 표시 끄기
 ├── Managers/
-│   ├── BuildFingerprint.cs   게임 파일 지문(크기·PE 타임스탬프·메타데이터 헤더) 비교 및 실기 확인 추적(순수 로직)
+│   ├── AtomicFile.cs         .tmp → File.Move 원자적 쓰기 (실패 시 .tmp 정리)
+│   ├── BuildFingerprint.cs   게임 파일 지문(크기·PE 타임스탬프·메타데이터 헤더·로더 버전) 비교 및 실기 확인 추적(순수 로직)
 │   ├── CustomTrackManager.cs hwa 스캔(작업 스레드)·변경 감지 재스캔, 앨범 정보, 차트 텍스트(캐시), TrackData 복제
 │   ├── CustomAudioManager.cs FMOD Core 스트림 재생/일시정지/볼륨
 │   ├── MediaOverrideManager.cs 자켓 비동기 로드, BGA URL 교체
@@ -32,6 +33,7 @@ mod/
 │   ├── NativeLambdaScan.cs   람다 기계어에서 소유자 → 대상 필드 로드 찾기 (명령 단위 레지스터 추적, 순수 함수)
 │   ├── X64Decoder.cs         최소 x64 명령 길이 해독기 (NativeLambdaScan용, capstone 대조 시험)
 │   ├── PatchPreflight.cs     패치 적용 전 사전 JIT 검사 (업데이트로 사라진 인터롭 멤버를 쓰는 패치 건너뜀)
+│   ├── PatchSignatureCheck.cs 패치 인자 ↔ 훅 대상 시그니처 대조, 오버로드·바뀐 시그니처 고르기 (순수 리플렉션)
 │   ├── ModLog.cs             작업 스레드 로그 버퍼 (메인 스레드에서 출력)
 │   └── UpdateGuard.cs        Steam 빌드 ID 검증 및 Unity 내부 예외 포워딩
 ├── Loaders/
@@ -50,11 +52,14 @@ mod/
 Core.OnInitializeMelon
   ├─ CustomTrackManager.Initialize: hwa 스캔을 작업 스레드에서 시작 (CustomNoteSkin PNG 해독도 작업 스레드)
   ├─ PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance, gameRoot)
-       → 패치 클래스마다 대상 메서드와 네이티브 주소를 먼저 구함(+ NoteEffects 동적 대상)
-       → IcfScanner.Prepare: 그 주소들을 공유하는 IL2CPP 메서드 수 (같은 빌드면 UserData 캐시)
+       → PatchPreflight.Check: 패치 코드·호출 그래프 사전 JIT (사라진 인터롭 멤버면 건너뜀)
+       → 대상 해석(TargetMethod / [HarmonyPatch], 오버로드·바뀐 시그니처는 패치 인자로 골라 ManualTargets)
+       → PatchSignatureCheck.Check: 패치 인자 ↔ 대상 시그니처 (값 형식 불일치면 건너뜀)
+       → 네이티브 주소 수집(+ NoteEffects 동적 대상) → IcfScanner.Prepare (같은 빌드면 UserData 캐시)
        → 대상별로 빈 스텁(1~3바이트 ret/xor/mov)이거나 공유 수 > 허용([IcfShared], 기본 1)이면 건너뜀
-       → 나머지는 CreateClassProcessor(type).Patch()
+       → 나머지는 CreateClassProcessor(type).Patch() 또는 PatchManually
        → 하나가 실패해도 나머지는 적용, 로그 "[Harmony] 패치 N개 모두 적용 완료"
+       → UpdateGuard.ReportPatchSummary: "업데이트 점검 결과:" 한 줄 + 지문 저장
   └─ (finally) CustomTrackManager.CompleteScan: 스캔 결과·로그를 메인 스레드에서 받음
 ```
 
@@ -69,8 +74,8 @@ Core.OnInitializeMelon
 ```text
 OnLateUpdate (Renewal_Play 또는 마라톤 결과 배너 표시 중일 때만)
   ├─ NoteEffects.OnFrame()        렌더러 스크롤 배율 1번 읽기 (히든/페이드용)
-  ├─ Overlay.Begin()              화면 크기·배율 1번 읽기
-  ├─ CustomMarathon.Update(now)   결과 화면 Esc / 자동 진행
+  ├─ CustomMarathon.Update(now)   결과 화면 Esc / 자동 진행 (v2.3.5: 오버레이와 무관하게 먼저 실행)
+  ├─ Overlay.Begin()              캔버스 생존·화면 크기·배율은 30프레임마다만 조회
   ├─ JudgmentBar.Draw(now)
   ├─ CustomMarathon.Draw(now)
   ├─ KeyViewer.Draw()

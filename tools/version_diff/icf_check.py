@@ -1,7 +1,7 @@
 """모드가 훅하는 함수의 ICF(동일 코드 접기) 개수를 새 빌드의 script.json으로 다시 센다.
 
-런타임 ICF 가드(PatchResilience)는 1~3바이트 빈 스텁만 잡는다. 업데이트로 훅 대상이 내용 있는 다른 함수와
-같은 주소를 쓰게 되면 패치가 엉뚱한 클래스의 this로 실행되므로, 업데이트 직후 이 스크립트로 확인한다.
+실행 중 IcfScanner는 제네릭 인스턴스화 메서드를 세지 못하므로, 업데이트 직후에는
+이 스크립트로 script.json 전체(제네릭 포함) 기준 ICF 변화를 한 번 더 확인한다.
 
 사용:
   python -I icf_check.py <script.json> <HOOK_TABLE.md>

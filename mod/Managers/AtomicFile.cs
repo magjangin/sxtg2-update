@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -15,16 +16,38 @@ internal static class AtomicFile
     {
         EnsureParent(path);
         string tmp = path + ".tmp";
-        File.WriteAllText(tmp, content, Utf8NoBom);
-        File.Move(tmp, path, overwrite: true);
+        try
+        {
+            File.WriteAllText(tmp, content, Utf8NoBom);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            TryDeleteTemp(tmp);
+            throw;
+        }
     }
 
     public static void WriteAllLines(string path, IEnumerable<string> lines)
     {
         EnsureParent(path);
         string tmp = path + ".tmp";
-        File.WriteAllLines(tmp, lines, Utf8NoBom);
-        File.Move(tmp, path, overwrite: true);
+        try
+        {
+            File.WriteAllLines(tmp, lines, Utf8NoBom);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            TryDeleteTemp(tmp);
+            throw;
+        }
+    }
+
+    private static void TryDeleteTemp(string tmp)
+    {
+        try { if (File.Exists(tmp)) File.Delete(tmp); }
+        catch (Exception) { /* 정리 실패는 무시하고 원래 예외를 전파 */ }
     }
 
     private static void EnsureParent(string path)

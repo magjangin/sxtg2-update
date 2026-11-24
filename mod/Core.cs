@@ -14,7 +14,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using SixtarGateMod.Managers;
 using SixtarGateMod.Features;
 
-[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.4", "화영왕 (Hwa-young-wang)")]
+[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.5", "화영왕 (Hwa-young-wang)")]
 [assembly: MelonGame("Lyrebird Studio", "Sixtar Gate STARTRAIL")]
 // OnInitializeMelon calls PatchAll itself; without this MelonLoader auto-patches too and every hook runs twice.
 [assembly: HarmonyDontPatchAll]
@@ -68,7 +68,7 @@ public class Core : MelonMod
     public override void OnInitializeMelon()
     {
         var ver = typeof(Core).Assembly.GetName().Version;
-        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "2.3.4";
+        string verText = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "?";
         LoggerInstance.Msg("==========================================================");
         LoggerInstance.Msg($" Sixtar Gate: STARTRAIL 커스텀 차트 & 미디어 로더 v{verText}");
         LoggerInstance.Msg(" 제작: 화영왕 (Hwa-young-wang)");
@@ -130,6 +130,11 @@ public class Core : MelonMod
         try
         {
             NoteEffects.OnFrame();
+            float now = Time.time;
+            // 마라톤 Esc 중단·자동 진행은 오버레이 캔버스 성공 여부와 무관하게 동작해야 하며,
+            // 자동 진행 시 GotoMusicSelect()가 Overlay.Begin()~End() 중간에 끼어들지 않도록 먼저 실행한다.
+            if (CustomMarathon.IsShowingResultBanner)
+                CustomMarathon.Update(now);
             // 판정바·키뷰어를 둘 다 끄고 마라톤 배너도 없으면 그릴 것이 없다: 캔버스 생성과 매 프레임
             // 화면 크기·배율 조회(IL2CPP 호출 3번)를 건너뛰고, 전에 그린 것만 한 번 숨긴다.
             bool playOverlay = PlayAssist.IsPlaying && (ModConfig.EnableJudgmentBar || ModConfig.EnableKeyViewer);
@@ -140,8 +145,6 @@ public class Core : MelonMod
             }
             _overlayIdle = false;
             if (!Overlay.Begin()) return;
-            float now = Time.time;
-            CustomMarathon.Update(now);
             JudgmentBar.Draw(now);
             CustomMarathon.Draw(now);
             KeyViewer.Draw();
@@ -165,7 +168,7 @@ public class Core : MelonMod
     }
 
     // 1. CategorySelectController: Register "CUSTOM" category to category tabs list
-    [HarmonyPatch(typeof(CategorySelectController), "LoadData")]
+    [HarmonyPatch(typeof(CategorySelectController), nameof(CategorySelectController.LoadData))]
     [CriticalPatch("곡 선택 상단 CUSTOM 카테고리 탭 생성")]
     public static class CategorySelectController_LoadData_Patch
     {
@@ -468,7 +471,7 @@ public class Core : MelonMod
         }
     }
 
-    [HarmonyPatch(typeof(FinishProcessor), "UpdatePatternTime")]
+    [HarmonyPatch(typeof(FinishProcessor), nameof(FinishProcessor.UpdatePatternTime))]
     public static class FinishProcessor_UpdatePatternTime_Patch
     {
         private static IntPtr _verifiedInstance;

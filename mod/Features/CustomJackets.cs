@@ -40,9 +40,10 @@ public static class CustomJackets
         public static void Postfix(TrackInfoViewer __instance, ITrack track, TrackSelectArgs args)
         {
             if (track == null) return;
-            _shownTrackId = track.TrackID;
+            string? trackId = track.TrackID;
+            _shownTrackId = trackId;
 
-            var album = CustomTrackManager.FindAlbum(track.TrackID);
+            var album = CustomTrackManager.FindAlbum(trackId);
             if (album == null || !album.HasCustomJacket) return;
 
             var img = __instance.jacket;
@@ -52,7 +53,6 @@ public static class CustomJackets
                 return;
             }
 
-            string trackId = track.TrackID;
             MediaOverrideManager.RequestAlbumSprite(album, sprite =>
             {
                 // The selection may have moved on while the PNG was decoding.
@@ -124,7 +124,7 @@ public static class CustomJackets
         Core.DebugLog($"[Jacket] 커스텀 자켓 적용: {where}");
     }
 
-    [HarmonyPatch(typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), "OnLoadResource_Travel")]
+    [HarmonyPatch(typeof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager), nameof(Il2CppSixtarGate.PlayLoading.PlayLoadingManager.OnLoadResource_Travel))]
     public static class PlayLoading_OnLoadResource_Patch
     {
         public static void Postfix(Il2CppSixtarGate.PlayLoading.PlayLoadingManager __instance)
@@ -171,6 +171,8 @@ public static class CustomJackets
     internal static void ApplyCurrentAlbumJacketDeferred(Image? img, string where)
     {
         if (img == null || !Core.IsCustomTrackActive) return;
+        var album = CustomTrackManager.CurrentSelectedAlbum;
+        if (album == null || !album.HasCustomJacket) return;
         ApplyCurrentAlbumJacket(img, where);
         MelonCoroutines.Start(ReapplyJacket(img, where));
     }

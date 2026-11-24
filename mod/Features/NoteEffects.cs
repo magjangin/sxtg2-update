@@ -159,15 +159,23 @@ public static class NoteEffects
                 }
                 return;
             }
-            // 게임 업데이트로 인터롭 멤버가 바뀌었으면 매 노트·매 프레임 트램펄린 오류가 나므로 붙이지 않음
+            // 게임 업데이트로 인터롭 멤버·시그니처가 바뀌었으면 매 노트·매 프레임 트램펄린 오류/크래시가 나므로 붙이지 않음
             string? broken = PatchPreflight.Check(typeof(NoteObject_SetHeadPosition_Patch))
                              ?? PatchPreflight.Check(typeof(NoteObject_SetNoteLength_Patch));
+            if (broken == null)
+            {
+                var sigWarnings = new List<string>();
+                broken = PatchSignatureCheck.Check(typeof(NoteObject_SetHeadPosition_Patch), new MethodBase[] { head! }, sigWarnings)
+                      ?? PatchSignatureCheck.Check(typeof(NoteObject_SetNoteLength_Patch), new MethodBase[] { length! }, sigWarnings);
+                foreach (var w in sigWarnings)
+                    Melon<Core>.Logger.Warning($"[NoteEffects] 시그니처 경고: {w}");
+            }
             if (broken != null)
             {
                 if (!_unsafeWarned)
                 {
                     _unsafeWarned = true;
-                    Melon<Core>.Logger.Error($"[NoteEffects] 사전 JIT 검사 실패로 속도 카오스/히든/페이드를 끔: {broken}");
+                    Melon<Core>.Logger.Error($"[NoteEffects] 사전 검사(JIT·시그니처) 실패로 속도 카오스/히든/페이드를 끔: {broken}");
                 }
                 return;
             }
@@ -219,7 +227,17 @@ public static class NoteEffects
     {
         bool active = ModConfig.AnyLaneCover;
         // 속도 카오스만 쓰는 플레이: 가린 노트가 하나도 없으면 노트·프레임마다 사전 조회도 하지 않음
-        if (!active && (Covers.Count == 0 || !Covers.ContainsKey(note.Pointer))) return; // never touched, nothing to restore
+        if (!active && Covers.Count == 0) return;
+
+        Cover? cover = null;
+        if (!Covers.TryGetValue(note.Pointer, out cover))
+        {
+            if (!active) return; // never touched, nothing to restore
+            var group = note.gameObject.GetComponent<CanvasGroup>() ?? note.gameObject.AddComponent<CanvasGroup>();
+            group.interactable = false;
+            group.blocksRaycasts = false;
+            Covers[note.Pointer] = cover = new Cover { Group = group };
+        }
 
         float alpha = 1f;
         if (active)
@@ -240,13 +258,6 @@ public static class NoteEffects
             }
         }
 
-        if (!Covers.TryGetValue(note.Pointer, out var cover))
-        {
-            var group = note.gameObject.GetComponent<CanvasGroup>() ?? note.gameObject.AddComponent<CanvasGroup>();
-            group.interactable = false;
-            group.blocksRaycasts = false;
-            Covers[note.Pointer] = cover = new Cover { Group = group };
-        }
         if (cover.Alpha == alpha) return; // most notes sit fully visible or fully hidden: skip the IL2CPP call
         cover.Group.alpha = alpha;
         cover.Alpha = alpha;

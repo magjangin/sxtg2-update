@@ -52,13 +52,13 @@ public static class BmsParser
             if (width == 2 && line.StartsWith("#WAV", StringComparison.OrdinalIgnoreCase) && FirstTokenLength(line) == 7)
                 width = 3;
 
-            if (title.Length == 0 && line.StartsWith("#TITLE", StringComparison.OrdinalIgnoreCase))
+            if (title.Length == 0 && line.Length > 6 && line.StartsWith("#TITLE", StringComparison.OrdinalIgnoreCase) && (line[6] == ' ' || line[6] == '\t'))
             {
                 var val = line.Slice(6).Trim();
                 if (val.Length > 0 && val.IndexOf(Replacement) < 0)
                     title = TrackInfoParser.NormalizeMetadataText(val.ToString());
             }
-            else if (artist.Length == 0 && line.StartsWith("#ARTIST", StringComparison.OrdinalIgnoreCase))
+            else if (artist.Length == 0 && line.Length > 7 && line.StartsWith("#ARTIST", StringComparison.OrdinalIgnoreCase) && (line[7] == ' ' || line[7] == '\t'))
             {
                 var val = line.Slice(7).Trim();
                 if (val.Length > 0 && val.IndexOf(Replacement) < 0)
@@ -67,9 +67,9 @@ public static class BmsParser
         }
         if (baseBpm <= 0f) baseBpm = DefaultBpm;
 
-        // 레인 0..6: 16/11/12/13/14/15/18, 레인 7: OPEN.
-        // 각 항목은 (마디, 마디 내 비율, 등장 순번, 타입): 타입 1 일반, 2/4 롱 시작, 3/5 롱 끝.
-        var notesByLane = new List<(int Measure, double Frac, int Seq, int Type)>?[8];
+        // 레인 0..6: sxtg2 16/11/12/13/14/15/18, 레인 7: OPEN, 레인 8: 게임 네이티브 전용 채널(19, 51~59).
+        // 각 항목은 (마디, 마디 내 비율, 등장 순번, 타입): 타입 1 일반/마커, 2/4 롱 시작, 3/5 롱 끝.
+        var notesByLane = new List<(int Measure, double Frac, int Seq, int Type)>?[9];
         Dictionary<int, double>? measureScales = null;
         List<(int Measure, double Frac, int Seq, float Bpm)>? bpmEvents = null;
         int maxMeasure = 0;
@@ -88,7 +88,7 @@ public static class BmsParser
             // 채널 02: 마디 길이 배율
             if (ch.Equals("02", StringComparison.Ordinal))
             {
-                if (double.TryParse(data.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double scale) && scale > 0.0)
+                if (double.TryParse(data.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double scale) && double.IsFinite(scale) && scale > 0.0)
                     (measureScales ??= new Dictionary<int, double>())[measure] = scale;
                 continue;
             }
@@ -128,7 +128,8 @@ public static class BmsParser
 
             int chLane = LaneIndexOf(ch);
             bool isOpenCh = ch.Equals("04", StringComparison.Ordinal) || ch.Equals("05", StringComparison.Ordinal);
-            if (chLane < 0 && !isOpenCh) continue;
+            bool isNativeOnlyCh = IsNativeNoteChannel(ch);
+            if (chLane < 0 && !isOpenCh && !isNativeOnlyCh) continue;
 
             int noteCount = data.Length / width;
             for (int i = 0; i < noteCount; i++)
@@ -139,16 +140,36 @@ public static class BmsParser
                     if (data[o] != '0') continue;
                     o++;
                 }
-                int type = data[o] == '0' ? (data[o + 1] - '0') : 0;
-                if (type < 1 || type > 5) continue;
+                if (data[o] == '0' && data[o + 1] == '0') continue;
 
+                if (isNativeOnlyCh)
+                {
+                    // 게임 네이티브 채널(19, 51~59): 00이 아닌 모든 마커가 노트 시작/끝 시각을 나타냄
+                    var nativeList = notesByLane[8] ??= new List<(int, double, int, int)>();
+                    nativeList.Add((measure, (double)i / noteCount, seq++, 1));
+                    continue;
+                }
+
+                int type = data[o] == '0' && data[o + 1] >= '1' && data[o + 1] <= '5' ? (data[o + 1] - '0') : 0;
                 int laneIdx;
                 if (type >= 4)
+                {
                     laneIdx = 7;
-                else if (chLane >= 0)
+                }
+                else if (type >= 1 && chLane >= 0)
+                {
                     laneIdx = chLane;
+                }
+                else if (chLane >= 0)
+                {
+                    // 게임 네이티브 BMS의 11..18 일반 WAV 키(예: 0A, ZZ): 일반 노트로 MaxTime에 포함
+                    laneIdx = chLane;
+                    type = 1;
+                }
                 else
+                {
                     continue;
+                }
 
                 var list = notesByLane[laneIdx] ??= new List<(int, double, int, int)>();
                 list.Add((measure, (double)i / noteCount, seq++, type));
@@ -200,6 +221,7 @@ public static class BmsParser
         });
 
         var segments = new List<(double Pos, double Time, float Bpm)>();
+        var measureStartPos = new double[maxMeasure + 2];
         double curPos = 0.0;
         double curTime = 0.0;
         float curBpm = baseBpm;
@@ -207,6 +229,7 @@ public static class BmsParser
 
         for (int m = 0; m <= maxMeasure; m++)
         {
+            measureStartPos[m] = curPos;
             double scale = measureScales != null && measureScales.TryGetValue(m, out double s) ? s : 1.0;
             double mStartPos = curPos;
             double mFracPos = 0.0;
@@ -229,17 +252,7 @@ public static class BmsParser
             curTime += (1.0 - mFracPos) * scale * 240.0 / curBpm;
             curPos = mStartPos + scale;
         }
-
-        // 마디 시작 위치(measure -> 누적 정규화 마디 길이) 캐시
-        var measureStartPos = new double[maxMeasure + 2];
-        double p = 0.0;
-        for (int m = 0; m <= maxMeasure; m++)
-        {
-            measureStartPos[m] = p;
-            double scale = measureScales != null && measureScales.TryGetValue(m, out double s) ? s : 1.0;
-            p += scale;
-        }
-        measureStartPos[maxMeasure + 1] = p;
+        measureStartPos[maxMeasure + 1] = curPos;
 
         // 각 마디 시작 시점의 (Pos, Time, Bpm)을 빠르게 찾기 위해 세그먼트 테이블 구성
         var segPos = new double[segments.Count + 1];
@@ -292,6 +305,9 @@ public static class BmsParser
         };
     }
 
+    private static bool IsNativeNoteChannel(ReadOnlySpan<char> ch)
+        => ch.Length == 2 && ((ch[0] == '1' && ch[1] == '9') || (ch[0] == '5' && ch[1] >= '1' && ch[1] <= '9'));
+
     private static int FirstTokenLength(ReadOnlySpan<char> line)
     {
         int sep = line.IndexOfAny(' ', '\t');
@@ -305,7 +321,7 @@ public static class BmsParser
         int sep = rest.IndexOfAny(' ', '\t');
         if (sep <= 0 || !rest.Slice(0, sep).Equals("BPM", StringComparison.OrdinalIgnoreCase))
             return false;
-        return float.TryParse(rest.Slice(sep + 1).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out bpm) && bpm > 0f;
+        return float.TryParse(rest.Slice(sep + 1).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out bpm) && float.IsFinite(bpm) && bpm > 0f;
     }
 
     private static bool TryParseExtendedBpm(ReadOnlySpan<char> line, out string key, out float bpm)
@@ -317,7 +333,7 @@ public static class BmsParser
             return false;
         if (!IsAlphaNum(line[4]) || !IsAlphaNum(line[5]) || (line[6] != ' ' && line[6] != '\t'))
             return false;
-        if (!float.TryParse(line.Slice(7).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out bpm) || bpm <= 0f)
+        if (!float.TryParse(line.Slice(7).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out bpm) || !float.IsFinite(bpm) || bpm <= 0f)
             return false;
         key = line.Slice(4, 2).ToString();
         return true;

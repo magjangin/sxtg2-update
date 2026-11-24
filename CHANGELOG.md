@@ -2,6 +2,40 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [2.3.5] - 2026-11-24
+
+### 업데이트 내성
+- `CustomAudioManager`: `PlayLocal`/`ApplyVolumes`의 `module.CurrectionVolume` 직접 참조를 `PatchResilience.CreateValueGetter<float>(..., "CurrectionVolume", "CorrectionVolume")`로 통일(게임 업데이트로 오타가 수정돼도 커스텀 오디오가 깨지지 않음).
+- `UpdateGuard`: `VerifiedBuilds` 목록에 있는 빌드에서 메타데이터·UnityPlayer·로더가 바뀐 경우, 실기 플레이 통과 전까지 `BuildState.txt`를 덮어쓰지 않음(2번째 부팅부터 실기 확인 없이 "검증된 빌드"로 통과하던 문제 수정). 대체 해석(`fallbackResolved > 0`) 시에도 실기 확인 기록 차단.
+- `PatchPreflight`: 닫힌 제네릭 메서드를 오픈 정의로 바꾸지 않고 실제 타입 인자로 사전 JIT(`PrepareMethod`) 실행.
+- `PatchSignatureCheck`: `ref object`로 값 형식 받기 차단, `bool`↔`byte`·`char`↔`short` 동일 크기 정수 오판 제거, `___field` 주입 필드 존재·형식 검사 추가. `NoteEffects` 동적 패치 부착 시에도 `PatchSignatureCheck` 실행.
+- `IcfScanner`: 스캔 루프에서 발견되지 않은 주소(닫힌 제네릭 클래스 등)를 `0`(안전) 대신 `-1`(미발견 경고)로 기록, 빈 지문 시 캐시 생략.
+- `X64Decoder` / `LambdaTranslator`: `vzeroupper`/`vzeroall` ModRM 없음 처리, SIB 인덱스 레지스터 존재 시 `BaseReg = -1`, `0x3C`(`cmp al, imm8`) RAX 쓰기 오판 제거, `ScanNative`에 Windows `VirtualQuery` 페이지 경계 제한 추가(섹션 끝 AV 크래시 방지).
+- `PatchResilience.LogResolveWarning`: 오프라인 `tools/sigcheck`에서 MelonLoader 런타임 부재로 대체 해석 경고가 예외로 묻히지 않도록 방어.
+
+### 성능
+- `PngDecoder`: 가장 흔한 RGBA(`colorType == 6`) 출력을 픽셀당 `Buffer.BlockCopy`(1080p당 약 207만 회)에서 행 단위 1회(1,080회)로 최적화, `filter == 0` 스킵 및 `switch (filter)`/`switch (colorType)` 루프 외부화.
+- `CustomTrackManager.ScanHwaFolder`: 단일 디렉터리 순회에서 `_lastHwaStamp`를 함께 계산(부팅 2회·갱신 3회 → 1회 열거).
+- `MediaOverrideManager.LoadAsync`: 작업 스레드가 읽은 비-PNG(JPG 등) 바이트를 메인 스레드 `ImageConversion.LoadImage`로 재사용해 이중 파일 읽기 제거.
+- `RandomNoteSkin.ImagesOf` Unity `op_Equality` 및 LINQ `.ToArray()` 제거, `CustomJackets` `track.TrackID` 중복 조회·무자켓 코루틴 제거, `NoteEffects.ApplyLaneCover` 딕셔너리 중복 조회 제거, `KeyViewer._actions` 필드 제거.
+
+### 수정
+- `Overlay.HideAll()`: 파괴된 캔버스(`_root == null`) 가드 추가(씬 전환 시 `OnSceneWasLoaded` 후속 정리 중단 방지), `Overlay.Label()` 풀 재사용 시 `Outline.effectColor` 알파 갱신 누락 수정.
+- `Core.OnLateUpdate()`: `CustomMarathon.Update(now)`를 `Overlay.Begin()` 이전으로 분리(오버레이 생성 실패 시에도 Esc 중단·자동 진행 동작, 프레임 중간 `HideAll` 꼬임 방지).
+- `CustomBga`: 세대 카운터(`_playSeq`)로 일시정지/재개 뒤 이전 지연 재생 코루틴(`PlayAfter`)의 강제 재생 차단.
+- `MediaOverrideManager`: 비동기/동기 자켓 로드 경쟁 시 중복 GPU 텍스처 누수 방지 및 `MakeSprite` 예외 시 `Texture2D` 파괴.
+- `PngDecoder`: 손상된 zlib(`IDAT`)에서 `InvalidDataException` 대신 `false` 반환(`Try*` 계약 준수), `IHDR` compression/filter 0 검증.
+- `BmsParser` / `SxtgBmsConverter` / `TrackInfoParser`: `#TITLE`/`#ARTIST` 공백 구분자 확인, `Infinity` 차단, 게임 네이티브 BMS 채널(`19`, `51`~`59`, 일반 WAV 키) `MaxTime` 반영, `IsSxtgFormat`에 OPEN `'04'` 추가, `BGA作者`/`Jacket` 크레딧 필터링 및 0 이하 난이도 제외.
+- `RandomNoteSkin.EnsureCatalog` null 재시도 차단 수정, `PlayAssist.OnTickEvent` `Finalizer` 전환, `CustomAudioManager.StopAll` 예외 격리, `AtomicFile` 실패 시 `.tmp` 정리.
+- `tools/release.ps1`·`tools/version_diff/check_update.ps1`: PowerShell 5.1 stderr 안전 처리, `tools/sigcheck` `Directory.Build.props.user` 연동 및 `SameNameMethods` 중복 제거.
+
+### 문서·테스트
+- 단위 테스트 77건 → **94건**(`SourceHygieneTests` IL2CPP/MelonLoader 금지 패턴 6종 + `HarmonyDontPatchAll`, `PngDecoder`·`BmsParser`·`SxtgBmsConverter`·`PatchSignatureCheck`·`X64Decoder`·`TrackInfoParser` 회귀 테스트 추가).
+- 전체 문서 감사 및 현행화(`HANDOVER_NOTES.md` `[CriticalPatch]` 클래스명 오류 정정, `CODE_STRUCTURE.md` 줄 수·테스트 건수 일치, `BMS_CONVERSION.md`·`CUSTOM_TRACKS.md`·`ARCHITECTURE.md`·`PLAY_OVERLAY.md`·`MEDIA_SYSTEM.md`·`BUILD_AND_DEPLOY.md`·`README.md`).
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 94건, `tools/bodycheck`(`--self-test` 포함) 통과, `tools/sigcheck` 통과 114·오류 0·경고 0·대체 해석 0, `tools/lambdascan` `ALL PASS`. 게임 실기는 미실행.
+
 ## [2.3.4] - 2026-11-24
 
 ### 성능

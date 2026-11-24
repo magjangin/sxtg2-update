@@ -106,7 +106,7 @@ public static class PlayAssist
     }
 
     // AutoPlay: the renewal JudgeProcessor already has an auto-judge path (ProcessAutoJudge, judgeID 0, delta 0).
-    [HarmonyPatch(typeof(JudgeProcessor), "Judge")]
+    [HarmonyPatch(typeof(JudgeProcessor), nameof(JudgeProcessor.Judge))]
     public static class JudgeProcessor_Judge_Patch
     {
         public static void Prefix(JudgeProcessor __instance)
@@ -119,7 +119,7 @@ public static class PlayAssist
 
     // AllPerfect: every tick result (hit, auto or Missbreak's judgeID 3) funnels through OnTickEvent before it is
     // appended to the note's TickJudgeList and broadcast, so forcing judgeID 0 here turns it into BlueStar everywhere.
-    [HarmonyPatch(typeof(JudgeProcessor), "OnTickEvent")]
+    [HarmonyPatch(typeof(JudgeProcessor), nameof(JudgeProcessor.OnTickEvent))]
     public static class JudgeProcessor_OnTickEvent_Patch
     {
         public static void Prefix(JudgeProcessor __instance, JudgeResult result)
@@ -136,7 +136,7 @@ public static class PlayAssist
             }
         }
 
-        public static void Postfix() => _suppressFlash = false;
+        public static void Finalizer() => _suppressFlash = false;
     }
 
     private static bool IsTickLanePressed(JudgeResult result)
@@ -167,7 +167,7 @@ public static class PlayAssist
     }
 
     // Key viewer feed: LaneComposer press/release events land here (lane = LaneIndex value).
-    [HarmonyPatch(typeof(JudgeProcessor), "SetPressedState")]
+    [HarmonyPatch(typeof(JudgeProcessor), nameof(JudgeProcessor.SetPressedState))]
     public static class JudgeProcessor_SetPressedState_Patch
     {
         public static void Postfix(JudgeProcessor __instance, int lane, bool pressed)

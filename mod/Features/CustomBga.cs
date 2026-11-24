@@ -16,6 +16,9 @@ namespace SixtarGateMod.Features;
 /// </summary>
 public static class CustomBga
 {
+    // 지연 재생 코루틴(PlayAfter)이 일시정지/재초기화/재재생 뒤에도 깨어나 강제 재생하지 않도록 세대 번호로 무효화한다.
+    private static int _playSeq;
+
     internal static bool IsCustomBga(BackgroundUIProcessor p)
     {
         var album = CustomTrackManager.CurrentSelectedAlbum;
@@ -27,6 +30,7 @@ public static class CustomBga
     {
         public static void Postfix(BackgroundUIProcessor __instance)
         {
+            _playSeq++;
             CustomJackets.ApplyCurrentAlbumJacketDeferred(__instance.jacket, "Play.background jacket");
             if (IsCustomBga(__instance))
                 MediaOverrideManager.OverrideBGA(__instance.bgaPlayer, CustomTrackManager.CurrentSelectedAlbum!);
@@ -81,10 +85,11 @@ public static class CustomBga
 
             float delay = __instance._reservedDelayTime;
             var player = __instance.bgaPlayer;
+            int seq = ++_playSeq;
             if (delay > 0f)
             {
                 __instance._reservedDelayTime = 0f;
-                MelonCoroutines.Start(PlayAfter(player, delay));
+                MelonCoroutines.Start(PlayAfter(player, delay, seq));
             }
             else
             {
@@ -94,10 +99,10 @@ public static class CustomBga
             return false;
         }
 
-        private static System.Collections.IEnumerator PlayAfter(VideoPlayer player, float delay)
+        private static System.Collections.IEnumerator PlayAfter(VideoPlayer player, float delay, int seq)
         {
             yield return new WaitForSeconds(delay);
-            if (player != null && player.isActiveAndEnabled && Core.IsCustomTrackActive)
+            if (seq == _playSeq && player != null && player.isActiveAndEnabled && Core.IsCustomTrackActive)
                 player.Play();
         }
     }
@@ -109,6 +114,7 @@ public static class CustomBga
         {
             if (!IsCustomBga(__instance)) return true;
 
+            _playSeq++;
             if (!__instance._isPlayStarted)
             {
                 __instance._isReservedPause = true;

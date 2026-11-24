@@ -51,9 +51,10 @@ public static class IcfScanner
 
         string cachePath = Path.Combine(gameRoot, "UserData", CacheFileName);
         string fingerprint = LambdaTranslator.BuildFingerprint;
+        bool hasFingerprint = !string.IsNullOrEmpty(fingerprint);
         try
         {
-            if (TryLoadCache(cachePath, fingerprint, targets))
+            if (hasFingerprint && TryLoadCache(cachePath, fingerprint, targets))
             {
                 Available = true;
                 Core.DebugLog($"{LOG_PREFIX} 같은 빌드의 검사 결과 사용 ({CacheFileName}, 대상 {targets.Count}개)");
@@ -64,8 +65,9 @@ public static class IcfScanner
             int methods = Scan(targets);
             sw.Stop();
             Available = true;
-            Melon<Core>.Logger.Msg($"{LOG_PREFIX} 훅 대상 {targets.Count}개의 주소 공유 검사: 메서드 {methods:N0}개 확인 ({sw.Elapsed.TotalMilliseconds:F0}ms, 결과 저장)");
-            SaveCache(cachePath, fingerprint);
+            Melon<Core>.Logger.Msg($"{LOG_PREFIX} 훅 대상 {targets.Count}개의 주소 공유 검사: 메서드 {methods:N0}개 확인 ({sw.Elapsed.TotalMilliseconds:F0}ms" +
+                                   (hasFingerprint ? ", 결과 저장)" : ", 지문 없음 — 캐시 생략)"));
+            if (hasFingerprint) SaveCache(cachePath, fingerprint);
         }
         catch (Exception ex)
         {
@@ -128,9 +130,11 @@ public static class IcfScanner
         {
             counts.TryGetValue(code, out int n);
             names.TryGetValue(code, out var list);
+            // il2cpp_image_get_class 루프에서 한 번도 안 나온 주소(예: 닫힌 제네릭 클래스의 메서드)는
+            // 0(안전)으로 묻지 않고 -1(미발견)로 기록해 호출부가 미스캔 경고를 남기도록 한다.
             _byRva[code.ToInt64() - _base.ToInt64()] = new Entry
             {
-                Count = n,
+                Count = n == 0 ? -1 : n,
                 Sharers = list == null ? "" : string.Join(", ", list),
             };
         }

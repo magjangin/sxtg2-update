@@ -81,7 +81,12 @@ Write-Host "버전 $version (태그 $tag), csproj·Core.cs·CHANGELOG 일치"
 
 # ---------------------------------------------------------------- 2. git 상태 (게시할 때만 강제)
 Step 'git 상태 확인'
-Invoke-Native 'git fetch' git @('fetch', 'origin', '--tags', '--quiet')
+if ($Publish) {
+    Invoke-Native 'git fetch' git @('fetch', 'origin', '--tags', '--quiet')
+} else {
+    try { Invoke-Native 'git fetch' git @('fetch', 'origin', '--tags', '--quiet') }
+    catch { Write-Warning "원격 fetch 건너뜀 (오프라인?): $_" }
+}
 $dirty = git status --porcelain
 $branch = (git rev-parse --abbrev-ref HEAD).Trim()
 $head = (git rev-parse HEAD).Trim()
@@ -113,7 +118,7 @@ Invoke-Native '빌드' dotnet (@('build', 'mod\SixtarGateMod.csproj', '-c', 'Rel
 $dll = Join-Path $root 'mod\bin\Release\net6.0\SixtarGateMod.dll'
 if (-not (Test-Path $dll)) { throw "DLL 없음: $dll" }
 $fileVer = (Get-Item $dll).VersionInfo.ProductVersion
-if ($fileVer -and -not $fileVer.StartsWith($version)) { throw "빌드된 DLL 버전($fileVer)이 $version 과 다릅니다." }
+if ($fileVer -and $fileVer -notmatch "^$([regex]::Escape($version))(\.0)?(\+|$)") { throw "빌드된 DLL 버전($fileVer)이 $version 과 다릅니다." }
 
 Step '단위 테스트'
 Invoke-Native '단위 테스트' dotnet @('test', 'tests\SixtarGateMod.Tests\SixtarGateMod.Tests.csproj', '-c', 'Release', '-nologo')
@@ -123,8 +128,14 @@ if (-not $SkipSigcheck) {
     Step '패치 시그니처 대조 (tools\sigcheck)'
     $sigArgs = @('run', '--project', 'tools\sigcheck', '-c', 'Release', '--', $dll)
     if ($GameDir) { $sigArgs += $GameDir }
-    $sigOut = & dotnet @sigArgs 2>&1 | ForEach-Object { "$_" }
-    $sigExit = $LASTEXITCODE
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $sigOut = & dotnet @sigArgs 2>&1 | ForEach-Object { "$_" }
+        $sigExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
     $sigOut | ForEach-Object { Write-Host $_ }
     if ($sigExit -eq 1) { throw '시그니처 대조: 부팅 때 건너뛰어질 패치가 있습니다(종료 코드 1).' }
     if ($sigExit -ne 0) { throw "시그니처 대조를 실행하지 못했습니다(종료 코드 $sigExit). 게임 폴더·인터롭을 확인하거나 -SkipSigcheck." }

@@ -16,7 +16,8 @@ public class PatchSignatureCheckTests
 
     private class Target
     {
-        public Target(int id) { }
+        private int field = 0;
+        public Target(int id) { _ = field; }
         public int Prop { get; set; }
         public void Judge(int lane, float time, Derived data) { }
         public static void StaticCall(int lane) { }
@@ -271,5 +272,19 @@ public class PatchSignatureCheckTests
         var cands = PatchSignatureCheck.SameNameMethods(typeof(ChangedDerived), nameof(ChangedBase.Start));
         Assert.Single(cands);
         Assert.NotNull(PatchSignatureCheck.PickChangedSignature(typeof(StartPatch), cands, out _));
+    }
+
+    private static class RefObjectValueTypePatch { public static void Prefix(ref object lane) { } }
+    private static class BoolAsBytePatch { public static void Postfix(ref byte __result) { } }
+    private static class MissingFieldInjectPatch { public static void Prefix(int ___noSuchField) { } }
+    private static class WrongFieldTypeInjectPatch { public static void Prefix(long ___field) { } }
+
+    [Fact]
+    public void RefObjectForValueType_BoolVsByte_AndMissingInjectedField_AreErrors()
+    {
+        Assert.NotNull(Run(typeof(RefObjectValueTypePatch), nameof(Target.Judge)));
+        Assert.NotNull(Run(typeof(BoolAsBytePatch), nameof(Target.IsOwned)));
+        Assert.NotNull(Run(typeof(MissingFieldInjectPatch), nameof(Target.Judge)));
+        Assert.NotNull(Run(typeof(WrongFieldTypeInjectPatch), nameof(Target.Judge)));
     }
 }

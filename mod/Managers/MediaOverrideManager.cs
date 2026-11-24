@@ -169,27 +169,46 @@ public static class MediaOverrideManager
                 {
                     byte[] file = File.ReadAllBytes(path);
                     bool ok = PngDecoder.TryDecode(file, 1024, out int w, out int h, out byte[] rgba);
-                    return (ok, w, h, rgba);
+                    // PNG 해독에 실패한 JPG 등은 이미 읽은 바이트를 메인 스레드로 넘겨 디스크 이중 읽기를 막는다.
+                    return (ok, w, h, rgba, raw: ok ? null : file);
                 });
                 while (!decode.IsCompleted) yield return null;
 
-                if (decode.Status == System.Threading.Tasks.TaskStatus.RanToCompletion && decode.Result.ok)
+                // 비동기 해독 도중 동기 경로(플레이 씬 등)가 먼저 캐시를 채웠으면 중복 GPU 텍스처를 만들지 않는다.
+                if (TryCached(key, out var already))
                 {
-                    try
-                    {
-                        var (_, w, h, rgba) = decode.Result;
-                        var tex = TextureFromRgba(w, h, rgba);
-                        if (tex != null)
-                            sprite = Features.Overlay.MakeSprite(tex);
-                    }
-                    catch (Exception ex)
-                    {
-                        Melon<Core>.Logger.Warning($"{LOG_PREFIX} 자켓 텍스처 업로드 실패 ({album.Title}): {ex.Message}");
-                    }
+                    sprite = already;
                 }
+                else
+                {
+                    byte[]? rawBytes = null;
+                    if (decode.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
+                    {
+                        var res = decode.Result;
+                        rawBytes = res.raw;
+                        if (res.ok)
+                        {
+                            Texture2D? tex = null;
+                            try
+                            {
+                                tex = TextureFromRgba(res.w, res.h, res.rgba);
+                                if (tex != null)
+                                    sprite = Features.Overlay.MakeSprite(tex);
+                            }
+                            catch (Exception ex)
+                            {
+                                if (tex != null) UnityEngine.Object.Destroy(tex);
+                                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 자켓 텍스처 업로드 실패 ({album.Title}): {ex.Message}");
+                            }
+                        }
+                    }
 
-                // JPG, 16-bit / interlaced PNG or a failed upload: synchronous decoder.
-                sprite ??= LoadSpriteFromFile(album.JacketPath!);
+                    // JPG, 16-bit / interlaced PNG or a failed upload: synchronous decoder (reusing bytes read on worker when available).
+                    if (sprite == null)
+                        sprite = rawBytes != null
+                            ? LoadSpriteFromBytes(rawBytes, album.JacketPath!)
+                            : LoadSpriteFromFile(album.JacketPath!);
+                }
             }
 
             if (sprite != null) Store(album, key, sprite);
@@ -218,8 +237,21 @@ public static class MediaOverrideManager
 
         try
         {
-            byte[] fileData = File.ReadAllBytes(filePath);
-            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            return LoadSpriteFromBytes(File.ReadAllBytes(filePath), filePath);
+        }
+        catch (Exception ex)
+        {
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} 스프라이트 로드 실패 '{filePath}': {ex}");
+            return null;
+        }
+    }
+
+    private static Sprite? LoadSpriteFromBytes(byte[] fileData, string label)
+    {
+        Texture2D? texture = null;
+        try
+        {
+            texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             // markNonReadable frees the CPU-side copy once the texture is uploaded.
             if (ImageConversion.LoadImage(texture, fileData, true))
             {
@@ -227,10 +259,12 @@ public static class MediaOverrideManager
                 return Features.Overlay.MakeSprite(texture);
             }
             UnityEngine.Object.Destroy(texture);
+            texture = null;
         }
         catch (Exception ex)
         {
-            Melon<Core>.Logger.Error($"{LOG_PREFIX} 스프라이트 로드 실패 '{filePath}': {ex}");
+            if (texture != null) UnityEngine.Object.Destroy(texture);
+            Melon<Core>.Logger.Error($"{LOG_PREFIX} 스프라이트 로드 실패 '{label}': {ex}");
         }
 
         return null;

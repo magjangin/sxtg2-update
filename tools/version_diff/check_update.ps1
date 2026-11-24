@@ -80,13 +80,17 @@ $slices = Join-Path $Repo "slices"
 if ($py -and (Test-Path $slices)) {
     Write-Host ""
     Write-Host "[3] slices/ 함수 바이트 비교:"
-    & python -I (Join-Path $PSScriptRoot "slicecmp.py") $slices (Join-Path $Game "GameAssembly.dll")
+    $prevEap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try { & python -I (Join-Path $PSScriptRoot "slicecmp.py") $slices (Join-Path $Game "GameAssembly.dll") }
+    finally { $ErrorActionPreference = $prevEap }
 }
 
 if ($py -and $ScriptJson) {
     Write-Host ""
     Write-Host "[4] 훅 대상 ICF 개수 (새 script.json 기준):"
-    & python -I (Join-Path $PSScriptRoot "icf_check.py") $ScriptJson (Join-Path $Repo "docs\02-systems\HOOK_TABLE.md")
+    $prevEap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try { & python -I (Join-Path $PSScriptRoot "icf_check.py") $ScriptJson (Join-Path $Repo "docs\02-systems\HOOK_TABLE.md") }
+    finally { $ErrorActionPreference = $prevEap }
     if ($LASTEXITCODE -ne 0) { Write-Host "    ICF가 늘어난 대상이 있습니다. 그 패치는 다른 함수까지 건드리니 대상을 바꾸세요." }
 } else {
     Write-Host ""
@@ -99,7 +103,9 @@ if (Test-Path $modDll) {
     Write-Host "[5] 패치 인자 ↔ 새 인터롭 시그니처 대조 (tools/sigcheck):"
     $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
     if (-not $dotnet) { $dotnet = "C:\Program Files\dotnet\dotnet.EXE" }
-    & $dotnet run --project (Join-Path $Repo "tools\sigcheck\sigcheck.csproj") -v q -- $modDll $Game
+    $prevEap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try { & $dotnet run --project (Join-Path $Repo "tools\sigcheck\sigcheck.csproj") -v q -- $modDll $Game }
+    finally { $ErrorActionPreference = $prevEap }
     if ($LASTEXITCODE -eq 1) { Write-Host "    시그니처가 바뀐 훅이 있습니다. 그 패치는 부팅 시 [Harmony/Signature]로 건너뛰어집니다. 패치 인자를 새 시그니처에 맞추세요." }
 } else {
     Write-Host "[5] 시그니처 대조 생략: 먼저 dotnet build mod/SixtarGateMod.csproj -c Release"

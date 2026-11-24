@@ -49,8 +49,10 @@ public static class PngDecoder
                     h = ReadInt(file, data + 4);
                     int bitDepth = file[data + 8];
                     colorType = file[data + 9];
+                    int compression = file[data + 10];
+                    int filterMethod = file[data + 11];
                     int interlace = file[data + 12];
-                    if (bitDepth != 8 || interlace != 0) return false;
+                    if (bitDepth != 8 || compression != 0 || filterMethod != 0 || interlace != 0) return false;
                     if (colorType != 0 && colorType != 2 && colorType != 3 && colorType != 4 && colorType != 6) return false;
                     break;
                 case "PLTE":
@@ -81,8 +83,9 @@ public static class PngDecoder
         int stride = (int)strideLong;
         var raw = new byte[(int)rawLenLong];
         idat.Position = 0;
-        using (var z = new ZLibStream(idat, CompressionMode.Decompress))
+        try
         {
+            using var z = new ZLibStream(idat, CompressionMode.Decompress);
             int read = 0;
             while (read < raw.Length)
             {
@@ -90,6 +93,10 @@ public static class PngDecoder
                 if (n <= 0) return false;
                 read += n;
             }
+        }
+        catch (InvalidDataException)
+        {
+            return false;
         }
 
         // Unfilter in place (filter byte + scanline per row).
@@ -102,46 +109,72 @@ public static class PngDecoder
             int filter = raw[rowStart];
             if ((uint)filter > 4u) return false;
             Buffer.BlockCopy(raw, rowStart + 1, cur, 0, stride);
-            for (int x = 0; x < stride; x++)
+            switch (filter)
             {
-                int a = x >= channels ? cur[x - channels] : 0;
-                int b = prev[x];
-                int c = x >= channels ? prev[x - channels] : 0;
-                int v = cur[x];
-                switch (filter)
-                {
-                    case 1: v += a; break;
-                    case 2: v += b; break;
-                    case 3: v += (a + b) >> 1; break;
-                    case 4:
+                case 0:
+                    break;
+                case 1:
+                    for (int x = channels; x < stride; x++)
+                        cur[x] = (byte)(cur[x] + cur[x - channels]);
+                    break;
+                case 2:
+                    for (int x = 0; x < stride; x++)
+                        cur[x] = (byte)(cur[x] + prev[x]);
+                    break;
+                case 3:
+                    for (int x = 0; x < stride; x++)
+                    {
+                        int a = x >= channels ? cur[x - channels] : 0;
+                        cur[x] = (byte)(cur[x] + ((a + prev[x]) >> 1));
+                    }
+                    break;
+                case 4:
+                    for (int x = 0; x < stride; x++)
+                    {
+                        int a = x >= channels ? cur[x - channels] : 0;
+                        int b = prev[x];
+                        int c = x >= channels ? prev[x - channels] : 0;
                         int p = a + b - c, pa = Math.Abs(p - a), pb = Math.Abs(p - b), pc = Math.Abs(p - c);
-                        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-                        break;
-                }
-                cur[x] = (byte)v;
+                        cur[x] = (byte)(cur[x] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c));
+                    }
+                    break;
             }
 
             // Expand to RGBA, writing rows bottom-up.
             int o = (h - 1 - y) * w * 4;
-            for (int x = 0; x < w; x++, o += 4)
+            switch (colorType)
             {
-                switch (colorType)
-                {
-                    case 0:
-                        pixels[o] = pixels[o + 1] = pixels[o + 2] = cur[x]; pixels[o + 3] = 255; break;
-                    case 2:
-                        pixels[o] = cur[x * 3]; pixels[o + 1] = cur[x * 3 + 1]; pixels[o + 2] = cur[x * 3 + 2]; pixels[o + 3] = 255; break;
-                    case 3:
+                case 6:
+                    // 가장 흔한 RGBA(8-bit): 픽셀당 호출 대신 행 단위로 한 번 복사한다.
+                    Buffer.BlockCopy(cur, 0, pixels, o, w * 4);
+                    break;
+                case 2:
+                    for (int x = 0, s = 0; x < w; x++, o += 4, s += 3)
+                    {
+                        pixels[o] = cur[s]; pixels[o + 1] = cur[s + 1]; pixels[o + 2] = cur[s + 2]; pixels[o + 3] = 255;
+                    }
+                    break;
+                case 0:
+                    for (int x = 0; x < w; x++, o += 4)
+                    {
+                        pixels[o] = pixels[o + 1] = pixels[o + 2] = cur[x]; pixels[o + 3] = 255;
+                    }
+                    break;
+                case 3:
+                    for (int x = 0; x < w; x++, o += 4)
+                    {
                         int idx = cur[x];
                         if (idx * 3 + 2 >= palette!.Length) return false;
                         pixels[o] = palette[idx * 3]; pixels[o + 1] = palette[idx * 3 + 1]; pixels[o + 2] = palette[idx * 3 + 2];
                         pixels[o + 3] = paletteAlpha != null && idx < paletteAlpha.Length ? paletteAlpha[idx] : (byte)255;
-                        break;
-                    case 4:
-                        pixels[o] = pixels[o + 1] = pixels[o + 2] = cur[x * 2]; pixels[o + 3] = cur[x * 2 + 1]; break;
-                    default:
-                        Buffer.BlockCopy(cur, x * 4, pixels, o, 4); break;
-                }
+                    }
+                    break;
+                case 4:
+                    for (int x = 0, s = 0; x < w; x++, o += 4, s += 2)
+                    {
+                        pixels[o] = pixels[o + 1] = pixels[o + 2] = cur[s]; pixels[o + 3] = cur[s + 1];
+                    }
+                    break;
             }
             (prev, cur) = (cur, prev);
         }
