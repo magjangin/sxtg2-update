@@ -81,4 +81,23 @@ public class SxtgBmsConverterTests
         Assert.Contains("#00202:1.5", normalized);
         Assert.Contains("#00116:0100", normalized);
     }
+
+    [Fact]
+    public void IsSxtgFormat_DetectsOpenStartValue04()
+    {
+        string bms = "#BPM 160\n#00111:0400\n";
+        Assert.True(SxtgBmsConverter.IsSxtgFormat(bms));
+    }
+
+    [Fact]
+    public void Convert_MapsOpenNotesToChannel56AndMergesResolutions()
+    {
+        // 레인 11(2분할 0.5)에 04(OPEN 시작), 레인 12(4분할 0.75)에 05(OPEN 끝) → 채널 56에 LCM=4로 병합
+        string sxtg = "#BPM 150\n#00111:0004\n#00112:00000005\n";
+
+        string converted = SxtgBmsConverter.Convert(sxtg, out int notes);
+
+        Assert.Equal(2, notes);
+        Assert.Contains("#00156:00000101", converted);
+    }
 }

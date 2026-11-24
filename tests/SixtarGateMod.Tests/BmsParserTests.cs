@@ -80,4 +80,63 @@ public class BmsParserTests
 
         Assert.Equal(3.0f, result.MaxTime, 3);
     }
+
+    [Fact]
+    public void Parse_TitleAndArtistRequireWhitespaceSeparator()
+    {
+        var result = BmsParser.Parse(new[]
+        {
+            "#BPM 120",
+            "#TITLE2 Wrong",
+            "#TITLE Real Title",
+            "#ARTIST_EN Wrong",
+            "#ARTIST Real Artist",
+        });
+
+        Assert.Equal("Real Title", result.Title);
+        Assert.Equal("Real Artist", result.Artist);
+    }
+
+    [Fact]
+    public void Parse_RejectsInfinityBpmAndMeasureScale()
+    {
+        var result = BmsParser.Parse(new[]
+        {
+            "#BPM Infinity",
+            "#00002:Infinity",
+            "#00116:0100",
+        });
+
+        Assert.Equal(150f, result.BaseBpm);
+        Assert.True(float.IsFinite(result.MaxTime) && result.MaxTime > 0f);
+    }
+
+    [Fact]
+    public void Parse_NativeBmsChannels_ComputeMaxTime()
+    {
+        // 게임 네이티브 채널(19, 51, 비-01..05 WAV 키)도 MaxTime에 반영돼야 함
+        var result = BmsParser.Parse(new[]
+        {
+            "#BPM 240", // 1.0s per measure
+            "#00119:0100",
+            "#00251:0001", // 2.5s
+            "#00311:0A00", // 3.0s
+        });
+
+        Assert.Equal(3.0f, result.MaxTime, 3);
+    }
+
+    [Fact]
+    public void Parse_ThreeCharChartAndMidMeasureBpm()
+    {
+        var result = BmsParser.Parse(new[]
+        {
+            "#WAV001 hit.wav",
+            "#BPM 120",        // 2.0s per measure
+            "#00003:0000F0",   // measure 0.5에서 0xF0 = 240 BPM (1.0s per measure)
+            "#00116:001000",   // m0 전반 1.0s + m0 후반 0.5s = 1.5s
+        });
+
+        Assert.Equal(1.5f, result.MaxTime, 3);
+    }
 }

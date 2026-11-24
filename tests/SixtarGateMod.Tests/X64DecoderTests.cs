@@ -76,4 +76,34 @@ public class X64DecoderTests
         Assert.False(X64Decoder.TryDecode(new byte[] { 0x48, 0x8B }, 0, out _));
         Assert.False(X64Decoder.TryDecode(new byte[] { 0xC5, 0xF9, 0x70, 0xC1 }, 0, out _)); // missing imm8
     }
+
+    [Fact]
+    public void TryDecode_Vzeroupper_ConsumesThreeBytesWithoutModRm()
+    {
+        // C5 F8 77 => vzeroupper (3 bytes, no ModRM, no GPR writes)
+        byte[] code = { 0xC5, 0xF8, 0x77, 0xC3 };
+        Assert.True(X64Decoder.TryDecode(code, 0, out var ins));
+        Assert.Equal(3, ins.Length);
+        Assert.Equal(0, ins.Writes);
+    }
+
+    [Fact]
+    public void TryDecode_SibWithIndexRegister_SetsBaseRegNegativeOne()
+    {
+        // 48 8B 44 C1 18 => mov rax, [rcx + rax*8 + 0x18]
+        byte[] code = { 0x48, 0x8B, 0x44, 0xC1, 0x18 };
+        Assert.True(X64Decoder.TryDecode(code, 0, out var ins));
+        Assert.Equal(5, ins.Length);
+        Assert.Equal(-1, ins.BaseReg);
+    }
+
+    [Fact]
+    public void TryDecode_CmpAlImm8_DoesNotWriteRax()
+    {
+        // 3C 01 => cmp al, 1
+        byte[] code = { 0x3C, 0x01 };
+        Assert.True(X64Decoder.TryDecode(code, 0, out var ins));
+        Assert.Equal(2, ins.Length);
+        Assert.Equal(0, ins.Writes);
+    }
 }

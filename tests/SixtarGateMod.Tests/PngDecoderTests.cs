@@ -123,4 +123,66 @@ public class PngDecoderTests
     [Fact]
     public void NotAPng_ReturnsFalse()
         => Assert.False(PngDecoder.TryDecode(new byte[64], 0, out _, out _, out _));
+
+    [Fact]
+    public void CorruptedZlibStream_ReturnsFalseWithoutThrowing()
+    {
+        var ihdr = new byte[13];
+        ihdr[3] = 2; ihdr[7] = 2; ihdr[8] = 8; ihdr[9] = 6;
+        var png = new MemoryStream();
+        png.Write(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 });
+        png.Write(Chunk("IHDR", ihdr));
+        png.Write(Chunk("IDAT", new byte[] { 0xFF, 0x00, 0xDE, 0xAD, 0xBE, 0xEF }));
+        png.Write(Chunk("IEND", Array.Empty<byte>()));
+        Assert.False(PngDecoder.TryDecode(png.ToArray(), 0, out _, out _, out _));
+    }
+
+    [Fact]
+    public void AverageAndPaethFilters_DecodeCorrectly()
+    {
+        // 2x2 회색조: 0행 [10, 20] (None), 1행 [30, 40]을 Average(3)로 인코딩:
+        // x=0: avg(0,10)=5 → raw=25; x=1: avg(30,20)=25 → raw=15
+        var rawAvg = new byte[] { 0, 10, 20, 3, 25, 15 };
+        Assert.True(PngDecoder.TryDecode(Png(2, 2, 0, rawAvg), 0, out _, out _, out var rgbaAvg));
+        Assert.Equal(30, rgbaAvg[0]);
+        Assert.Equal(40, rgbaAvg[4]);
+
+        // 2x2 회색조: 0행 [10, 20] (None), 1행 [30, 40]을 Paeth(4)로 인코딩:
+        // x=0: a=0,b=10,c=0 -> p=10 -> b=10 -> raw=20
+        // x=1: a=30,b=20,c=10 -> p=40 -> pa=10,pb=20,pc=30 -> a=30 -> raw=10
+        var rawPaeth = new byte[] { 0, 10, 20, 4, 20, 10 };
+        Assert.True(PngDecoder.TryDecode(Png(2, 2, 0, rawPaeth), 0, out _, out _, out var rgbaPaeth));
+        Assert.Equal(30, rgbaPaeth[0]);
+        Assert.Equal(40, rgbaPaeth[4]);
+    }
+
+    [Fact]
+    public void GrayAlpha_AndMultiIdat_DecodeCorrectly()
+    {
+        var raw = new byte[] { 0, 80, 128, 200, 255 };
+        var ihdr = new byte[13];
+        ihdr[3] = 2; ihdr[7] = 1; ihdr[8] = 8; ihdr[9] = 4; // Gray+Alpha
+        var z = new MemoryStream();
+        using (var zs = new ZLibStream(z, CompressionLevel.Fastest, leaveOpen: true)) zs.Write(raw);
+        byte[] idat = z.ToArray();
+        int mid = idat.Length / 2;
+
+        var png = new MemoryStream();
+        png.Write(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 });
+        png.Write(Chunk("IHDR", ihdr));
+        png.Write(Chunk("IDAT", idat[..mid]));
+        png.Write(Chunk("IDAT", idat[mid..]));
+        png.Write(Chunk("IEND", Array.Empty<byte>()));
+
+        Assert.True(PngDecoder.TryDecode(png.ToArray(), 0, out int w, out int h, out var rgba));
+        Assert.Equal((2, 1), (w, h));
+        Assert.Equal(new byte[] { 80, 80, 80, 128, 200, 200, 200, 255 }, rgba);
+    }
+
+    [Fact]
+    public void UnsupportedTrnsOrBadFilter_ReturnsFalse()
+    {
+        Assert.False(PngDecoder.TryDecode(Png(1, 1, 2, new byte[] { 0, 1, 2, 3 }, trns: new byte[] { 0, 0, 0, 0, 0, 0 }), 0, out _, out _, out _));
+        Assert.False(PngDecoder.TryDecode(Png(1, 1, 0, new byte[] { 5, 100 }), 0, out _, out _, out _));
+    }
 }

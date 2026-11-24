@@ -137,6 +137,7 @@ public static class CustomMarathon
             if (kb != null && kb.escapeKey.wasPressedThisFrame)
             {
                 IsActive = false;
+                _transitioning = false;
                 _resultShownAt = -1f;
                 Queue.Clear();
                 Overlay.HideAll();

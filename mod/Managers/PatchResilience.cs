@@ -500,7 +500,14 @@ public static class PatchResilience
     {
         if (!ResolveWarned.Add(message)) return;
         if (countsAsFallback) FallbackResolved++;
-        Melon<Core>.Logger.Warning($"[Harmony/Resolve] {message}");
+        try
+        {
+            Melon<Core>.Logger.Warning($"[Harmony/Resolve] {message}");
+        }
+        catch (Exception)
+        {
+            // 오프라인 sigcheck 등 MelonLoader 런타임이 없는 환경에서는 경고 출력만 건너뛰고 대체 해석 결과는 유지한다.
+        }
     }
 
     public static MethodInfo? ResolvePropertySetter(Type type, params string[] candidateNames)

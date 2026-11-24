@@ -105,6 +105,22 @@ public static class LambdaTranslator
     [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private static extern IntPtr GetModuleHandleW(string moduleName);
 
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MEMORY_BASIC_INFORMATION
+    {
+        public IntPtr BaseAddress;
+        public IntPtr AllocationBase;
+        public uint AllocationProtect;
+        public ushort PartitionId;
+        public IntPtr RegionSize;
+        public uint State;
+        public uint Protect;
+        public uint Type;
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern UIntPtr VirtualQuery(IntPtr lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, UIntPtr dwLength);
+
     /// <summary>
     /// GameAssembly.dll의 올라간 주소 = 모듈 핸들(이미 로드돼 있으므로 GetModuleHandle 한 번). 전에는
     /// Process.GetCurrentProcess().Modules로 게임 프로세스의 모듈 수백 개를 모두 열거했다.
@@ -144,7 +160,7 @@ public static class LambdaTranslator
             _cacheFilePath = Path.Combine(userDataDir, CacheFileName);
 
             _currentBuildFingerprint = UpdateGuard.BinaryFingerprint;
-            if (_currentBuildFingerprint == "?|?|?|?")
+            if (string.IsNullOrEmpty(_currentBuildFingerprint) || _currentBuildFingerprint.EndsWith("|?|?|?", StringComparison.Ordinal))
             {
                 var gaInfo = new FileInfo(Path.Combine(gameRoot, "GameAssembly.dll"));
                 string buildId = UpdateGuard.CurrentBuildId ?? "unknown";
@@ -399,12 +415,35 @@ public static class LambdaTranslator
         if (codePtr == IntPtr.Zero) return NativeLambdaScan.Result.Inconclusive;
         try
         {
-            var span = new ReadOnlySpan<byte>((void*)codePtr, NativeLambdaScan.DefaultScanBytes);
+            int scanLen = SafeReadableBytes(codePtr, NativeLambdaScan.DefaultScanBytes);
+            if (scanLen <= 0) return NativeLambdaScan.Result.Inconclusive;
+            var span = new ReadOnlySpan<byte>((void*)codePtr, scanLen);
             return NativeLambdaScan.Scan(span, ownerPtrOffset, targetFieldOffset, strict);
         }
         catch
         {
             return NativeLambdaScan.Result.Inconclusive;
+        }
+    }
+
+    private static int SafeReadableBytes(IntPtr ptr, int maxBytes)
+    {
+        const uint MEM_COMMIT = 0x1000;
+        const uint PAGE_NOACCESS = 0x01;
+        const uint PAGE_GUARD = 0x100;
+        try
+        {
+            if (VirtualQuery(ptr, out var mbi, (UIntPtr)System.Runtime.InteropServices.Marshal.SizeOf<MEMORY_BASIC_INFORMATION>()) == UIntPtr.Zero)
+                return maxBytes;
+            if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0)
+                return 0;
+            long avail = mbi.BaseAddress.ToInt64() + mbi.RegionSize.ToInt64() - ptr.ToInt64();
+            if (avail <= 0) return 0;
+            return (int)Math.Min(maxBytes, avail);
+        }
+        catch (Exception)
+        {
+            return maxBytes;
         }
     }
 

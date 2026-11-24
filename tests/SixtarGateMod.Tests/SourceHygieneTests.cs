@@ -51,4 +51,44 @@ public class SourceHygieneTests
         Assert.NotEmpty(v1);
         Assert.Equal(v1, v2);
     }
+
+    // AGENTS.md에 기록된 IL2CPP/MelonLoader 금지 패턴이 코드에 다시 들어오지 않게 고정한다.
+    private static readonly (string Name, Regex Pattern)[] ForbiddenPatterns =
+    {
+        ("AccessTools.TypeByName (ReflectionTypeLoadException 경고 유발)", new Regex(@"\bAccessTools\.TypeByName\s*\(", RegexOptions.Compiled)),
+        ("UnityEngine.Mathf (il2cpp_runtime_invoke + boxing 유발, MathF/Math 사용)", new Regex(@"\bMathf\.", RegexOptions.Compiled)),
+        ("new Color(...) (il2cpp_runtime_invoke 유발, Overlay.Rgba 사용)", new Regex(@"\bnew\s+(UnityEngine\.)?Color\s*\(", RegexOptions.Compiled)),
+        ("new Rect(...) (il2cpp_runtime_invoke 유발, Box 또는 객체 이니셜라이저 사용)", new Regex(@"\bnew\s+(UnityEngine\.)?Rect\s*\(", RegexOptions.Compiled)),
+        ("OnGUI (이 빌드에서 IMGUI unstripping 실패)", new Regex(@"\bvoid\s+OnGUI\s*\(", RegexOptions.Compiled)),
+        ("Harmony.PatchAll (ApplyAllPatches 우회·이중 패치 방지)", new Regex(@"\.PatchAll\s*\(", RegexOptions.Compiled)),
+    };
+
+    [Fact]
+    public void NoForbiddenIl2CppOrMelonPatterns()
+    {
+        var offenders = new List<string>();
+        foreach (var file in ModSources())
+        {
+            string[] lines = File.ReadAllLines(file);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                int comment = line.IndexOf("//", StringComparison.Ordinal);
+                string code = comment >= 0 ? line.Substring(0, comment) : line;
+                foreach (var (name, rx) in ForbiddenPatterns)
+                {
+                    if (rx.IsMatch(code))
+                        offenders.Add($"{Path.GetRelativePath(RepoRoot(), file)}:{i + 1} ({name})");
+                }
+            }
+        }
+        Assert.True(offenders.Count == 0, "금지 패턴 발견:\n" + string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void CoreDeclaresHarmonyDontPatchAll()
+    {
+        string core = File.ReadAllText(Path.Combine(RepoRoot(), "mod", "Core.cs"));
+        Assert.Contains("[assembly: HarmonyDontPatchAll]", core);
+    }
 }

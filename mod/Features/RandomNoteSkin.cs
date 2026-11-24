@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
@@ -83,7 +82,14 @@ public static class RandomNoteSkin
     }
 
     private static Image[] ImagesOf(RectTransform? part)
-        => part == null ? Array.Empty<Image>() : part.GetComponentsInChildren<Image>(true).ToArray();
+    {
+        if (part is null) return Array.Empty<Image>();
+        var src = part.GetComponentsInChildren<Image>(true);
+        if (src is null || src.Length == 0) return Array.Empty<Image>();
+        var arr = new Image[src.Length];
+        for (int i = 0; i < src.Length; i++) arr[i] = src[i];
+        return arr;
+    }
 
     private static Parts PartsOf(NoteObject note) => new()
     {
@@ -115,13 +121,13 @@ public static class RandomNoteSkin
     private static void EnsureCatalog(IngameUIRenderer ui)
     {
         if (ui.Pointer == _rendererPtr) return;
-        _rendererPtr = ui.Pointer;
         SkinsBySuffix.Clear();
         InstanceParts.Clear();
         LaneSuffix.Clear();
 
         var prefabs = ui.notePackage?.noteObjects;
         if (prefabs == null) return;
+        _rendererPtr = ui.Pointer;
         var names = new List<string>();
         for (int i = 0; i < prefabs.Count; i++)
         {

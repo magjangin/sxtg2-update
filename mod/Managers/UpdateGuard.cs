@@ -90,8 +90,8 @@ public static class UpdateGuard
     private static Dictionary<string, string> _current = new(StringComparer.Ordinal);
     /// <summary>지난 기록과 지문이 완전히 같을 때 그 기록의 실기 확인 값("날짜 곡"), 아니면 null.</summary>
     private static string? _locallyVerified;
-    /// <summary>이번 실행에서 지문을 저장했는지(= 패치가 전부 붙고 필수 패치가 안 빠짐). 실기 확인 기록의 전제.</summary>
-    private static bool _stateSaved;
+    /// <summary>이번 실행에서 실기 확인을 기록할 자격이 있는지(= 패치가 전부 붙고 필수 패치·대체 해석이 없음).</summary>
+    private static bool _canRecordVerifiedPlay;
     private static int _appliedPatches;
 
     private static void CheckFingerprint(string gameRoot)
@@ -223,11 +223,14 @@ public static class UpdateGuard
                 Melon<Core>.Logger.Msg($"{LOG_PREFIX} 업데이트 점검 결과: {verdict}");
 
             _appliedPatches = applied;
-            if (_gameRoot != null && criticalMissing == 0 && allApplied && _current.Count > 0)
+            _canRecordVerifiedPlay = _gameRoot != null && criticalMissing == 0 && allApplied && fallbackResolved == 0 && _current.Count > 0;
+            // ListVerified 빌드에서 메타데이터/로더 등이 바뀌었을 때(_fingerprintChanged)는 실기 플레이 통과 전까지
+            // BuildState.txt를 덮어쓰지 않는다. 바로 덮어쓰면 다음 부팅에서 _fingerprintChanged==false가 되어
+            // 실기 확인 없이 "검증된 빌드"로 통과해 버린다.
+            if (_canRecordVerifiedPlay && !(ListVerified && _fingerprintChanged))
             {
-                // 지문이 그대로면 실기 확인 기록을 이어받고, 바뀌었으면(_locallyVerified == null) 버린다.
-                SaveState(_gameRoot, applied, _locallyVerified);
-                _stateSaved = true;
+                // 지문이 그대로면 실기 확인 기록을 이어받고, 새 빌드면(_locallyVerified == null) 새 지문만 저장한다.
+                SaveState(_gameRoot!, applied, _locallyVerified);
             }
         }
         catch (Exception ex)
@@ -324,9 +327,9 @@ public static class UpdateGuard
                 Melon<Core>.Logger.Warning($"{LOG_PREFIX} 커스텀 곡 '{title}' 플레이 중 게임 내부 예외 {during}건: 이 빌드를 실기 확인으로 기록하지 않습니다 (위의 '게임 내부 예외' 줄 참조).");
                 return;
             }
-            if (!_stateSaved || _gameRoot == null)
+            if (!_canRecordVerifiedPlay || _gameRoot == null)
             {
-                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 커스텀 곡 '{title}'이 결과 화면까지 갔지만, 이번 실행은 패치가 일부 빠져서 실기 확인으로 기록하지 않습니다.");
+                Melon<Core>.Logger.Warning($"{LOG_PREFIX} 커스텀 곡 '{title}'이 결과 화면까지 갔지만, 이번 실행은 패치가 일부 빠졌거나 대체 해석이 있어 실기 확인으로 기록하지 않습니다.");
                 return;
             }
             if (_recordedThisRun)

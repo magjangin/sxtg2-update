@@ -3,7 +3,7 @@
 Sixtar Gate: STARTRAIL(Unity IL2CPP)용 MelonLoader 모드 **SixtarGateMod** 문서 모음입니다.
 Mono 시절 모드 `sxtg2`의 문서 구성(`sxtg2 커스텀 리드미`)을 따라 나눴습니다.
 
-기준 시점: 2026-11-19, Steam Build `26455233`, 모드 소스 `mod/`.
+기준 시점: 2026-11-24, Steam Build `26455233`, 모드 소스 `mod/`.
 
 ## 먼저 볼 문서
 
@@ -73,8 +73,8 @@ docs/
 - [REVIEW_2026-11-18.md](03-development/REVIEW_2026-11-18.md): 코드 리뷰 — 크기가 같은 변경 감지(PE 링크 시각, 메타데이터 버전·헤더 해시), 커스텀 곡 결과 화면 도달 시 실기 확인 자동 기록(`verifiedPlay`)
 - [REVIEW_2026-11-19.md](03-development/REVIEW_2026-11-19.md): 코드 리뷰 — 패치 인자 ↔ 훅 대상 시그니처 대조(`PatchSignatureCheck`), 오버로드 생김 대응, 오프라인 대조 도구 `tools/sigcheck`
 - [REVIEW_2026-11-22.md](03-development/REVIEW_2026-11-22.md): 빈 `catch` 12곳 정리, `PngDecoder` 픽셀 상한, 테스트 71건(PNG·AtomicFile·소스 규칙), v2.3.1
-- [REVIEW_2026-11-24.md](03-development/REVIEW_2026-11-24.md): `hwa\` 증분 재스캔(바뀐 폴더만), 자켓 교체 재시작 없이 반영(캐시 키에 파일 지문), 자켓 캐시 Unity null 비교 제거, v2.3.4
 - [REVIEW_2026-11-23.md](03-development/REVIEW_2026-11-23.md): 인자 형식을 지정한 훅 대상의 시그니처 변경 대체 해석(`PickChangedSignature`), 대체 해석 시 점검 결과 경고, 매 프레임·매 노트 Unity null 비교 제거, 테스트 74건, v2.3.2 / 추가 점검: 로더 버전 지문, CUSTOM 대소문자 무시 비교, 테스트 77건, v2.3.3
+- [REVIEW_2026-11-24.md](03-development/REVIEW_2026-11-24.md): `hwa\` 증분 재스캔, 자켓 교체 재시작 없이 반영, v2.3.4 / 2차 전 파일 심층 감사(업데이트 내성·병목·버그·문서 현행화, 테스트 94건), v2.3.5
 
 **04-game-reference**
 - [MODE_SELECT.md](04-game-reference/MODE_SELECT.md): 모드 7종과 테마 8종

@@ -118,8 +118,9 @@ public static class X64Decoder
             case 0x6A: imm = 1; break;
             case 0xA8: imm = 1; break;
             case 0xA9: imm = (!w && opSize16) ? 2 : 4; break;
-            case 0x04: case 0x0C: case 0x14: case 0x1C: case 0x24: case 0x2C: case 0x34: case 0x3C:
+            case 0x04: case 0x0C: case 0x14: case 0x1C: case 0x24: case 0x2C: case 0x34:
                 imm = 1; insn.Writes = 1 << 0; break;
+            case 0x3C: imm = 1; break; // cmp al, imm8 (쓰기 없음)
             case 0x05: case 0x0D: case 0x15: case 0x1D: case 0x25: case 0x2D: case 0x35:
                 imm = (!w && opSize16) ? 2 : 4; insn.Writes = 1 << 0; break;
             case 0x3D: imm = (!w && opSize16) ? 2 : 4; break; // cmp eax, imm
@@ -187,8 +188,10 @@ public static class X64Decoder
         {
             if (i >= code.Length) return false;
             byte sib = code[i++];
+            int indexReg = ((sib >> 3) & 7) | (rexX << 3);
             int baseLow = sib & 7;
-            insn.BaseReg = baseLow | (rexB << 3);
+            // SIB index != 4(인덱스 없음)이면 [base + index*scale + disp] 형태라 단순 필드 접근이 아님
+            insn.BaseReg = indexReg == 4 ? (baseLow | (rexB << 3)) : -1;
             if (insn.Mod == 0 && baseLow == 5)
             {
                 insn.BaseReg = -1;
@@ -281,6 +284,12 @@ public static class X64Decoder
         }
         if (i >= code.Length) return false;
         byte vop = code[i++]; // 옵코드
+        // vzeroupper (C5 F8 77) / vzeroall (C5 FC 77): ModRM 없음, 범용 레지스터 쓰기 없음
+        if (map == 1 && vop == 0x77)
+        {
+            insn.Length = i - at;
+            return true;
+        }
         if (!ReadModRm(code, ref i, rexR, 0, rexB, ref insn)) return false;
         if (map == 3 || (map == 1 && (vop == 0x70 || vop == 0xC2 || vop == 0xC4 || vop == 0xC5 || vop == 0xC6)))
             i += 1; // 0F 3A 계열 및 0F 계열 AVX imm8(vpshuf*/vcmp*/vpinsrw/vpextrw/vshufp*)

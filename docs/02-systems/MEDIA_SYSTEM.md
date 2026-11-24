@@ -12,7 +12,9 @@
 
 - 1080p PNG를 메인 스레드에서 `ImageConversion.LoadImage`하면 50~100ms 멈춥니다. 그래서 비동기로 바꿨습니다.
 - Unity 자체 비동기 경로(`DownloadHandlerTexture`)는 이 빌드에서 생성자가 빠져 있어 못 씁니다.
-- `PngDecoder`는 8비트·비인터레이스 PNG(색 형식 0/2/3/4/6)만 지원. 그 밖(JPG, 16비트 등)은 `LoadImage`로 대신합니다.
+- `PngDecoder`는 8비트·비인터레이스 PNG(색 형식 0/2/3/4/6)만 지원. 그 밖(JPG, 16비트, 4천만 픽셀 초과 `MaxPixels`, 손상된 zlib)은 `false`를 돌려주고 `LoadImage`로 대신합니다. v2.3.5부터 작업 스레드가 이미 읽은 바이트를 그대로 넘겨 메인 스레드에서 파일을 다시 읽지 않습니다.
+- RGBA(색 형식 6)는 행 단위 한 번 복사(v2.3.5, 1080p당 `Buffer.BlockCopy` 207만 회 → 1,080회).
+- 캐시 키 = 곡 ID + 자켓 파일 크기·수정 시각(`JacketStamp`, v2.3.4). 비동기 해독 도중 동기 경로가 먼저 캐시를 채웠으면 텍스처를 또 만들지 않습니다(v2.3.5).
 
 ## 자켓을 붙이는 곳
 
@@ -45,6 +47,6 @@ PlayBGA / PauseBGA / IsVideoPlayable: clip == null 이면 바로 return
 모드:
 - `Initialize` Postfix와 `b__2` Postfix에서 `clip = null` → `source = Url` → `url = 절대경로` 순서로 다시 설정 (`OverrideBGA`)
 - `IsVideoPlayable` getter Postfix: true
-- `PlayBGA` / `PauseBGA` Prefix: 원본 로직(시작 예약, 일시정지 예약, 지연, 자켓 숨김)을 clip 검사만 빼고 그대로 재현
+- `PlayBGA` / `PauseBGA` Prefix: 원본 로직(시작 예약, 일시정지 예약, 지연, 자켓 숨김)을 clip 검사만 빼고 그대로 재현. 지연 재생 코루틴은 세대 번호(`_playSeq`)로 무효화해, 대기 중 일시정지·재초기화되면 깨어나도 재생하지 않음(v2.3.5)
 
 경로는 반드시 절대경로입니다. 상대경로면 VideoPlayer가 `*_Data\hwa\…`에서 찾고 `WindowsMediaFoundation received empty file`을 냅니다.

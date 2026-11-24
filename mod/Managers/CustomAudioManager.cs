@@ -71,9 +71,16 @@ public static class CustomAudioManager
         return true;
     }
 
+    private static readonly Func<Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase, float>? _getCurrectionVolume =
+        PatchResilience.CreateValueGetter<float>(typeof(SoundModuleForFMOD), "CurrectionVolume", "CorrectionVolume");
+
+    private static float GetCorrectionVolume(SoundModuleForFMOD module)
+        => _getCurrectionVolume != null ? _getCurrectionVolume(module) : 1f;
+
     public static void PlayLocal(SoundModuleForFMOD module, string filePath, ISoundModule.SoundChannel channel, float position)
     {
-        module.Stop(channel); // also stops our previous stream on this channel (Stop prefix below)
+        StopLocal(channel);
+        module.Stop(channel);
 
         var core = RuntimeManager.CoreSystem;
         var result = core.createStream(filePath, MODE.CREATESTREAM | MODE.LOOP_OFF, out Sound sound);
@@ -94,7 +101,7 @@ public static class CustomAudioManager
 
         try
         {
-            float volume = module.GetVolume(channel) * module.CurrectionVolume;
+            float volume = module.GetVolume(channel) * GetCorrectionVolume(module);
             ch.setVolume(volume);
             uint lengthMs = 0;
             if (sound.getLength(out uint len, TIMEUNIT.MS) == RESULT.OK) lengthMs = len;
@@ -116,15 +123,21 @@ public static class CustomAudioManager
 
     private static void ApplyVolumes(SoundModuleForFMOD module)
     {
+        float correction = GetCorrectionVolume(module);
         foreach (var pair in Streams)
-            pair.Value.Channel.setVolume(module.GetVolume(pair.Key) * module.CurrectionVolume);
+            pair.Value.Channel.setVolume(module.GetVolume(pair.Key) * correction);
     }
 
     public static void StopLocal(ISoundModule.SoundChannel channel)
     {
         if (!Streams.Remove(channel, out var s)) return;
         try { s.Channel.stop(); }
-        finally { s.Sound.release(); }
+        catch (Exception ex) { Core.DebugLog($"{LOG_PREFIX} 채널 정지 실패({channel}): {ex.Message}"); }
+        finally
+        {
+            try { s.Sound.release(); }
+            catch (Exception ex) { Core.DebugLog($"{LOG_PREFIX} 사운드 해제 실패({channel}): {ex.Message}"); }
+        }
     }
 
     public static void StopAll()

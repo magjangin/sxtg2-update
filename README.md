@@ -137,8 +137,10 @@ AGENTS.md                   기술 인수인계 문서 (훅 목록, 설계 이�
 docs/                       주제별 문서 (docs/README.md부터)
 tools/datadump/             게임 데이터 확인용 UnityPy 스크립트
 tools/version_diff/         게임 업데이트 후 변경점 점검(check_update.ps1, icf_check.py, dis.py, xrefs.py)
+tools/bodycheck/            게임 DLL 없이 모드 본체 net6 컴파일 검사 (CI 연동)
 tools/sigcheck/             패치 인자 ↔ 새 인터롭 시그니처 오프라인 대조
 tools/lambdascan/           람다 기계어 대조 오프라인 시험
+tools/release.ps1           버전 확인·빌드·테스트·sigcheck·zip 패키징·GitHub 릴리즈 게시
 ```
 
 궁금한 점은 먼저 [자주 묻는 질문](docs/01-user-guide/FAQ.md)을 보세요. 더 자세한 문서는 [docs/](docs/README.md)에 있습니다. 설정 키 전체, 기능별 동작 원리, 훅 표, IL2CPP 함정, 게임 자체 정보(모드 선택, 결과 화면 연출, 스킨, DLC)를 주제별로 나눠 두었습니다. 기술 인수인계 원본은 [AGENTS.md](AGENTS.md)입니다.

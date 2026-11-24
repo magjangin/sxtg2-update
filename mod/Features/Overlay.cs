@@ -155,8 +155,9 @@ public static class Overlay
         if (it.Label != text) { txt.text = text; it.Label = text; }
         if (it.FontSize != fontSize) { txt.fontSize = fontSize; it.FontSize = fontSize; }
         if (it.Anchor != anchor) { txt.alignment = anchor; it.Anchor = anchor; }
-        if (it.OutlineOn != outline) { it.Outline!.enabled = outline; it.OutlineOn = outline; }
-        if (outline && it.Color.a != color.a) it.Outline!.effectColor = Rgba(0f, 0f, 0f, 0.8f * color.a);
+        bool outlineChanged = it.OutlineOn != outline;
+        if (outlineChanged) { it.Outline!.enabled = outline; it.OutlineOn = outline; }
+        if (outline && (outlineChanged || it.Color.a != color.a)) it.Outline!.effectColor = Rgba(0f, 0f, 0f, 0.8f * color.a);
         Show(it, b, color);
     }
 
@@ -164,6 +165,8 @@ public static class Overlay
     public static void HideAll()
     {
         if (!_ready) return;
+        // 매 프레임 경로가 아니므로 파괴된 캔버스를 안전하게 확인해 OnSceneWasLoaded 후속 정리가 중단되지 않게 한다.
+        if (_root == null) { _ready = false; return; }
         Hide(Images, 0);
         Hide(Texts, 0);
         Drawn.Clear();

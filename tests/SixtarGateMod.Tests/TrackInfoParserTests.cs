@@ -29,4 +29,19 @@ public class TrackInfoParserTests
         Assert.Equal("rock 'n' roll", TrackInfoParser.NormalizeMetadataText("rock '  n '  roll"));
         Assert.Equal("Guns N' Roses", TrackInfoParser.NormalizeMetadataText("Guns N' Roses"));
     }
+
+    [Fact]
+    public void ParseLines_IgnoresVisualCreditsAndNonPositiveLevels()
+    {
+        var info = TrackInfoParser.ParseLines(new[]
+        {
+            "BGA作者: VideoMaker",
+            "Jacket Artist: Illustrator",
+            "作曲: RealComposer",
+            "난이도: 0, -2, 4, 11",
+        });
+
+        Assert.Equal("RealComposer", info.Artist);
+        Assert.Equal(new[] { 4, 11 }, info.Difficulties);
+    }
 }

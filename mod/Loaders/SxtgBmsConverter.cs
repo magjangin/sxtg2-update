@@ -138,7 +138,7 @@ public static class SxtgBmsConverter
                 {
                     for (int i = 0; i + 1 < data.Length; i += 2)
                     {
-                        if (data[i] == '0' && (data[i + 1] == '2' || data[i + 1] == '3' || data[i + 1] == '5'))
+                        if (data[i] == '0' && (data[i + 1] == '2' || data[i + 1] == '3' || data[i + 1] == '4' || data[i + 1] == '5'))
                             usesSxtgOnly = true;
                     }
                 }

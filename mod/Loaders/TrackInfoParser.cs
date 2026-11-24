@@ -32,8 +32,8 @@ public static class TrackInfoParser
 
     // Subtitle / chart author keys are never title or artist.
     private static readonly string[] IgnoredKeyParts = { "sub", "副", "부제", "谱", "譜", "chart", "채보" };
-    // Lyricist / arranger keys are skipped unless the key also names the composer ("作词/作曲", "작사·작곡").
-    private static readonly string[] OtherCreditParts = { "作词", "作詞", "작사", "lyric", "編曲", "编曲", "편곡", "arrange" };
+    // Lyricist / arranger / visual credit keys are skipped unless the key also names the composer ("作词/作曲", "작사·작곡").
+    private static readonly string[] OtherCreditParts = { "作词", "作詞", "작사", "lyric", "編曲", "编曲", "편곡", "arrange", "bga", "illust", "イラスト", "jacket" };
     private static readonly string[] ComposerParts = { "作曲", "composer", "작곡" };
     private static readonly string[] TitleKeys = { "곡 제목", "곡제목", "title", "曲名", "歌名", "标题", "標題", "タイトル" };
     private static readonly string[] TitleExactKeys = { "제목", "曲目" };
@@ -132,7 +132,7 @@ public static class TrackInfoParser
         foreach (char c in value)
             sb.Append(c >= '０' && c <= '９' ? (char)('0' + (c - '０')) : c);
         return sb.ToString().Split(LevelSeparators, StringSplitOptions.RemoveEmptyEntries)
-            .Select(p => int.TryParse(p, out int d) ? (int?)d : null).OfType<int>().ToList();
+            .Select(p => int.TryParse(p, out int d) && d > 0 ? (int?)d : null).OfType<int>().ToList();
     }
 
     private static string? FindTrackInfoFile(string albumFolder, string chartName, string[]? preloadedFiles)
@@ -141,7 +141,7 @@ public static class TrackInfoParser
         if (preloadedFiles == null)
             Array.Sort(source, StringComparer.OrdinalIgnoreCase);
         string? chartTxt = null, trackInfoTxt = null, infoTxt = null, firstTxt = null;
-        string? chartTarget = chartName.Length > 0 ? chartName + ".txt" : null;
+        string? chartTarget = !string.IsNullOrEmpty(chartName) ? chartName + ".txt" : null;
 
         foreach (string f in source)
         {
