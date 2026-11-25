@@ -42,8 +42,9 @@
 - **`[IcfShared]` 목록 (2개):**
   - `Features/CustomJackets.cs`: `PlayLoading_JacketCallback_Patch`, `PlayLoading_ThumbnailCallback_Patch` (`MaxShared=2`, Outer Space 판 `DisplayClass35_0`과 `<>4__this` 오프셋 동일)
 
-## 6. 실기 검증 대기 현황 (2026-11-24, v2.3.5)
+## 6. 실기 검증 대기 현황 (2026-11-25, v2.3.6)
 
+- v2.3.6(2026-11-25): 커스텀 곡 경로 게이트·노트 위치 훅 최적화. 실기 때 부팅 로그 `[CustomCategory] 커스텀 곡 플레이 경로 패치 모두 적용됨, CUSTOM 탭 사용 가능`, 속도 카오스(노트별)·히든 켠 커스텀 곡 플레이 → 결과 화면 확인 필요. 오프라인 검증은 xUnit 95건·sigcheck 114·lambdascan 통과.
 - 2026-11-18~24 변경분(v2.3.0~v2.3.5: 파일 분리, `verifiedPlay`, 시그니처 대조·오버로드/바뀐 시그니처 자동 선택, 로더 지문, 증분 재스캔, 2차 전 파일 감사)은 **Release/Debug 빌드(경고/오류 0), xUnit 94건, `tools/bodycheck` 통과, `tools/sigcheck` 114개 통과·오류 0·대체 해석 0, `lambdascan` `ALL PASS`**까지 오프라인 검증 완료 상태.
 - v2.3.5부터 `VerifiedBuilds` 빌드라도 메타데이터·UnityPlayer·로더가 바뀌면 실기 플레이를 통과할 때까지 `BuildState.txt`를 갱신하지 않습니다(전에는 2번째 부팅부터 실기 없이 "검증된 빌드"로 통과).
 - 다음 실기 세션에서 **커스텀 곡 1곡 플레이 → `Result` → `MusicSelect` 복귀** 및 `Latest.log`(`패치 118개 모두 적용 완료`, `verifiedPlay=` 기록) / `Player.log`(예외 0) 확인이 필요함.

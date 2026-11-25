@@ -85,6 +85,27 @@ public class SourceHygieneTests
         Assert.True(offenders.Count == 0, "금지 패턴 발견:\n" + string.Join("\n", offenders));
     }
 
+    // 2026-11-25: CUSTOM 탭은 커스텀 곡 플레이 경로의 패치가 모두 붙었을 때만 만든다(Core.CustomPlayReady).
+    // 그 목록의 패치가 [CriticalPatch]가 아니면 빠져도 "필수 패치 빠짐" 오류 없이 탭만 조용히 사라지므로 함께 고정한다.
+    [Fact]
+    public void CustomPlayGatePatchesAreCritical()
+    {
+        var sources = ModSources().ToDictionary(f => f, File.ReadAllText);
+        string core = sources.First(kv => kv.Key.EndsWith(Path.DirectorySeparatorChar + "Core.cs")).Value;
+        var gate = Regex.Match(core, @"MissingOf\(([^;]*)\);", RegexOptions.Singleline);
+        Assert.True(gate.Success, "Core.CustomPlayReady의 MissingOf(...) 목록을 찾지 못함");
+        var names = Regex.Matches(gate.Groups[1].Value, @"typeof\((?:\w+\.)*(\w+)\)").Select(m => m.Groups[1].Value).ToList();
+        Assert.True(names.Count >= 4, "게이트 목록이 너무 짧음: " + string.Join(", ", names));
+
+        var notCritical = new List<string>();
+        foreach (var name in names)
+        {
+            var decl = new Regex(@"\[CriticalPatch\([^\]]*\)\]\s*public static class " + Regex.Escape(name) + @"\b");
+            if (!sources.Values.Any(text => decl.IsMatch(text))) notCritical.Add(name);
+        }
+        Assert.True(notCritical.Count == 0, "[CriticalPatch]가 없는 게이트 패치: " + string.Join(", ", notCritical));
+    }
+
     [Fact]
     public void CoreDeclaresHarmonyDontPatchAll()
     {

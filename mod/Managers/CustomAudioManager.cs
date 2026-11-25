@@ -123,6 +123,9 @@ public static class CustomAudioManager
 
     private static void ApplyVolumes(SoundModuleForFMOD module)
     {
+        // 장면 전환 페이드는 CurrectionVolume setter를 매 프레임 부른다: 커스텀 스트림이 없으면(공식 곡·메뉴)
+        // 보정 볼륨 getter(IL2CPP 호출)도 부르지 않는다.
+        if (Streams.Count == 0) return;
         float correction = GetCorrectionVolume(module);
         foreach (var pair in Streams)
             pair.Value.Channel.setVolume(module.GetVolume(pair.Key) * correction);

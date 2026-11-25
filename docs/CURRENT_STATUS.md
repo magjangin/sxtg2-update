@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-24)
+# 현재 상태 (2026-11-25)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 118개(`[Harmony] 패치 118개 모두 적용 완료`, 2026-11-14 3차 정리 전 120개). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -79,6 +79,7 @@
 37. 로더 지문·카테고리 비교 통일·v2.3.3 (2026-11-23, [상세](03-development/REVIEW_2026-11-23.md) 5장): **업데이트 내성** 지문에 `loaderVersion`(MelonLoader/Il2CppInterop 버전, 위험 변경) 추가 — 옛 기록에 없으면 비교하지 않는 선택 키, CUSTOM 카테고리 비교를 대소문자 무시로 통일. **병목** `CustomNoteSkin.Apply` Unity null 비교 제거. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 77건, sigcheck 통과 114·오류 0·대체 해석 0, lambdascan `ALL PASS`. 실기는 미실행.
 38. 증분 재스캔·자켓 교체 반영·v2.3.4 (2026-11-24, [상세](03-development/REVIEW_2026-11-24.md)): **병목** `hwa\` 재스캔이 폴더별 지문이 같은 곡은 재사용(곡 하나 추가에 전 곡 BMS 재해석 → 바뀐 폴더만), 자켓 캐시 조회의 Unity null 비교 제거. **한계 해소** 자켓 캐시 키에 파일 크기·수정 시각을 넣어 그림 교체가 재시작 없이 반영. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 77건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
 39. 전 파일 심층 감사·업데이트 내성·병목·문서 현행화·v2.3.5 (2026-11-24, [상세](03-development/REVIEW_2026-11-24.md) 6장): **업데이트 내성** `CustomAudioManager` `CurrectionVolume` 동적 getter 통일, `UpdateGuard` `ListVerified` 변경 시 2번째 부팅 검증 우회 방지, `PatchPreflight` 닫힌 제네릭 사전 JIT, `PatchSignatureCheck`(`ref object`·`bool`↔`byte`·`___field`) + `NoteEffects` 동적 시그니처 검사, `IcfScanner` 미발견 `-1`, `X64Decoder`(`vzeroupper`/SIB index/`0x3C`)·`LambdaTranslator`(`VirtualQuery`). **병목/수정** `PngDecoder` RGBA 행 단위 복사·손상 zlib `false` 반환, `CustomTrackManager` 단일 순회 지문, `MediaOverrideManager` 중복 텍스처 방지·JPG 바이트 재사용, `Overlay.HideAll` 파괴 캔버스 가드·`CustomMarathon.Update` 분리·`CustomBga` 세대 카운터, `BmsParser` 네이티브 채널/`Infinity`/`#TITLE` 구분자, `release.ps1`·`check_update.ps1` stderr 안전 처리. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 94건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
+40. 3차 전 파일 감사·기능 묶음 게이트·v2.3.6 (2026-11-25, [상세](03-development/REVIEW_2026-11-25.md)): **업데이트 내성** 커스텀 곡 플레이 경로 필수 패치 5개 중 하나라도 안 붙으면 CUSTOM 탭을 만들지 않음(전에는 탭이 생겨 곡을 고르면 로딩에서 멈춤), 결과는 부팅 로그 패치 요약 아래에. **병목** `NoteEffects` 노트·프레임당 `_tickData` 래퍼(GC 핸들) 제거·`Pointer` 1회, `RandomNoteSkin` 스폰당 `Pointer` 1회, 페이드 중 `ApplyVolumes` 조기 반환. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 95건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행(사용자 요청으로 미룸).
 
 ## 알려진 한계
 
