@@ -1,6 +1,6 @@
 # 코드 구조
 
-`mod/` 36개 파일, 10,221줄 (2026-11-25 v2.3.6 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(11개 테스트 파일, 95건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+`mod/` 36개 파일, 10,268줄 (2026-11-25 v2.3.7 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(11개 테스트 파일, 95건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
 | 파일 | 줄 | 역할 |
 | --- | ---: | --- |

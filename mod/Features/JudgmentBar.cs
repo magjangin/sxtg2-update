@@ -126,7 +126,10 @@ public static class JudgmentBar
     private static void DrawShape(int shape, Box b, Color color)
     {
         int w = (int)MathF.Round(b.W), h = (int)MathF.Round(b.H);
-        Overlay.Rect(b, color, shape == 0 || w < 2 || h < 2 ? null : GetShapeSprite(shape, w, h));
+        // 원시 업로드를 못 쓰면 모양 스프라이트를 만들 수 없다: 전에는 실패한 결과를 기억하지 않아 프레임마다
+        // 모양 4개 × (w*h*4)바이트 버퍼를 다시 계산·할당했다. 사각형으로 그린다.
+        bool canShape = shape != 0 && w >= 2 && h >= 2 && MediaOverrideManager.RawUploadAvailable;
+        Overlay.Rect(b, color, canShape ? GetShapeSprite(shape, w, h) : null);
     }
 
     // 1 = capsule (distance to the center segment), 2 = diamond. Built as raw RGBA: Texture2D.SetPixel per pixel

@@ -124,6 +124,13 @@ public static class MediaOverrideManager
 
     private static bool _rawUploadBroken;
 
+    /// <summary>원시 RGBA 업로드를 쓸 수 있는지. 한 번 실패하면 false로 고정(이후 호출자는 버퍼를 만들지 않아도 됨).</summary>
+    public static bool RawUploadAvailable => !_rawUploadBroken;
+
+    /// <summary>이 곡 자켓을 작업 스레드에서 해독하는 중인지(동기 해독을 또 시작하면 같은 PNG를 두 번 해독한다).</summary>
+    public static bool IsLoading(CustomAlbumInfo album)
+        => album != null && album.HasCustomJacket && Pending.ContainsKey(KeyOf(album));
+
     /// <summary>
     /// Uploads a decoded RGBA32 buffer (bottom row first) in one call. Returns null when raw upload is unavailable,
     /// so the caller can fall back to ImageConversion.LoadImage.

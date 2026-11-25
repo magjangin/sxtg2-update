@@ -61,6 +61,8 @@
 - **`tools/release.ps1`의 네이티브 stderr 오판 (2026-11-23):** Windows PowerShell 5.1에서 출력을 `2>&1`/파이프로 받으면 `git push`의 정상 stderr(`To https://…`)가 `ErrorActionPreference=Stop` 아래 예외가 되어, 태그는 원격에 올라갔는데 "푸시 실패"로 로컬 태그를 지움 → `Invoke-Native`는 함수 안에서 `Continue`로 두고 종료 코드로만 판정. 같은 증상이면 `git ls-remote --tags origin v<버전>`으로 확인 후 `gh release create`만 다시.
 - **필수 패치가 빠져도 기능 입구(CUSTOM 탭)를 열어 둠 (2026-11-25 이전):** 업데이트로 `GotoPlayScene`/번들 콜백 패치만 빠져도 탭이 생겨 곡을 고르면 로딩 화면에서 멈춤 → 기능 묶음이 모두 붙었을 때만 입구를 연다(`PatchResilience.MissingOf`).
 - **인터롭 필드 읽기를 매 노트 경로에서 사용:** `note._tickData` 같은 참조 필드 읽기는 호출마다 `il2cpp_field_get_offset` + 새 래퍼(GC 핸들)를 만듦 → 오프셋을 한 번 구해 `Marshal.ReadIntPtr`(`NoteEffects.TickPointer`).
+- **실패 결과를 기억하지 않는 매 프레임 생성 경로 (2026-11-25):** `JudgmentBar` 모양 스프라이트는 원시 업로드가 막히면 null인데 기억하지 않아 프레임마다 RGBA 버퍼를 다시 만들었음 → 실패 상태(`MediaOverrideManager.RawUploadAvailable`)를 먼저 확인. 같은 이유로 동기 자켓 경로는 진행 중인 비동기 해독(`IsLoading`)을 먼저 확인.
+- **기증 곡을 이름 하나로만 찾기 (2026-11-25 이전):** `"Starting Point"`가 없으면 목록 첫 곡을 그대로 써서 `TryCast<TrackData>` 실패 시 속성 없는 커스텀 곡이 조용히 생김 → `Core.PickTemplate`(TrackData 우선, 대체 시 경고).
 - **기타:** `pe_slice` 네임스페이스 필수(`SixtarGate.BMSConverter`), `Cpp2IL`은 `< NUL` 리디렉션 필수, `AllTracks` 직접 주입 금지, 게임 실행 중 `Mods\SixtarGateMod.dll` 잠금.
 
 ## 6. 빌드, 테스트 및 배포 경로
