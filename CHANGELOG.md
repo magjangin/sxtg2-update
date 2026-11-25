@@ -2,6 +2,22 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [2.3.7] - 2026-11-25
+
+### 업데이트 내성
+- CUSTOM 곡을 만들 기증 곡을 `"Starting Point"`(TrackData) → 첫 TrackData → 첫 곡 순으로 고름. 전에는 이름이 안 맞으면 목록 첫 곡을 그대로 써서, 업데이트로 그 곡이 다른 `ITrack` 구현이면 곡 속성을 복사하지 못한 커스텀 곡이 조용히 만들어졌음. 대체 시 경고 한 번.
+
+### 성능
+- `JudgmentBar`: 원시 텍스처 업로드를 못 쓰는 환경에서 모양 스프라이트 버퍼(모양 4개 × w×h×4바이트)를 매 프레임 다시 만들던 것 제거(사각형으로 그림).
+- 플레이 흐름 자켓(로딩·일시정지·결과·배경): 곡 선택 화면에서 시작한 비동기 해독이 진행 중이면 동기 해독을 또 하지 않고 그 결과를 기다림(같은 PNG 이중 해독, 1080p 50~100ms 제거).
+- `RandomNoteSkin`: 풀 노트에 지난번 입힌 스킨을 기억해 배치 속성(`type`·`preserveAspect`)이 같으면 건너뜀(스폰당 Image setter 5 → 3).
+
+### 문서
+- [`REVIEW_2026-11-25.md`](docs/03-development/REVIEW_2026-11-25.md) 6장 추가, `CURRENT_STATUS.md`·`HANDOVER_NOTES.md`·`CODE_STRUCTURE.md`·`docs/README.md`·`AGENTS.md` 현행화.
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 95건, `tools/bodycheck` 통과, `tools/sigcheck` 통과 114·오류 0·경고 0·대체 해석 0, `tools/lambdascan` `ALL PASS`. 게임 실기는 미실행.
+
 ## [2.3.6] - 2026-11-25
 
 ### 업데이트 내성

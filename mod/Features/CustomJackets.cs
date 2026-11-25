@@ -118,6 +118,19 @@ public static class CustomJackets
         if (img == null || !Core.IsCustomTrackActive) return;
         var album = CustomTrackManager.CurrentSelectedAlbum;
         if (album == null || !album.HasCustomJacket) return;
+        // 곡 선택 화면에서 시작한 비동기 해독(PreloadAll·가운데 자켓)이 아직 안 끝났으면 동기 해독을 또 하지 않고
+        // 그 결과를 기다린다. 전에는 같은 PNG를 메인 스레드에서 한 번 더 해독(1080p 50~100ms)했다.
+        if (MediaOverrideManager.IsLoading(album))
+        {
+            string trackId = album.TrackId;
+            MediaOverrideManager.RequestAlbumSprite(album, s =>
+            {
+                if (img == null || !Core.IsCustomTrackActive || CustomTrackManager.CurrentSelectedAlbum?.TrackId != trackId) return;
+                SetJacketImage(img, s);
+                Core.DebugLog($"[Jacket] 비동기 해독 완료 후 커스텀 자켓 적용: {where}");
+            });
+            return;
+        }
         var sprite = MediaOverrideManager.GetOrCreateAlbumSprite(album);
         if (sprite == null) return;
         SetJacketImage(img, sprite);
@@ -187,6 +200,7 @@ public static class CustomJackets
             if (img == null || !Core.IsCustomTrackActive) yield break;
             var album = CustomTrackManager.CurrentSelectedAlbum;
             if (album == null || !album.HasCustomJacket || album.TrackId != trackId) yield break;
+            if (MediaOverrideManager.IsLoading(album)) continue; // 해독 중: 끝나면 위 콜백이 적용, 동기 해독 중복 방지
             var sprite = MediaOverrideManager.GetOrCreateAlbumSprite(album);
             if (sprite != null && img.sprite != sprite)
             {

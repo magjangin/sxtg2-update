@@ -26,6 +26,8 @@ public static class RandomNoteSkin
     private sealed class Parts
     {
         public Image[] Head = Array.Empty<Image>(), Body = Array.Empty<Image>(), Hold = Array.Empty<Image>(), Tail = Array.Empty<Image>();
+        /// <summary>이 풀 노트에 마지막으로 입힌 스킨(없으면 프리팹 그대로).</summary>
+        public Skin? Applied;
     }
 
     /// <summary>
@@ -160,7 +162,12 @@ public static class RandomNoteSkin
         LaneSuffix.Clear();
     }
 
-    private static void Copy(Look[] from, Image[] to)
+    /// <summary>
+    /// 스폰마다 Image 하나에 setter 5개(IL2CPP 호출)를 불렀다. 배치 속성(type·preserveAspect)은 게임이 플레이 중
+    /// 바꾸지 않으므로, 이 노트에 지난번 입힌 모양(<paramref name="prev"/>)과 같으면 건너뛴다. 스프라이트·색·재질은
+    /// 게임이 다른 이유로 바꿀 수 있어 항상 다시 쓴다(2026-11-25).
+    /// </summary>
+    private static void Copy(Look[] from, Look[]? prev, Image[] to)
     {
         int n = Math.Min(from.Length, to.Length);
         for (int i = 0; i < n; i++)
@@ -168,11 +175,12 @@ public static class RandomNoteSkin
             var src = from[i];
             var dst = to[i];
             if (!src.Valid || dst is null) continue; // dst는 이 플레이의 풀 노트 Image(GetComponentsInChildren 결과)
+            bool known = prev != null && i < prev.Length && prev[i].Valid;
             dst.sprite = src.Sprite;
-            dst.type = src.Type;
+            if (!known || prev![i].Type != src.Type) dst.type = src.Type;
             dst.color = src.Color;
             dst.material = src.Material;
-            dst.preserveAspect = src.PreserveAspect;
+            if (!known || prev![i].PreserveAspect != src.PreserveAspect) dst.preserveAspect = src.PreserveAspect;
         }
     }
 
@@ -209,10 +217,12 @@ public static class RandomNoteSkin
                 InstanceParts[notePtr] = target = PartsOf(note);
 
             var source = skins[Rng.Next(skins.Count)];
-            Copy(source.Head, target.Head);
-            Copy(source.Body, target.Body);
-            Copy(source.Hold, target.Hold);
-            Copy(source.Tail, target.Tail);
+            var prev = target.Applied;
+            Copy(source.Head, prev?.Head, target.Head);
+            Copy(source.Body, prev?.Body, target.Body);
+            Copy(source.Hold, prev?.Hold, target.Hold);
+            Copy(source.Tail, prev?.Tail, target.Tail);
+            target.Applied = source;
         }
         catch (Exception ex)
         {

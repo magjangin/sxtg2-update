@@ -14,7 +14,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using SixtarGateMod.Managers;
 using SixtarGateMod.Features;
 
-[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.6", "화영왕 (Hwa-young-wang)")]
+[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.7", "화영왕 (Hwa-young-wang)")]
 [assembly: MelonGame("Lyrebird Studio", "Sixtar Gate STARTRAIL")]
 // OnInitializeMelon calls PatchAll itself; without this MelonLoader auto-patches too and every hook runs twice.
 [assembly: HarmonyDontPatchAll]
@@ -266,24 +266,7 @@ public class Core : MelonMod
 
                 if (cachedCustomTracks == null)
                 {
-                    var allTracks = __instance.GetAllTracks();
-                    ITrack? template = null;
-                    if (allTracks != null)
-                    {
-                        for (int i = 0; i < allTracks.Count; i++)
-                        {
-                            var t = allTracks[i];
-                            if (t != null && t.DisplayName == "Starting Point")
-                            {
-                                template = t;
-                                break;
-                            }
-                        }
-                        if (template == null && allTracks.Count > 0)
-                        {
-                            template = allTracks[0];
-                        }
-                    }
+                    var template = PickTemplate(__instance.GetAllTracks());
 
                     if (template != null)
                     {
@@ -300,6 +283,36 @@ public class Core : MelonMod
             // For ALL TRACKS or any official category: Let original code execute untouched.
             // Custom tracks will NOT appear in ALL TRACKS or other categories!
             return true;
+        }
+
+        private static bool _templateFallbackWarned;
+
+        /// <summary>
+        /// 커스텀 곡 복제의 기증 곡: "Starting Point"(TrackData) → 첫 TrackData → 첫 곡. 전에는 이름이 맞지 않으면
+        /// 무조건 목록 첫 곡을 썼는데, 업데이트로 그 곡이 다른 ITrack 구현(TryCast 실패)이면 TrackData 속성(레벨 배열 등)을
+        /// 하나도 복사하지 못한 곡이 만들어졌다. 기증 곡이 바뀌면 한 번 경고해 로그로 알 수 있게 한다.
+        /// </summary>
+        private static ITrack? PickTemplate(Il2CppSystem.Collections.Generic.List<ITrack>? allTracks)
+        {
+            if (allTracks == null || allTracks.Count == 0) return null;
+            ITrack? firstData = null, first = null;
+            for (int i = 0; i < allTracks.Count; i++)
+            {
+                var t = allTracks[i];
+                if (t == null) continue;
+                first ??= t;
+                bool isData = t.TryCast<TrackLoader.TrackData>() != null;
+                if (isData && string.Equals(t.DisplayName, "Starting Point", StringComparison.OrdinalIgnoreCase)) return t;
+                if (isData) firstData ??= t;
+            }
+            var pick = firstData ?? first;
+            if (pick != null && !_templateFallbackWarned)
+            {
+                _templateFallbackWarned = true;
+                Melon<Core>.Logger.Warning($"[CustomCategory] 기증 곡 'Starting Point'(TrackData)를 찾지 못해 '{pick.DisplayName}'을 대신 씀" +
+                    (firstData == null ? " — TrackData 형식 곡이 없어 곡 속성 일부가 기본값" : "") + " (게임 업데이트로 곡 목록이 바뀌었을 수 있음)");
+            }
+            return pick;
         }
     }
 
