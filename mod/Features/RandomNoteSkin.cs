@@ -120,14 +120,15 @@ public static class RandomNoteSkin
     /// <summary>Catalog the skins once per play (a new IngameUIRenderer comes with every play scene).</summary>
     private static void EnsureCatalog(IngameUIRenderer ui)
     {
-        if (ui.Pointer == _rendererPtr) return;
+        IntPtr uiPtr = ui.Pointer;
+        if (uiPtr == _rendererPtr) return;
         SkinsBySuffix.Clear();
         InstanceParts.Clear();
         LaneSuffix.Clear();
 
         var prefabs = ui.notePackage?.noteObjects;
         if (prefabs == null) return;
-        _rendererPtr = ui.Pointer;
+        _rendererPtr = uiPtr;
         var names = new List<string>();
         for (int i = 0; i < prefabs.Count; i++)
         {
@@ -184,9 +185,11 @@ public static class RandomNoteSkin
         try
         {
             // 렌더러·UI 렌더러는 플레이마다 하나: 노트마다 UIRenderer 속성(IL2CPP 호출)을 읽지 않게 렌더러 포인터로 기억
-            if (renderer.Pointer != _spawnRendererPtr)
+            // Pointer는 GC 핸들 조회(네이티브 호출): 스폰마다 한 번씩만 읽는다
+            IntPtr rendererPtr = renderer.Pointer;
+            if (rendererPtr != _spawnRendererPtr)
             {
-                _spawnRendererPtr = renderer.Pointer;
+                _spawnRendererPtr = rendererPtr;
                 _ui = renderer.UIRenderer;
             }
             var ui = _ui;
@@ -201,8 +204,9 @@ public static class RandomNoteSkin
             }
             if (!SkinsBySuffix.TryGetValue(suffix, out var skins) || skins.Count == 0) return;
 
-            if (!InstanceParts.TryGetValue(note.Pointer, out var target))
-                InstanceParts[note.Pointer] = target = PartsOf(note);
+            IntPtr notePtr = note.Pointer;
+            if (!InstanceParts.TryGetValue(notePtr, out var target))
+                InstanceParts[notePtr] = target = PartsOf(note);
 
             var source = skins[Rng.Next(skins.Count)];
             Copy(source.Head, target.Head);

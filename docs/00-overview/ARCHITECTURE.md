@@ -60,6 +60,7 @@ Core.OnInitializeMelon
        → 나머지는 CreateClassProcessor(type).Patch() 또는 PatchManually
        → 하나가 실패해도 나머지는 적용, 로그 "[Harmony] 패치 N개 모두 적용 완료"
        → UpdateGuard.ReportPatchSummary: "업데이트 점검 결과:" 한 줄 + 지문 저장
+  ├─ Core.CustomPlayReady: 커스텀 곡 경로 필수 패치 5개가 모두 붙었는지(하나라도 빠지면 CUSTOM 탭을 만들지 않음, v2.3.6)
   └─ (finally) CustomTrackManager.CompleteScan: 스캔 결과·로그를 메인 스레드에서 받음
 ```
 

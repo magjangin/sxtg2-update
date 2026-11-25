@@ -14,7 +14,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using SixtarGateMod.Managers;
 using SixtarGateMod.Features;
 
-[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.5", "화영왕 (Hwa-young-wang)")]
+[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.6", "화영왕 (Hwa-young-wang)")]
 [assembly: MelonGame("Lyrebird Studio", "Sixtar Gate STARTRAIL")]
 // OnInitializeMelon calls PatchAll itself; without this MelonLoader auto-patches too and every hook runs twice.
 [assembly: HarmonyDontPatchAll]
@@ -86,6 +86,9 @@ public class Core : MelonMod
         try
         {
             PatchResilience.ApplyAllPatches(HarmonyInstance, LoggerInstance, gameRoot);
+            // 업데이트로 커스텀 곡 경로 패치가 빠졌는지 패치 요약 바로 아래에 알린다(곡 선택 화면까지 가지 않아도 보이게).
+            if (CustomPlayReady)
+                LoggerInstance.Msg("[CustomCategory] 커스텀 곡 플레이 경로 패치 모두 적용됨, CUSTOM 탭 사용 가능");
         }
         finally
         {
@@ -160,6 +163,34 @@ public class Core : MelonMod
 
     #region --- Dedicated CUSTOM Category & Custom 1-Note Chart Injection ---
 
+    private static bool? _customPlayReady;
+
+    /// <summary>
+    /// 커스텀 곡을 끝까지 플레이하는 데 꼭 필요한 패치가 모두 붙었는지. 게임 업데이트로 이 중 하나라도 빠지면
+    /// CUSTOM 탭 자체를 만들지 않는다: 탭이 있으면 곡을 고르는 순간 로딩 화면에서 멈춰(FMOD 뱅크 조회 NRE,
+    /// 게임 BMS 해석기 거부) 게임을 강제 종료해야 했다. 탭을 숨기면 공식 곡은 그대로 플레이할 수 있다.
+    /// 패치 적용이 끝난 뒤(카테고리 화면)에 처음 불리므로 한 번만 계산해 기억한다.
+    /// </summary>
+    internal static bool CustomPlayReady
+    {
+        get
+        {
+            if (_customPlayReady is bool ready) return ready;
+            string[] missing = PatchResilience.MissingOf(
+                typeof(TrackSelectController_GetTracks_Patch),
+                typeof(SixtarGlobal_GotoPlayScene_Patch),
+                typeof(SixtarGlobal_GotoPlayScene_LoadBundle_Patch),
+                typeof(MikazukiConverter_Parse_Patch),
+                typeof(PlayAssist.PlayRecordModule_RecordPlayData_Patch));
+            ready = missing.Length == 0;
+            if (!ready)
+                Melon<Core>.Logger.Error($"[CustomCategory] 커스텀 곡 플레이에 필요한 패치가 빠져 CUSTOM 탭을 만들지 않음 " +
+                    $"(곡을 고르면 로딩 화면에서 멈추거나 기록이 저장되므로): {string.Join(", ", missing)}. 공식 곡은 그대로 플레이할 수 있음");
+            _customPlayReady = ready;
+            return ready;
+        }
+    }
+
     private static bool ContainsIgnoreCase(Il2CppSystem.Collections.Generic.List<string> list, string value)
     {
         for (int i = 0; i < list.Count; i++)
@@ -176,6 +207,7 @@ public class Core : MelonMod
         {
             try
             {
+                if (!CustomPlayReady) return;
                 var categories = CategorySelectController.Categories;
                 if (categories != null && !ContainsIgnoreCase(categories, CUSTOM_CATEGORY_NAME))
                 {
@@ -201,7 +233,7 @@ public class Core : MelonMod
 
         public static void Postfix(ref Il2CppStringArray __result)
         {
-            if (__result == null) return;
+            if (__result == null || !CustomPlayReady) return;
             for (int i = 0; i < __result.Length; i++)
             {
                 if (string.Equals(__result[i], CUSTOM_CATEGORY_NAME, StringComparison.OrdinalIgnoreCase)) return;

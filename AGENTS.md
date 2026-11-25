@@ -23,6 +23,7 @@
 4. **전곡 & DLC 해금 (`Features/Unlock.cs`):** `ItemUnlockChecker`, `ItemProvideModule`, `TrackData.IsOwned`를 일괄 `true`로 오버라이드.
 5. **업데이트 내성 (`Managers/PatchResilience.cs`, `PatchSignatureCheck.cs`, `LambdaTranslator.cs`, `IcfScanner.cs`, `PatchPreflight.cs`, `UpdateGuard.cs`, `BuildFingerprint.cs`, `AtomicFile.cs`):**
    - `[assembly: HarmonyDontPatchAll]` + 부팅 시 5단계 검증: ⓪ `PatchSignatureCheck`(Prefix/Postfix/Finalizer 인자와 `__0`/`__1` 위치 인자를 훅 대상 시그니처와 이름·형식으로 대조, 값/포인터 형식 불일치·없는 인자·정적 대상 `__instance`·void 대상 `__result`면 스킵, 참조 형식 불일치는 경고. 인자 형식 없는 속성 대상에 업데이트로 오버로드가 생기면 패치 인자 목록으로 맞는 오버로드가 하나일 때만 골라 직접 패치, 인자 형식을 지정한 대상이 업데이트로 없어지면 같은 이름 메서드가 하나뿐이고 패치 인자와 맞을 때만 골라 직접 패치 — 대체 해석이 하나라도 있으면 `업데이트 점검 결과`가 "정상" 대신 실기 확인 요청), ① `IcfScanner`(모든 IL2CPP 메서드 `methodPointer`를 훑어 공유 개수가 허용치를 넘으면 스킵, 미스캔 주소 `-1` 경고, `[IcfShared]` 2개), ② `PatchPreflight`(패치 메서드·호출 그래프 사전 JIT 및 필드/타입/어셈블리 토큰 검사), ③ `LambdaTranslator`(`LambdaMap.json` 1단계 캐시 + `NativeLambdaScan`/`X64Decoder` 명령 단위 레지스터 추적으로 클로저·코루틴 동적 번역), ④ `UpdateGuard`(9개 지문 키 비교 — `loaderVersion`(MelonLoader/Il2CppInterop)은 옛 기록에 없으면 건너뛰는 선택 키 + `BinaryFingerprint`로 `BuildState.txt`·`LambdaMap.json`·`IcfCounts.txt` 캐시 무효화 통일 + `[CriticalPatch]` 20개 누락 감지 + `Renewal_Play`→`Result` 예외 0건 시 `verifiedPlay` 자동 기록).
+   - **기능 묶음 게이트 (2026-11-25):** 커스텀 곡 플레이 경로 필수 패치 5개(`GetTracks`·`GotoPlayScene`·번들 콜백·`MikazukiConverter.Parse`·`RecordPlayData` 차단) 중 하나라도 안 붙으면 `Core.CustomPlayReady = false` → CUSTOM 탭을 만들지 않음(반쪽 경로로 곡을 고르면 로딩에서 멈추므로). 게이트 목록은 모두 `[CriticalPatch]`여야 함(`SourceHygieneTests`).
    - `AtomicFile`로 모든 상태/캐시/설정 파일을 `.tmp` → `File.Move` 원자적 교체.
 6. **성능 원칙 (IL2CPP 네이티브 호출 최소화):**
    - `new Rect`, `new Color`, `Mathf.*` 등 Unity 값 형식 헬퍼는 전부 `il2cpp_runtime_invoke` + boxing을 유발하므로 `Overlay.Rgba`/`Box` 및 `MathF`/`Math`만 사용.
@@ -58,6 +59,8 @@
 - **매 프레임 Unity 객체 `== null` 가드:** `Overlay.Rect`/`Label`이 호출마다 `_root == null`을 보느라 키뷰어를 켜면 프레임당 약 50번 `op_Equality` IL2CPP 호출 → 관리 플래그 + 30프레임마다 확인(2026-11-23).
 - **Harmony 인자 바인딩을 믿고 시그니처 변경을 방치:** Harmony는 패치 인자를 **이름으로만** 묶고 형식을 확인하지 않아, 업데이트로 `int`→`long`처럼 값 형식이 바뀌어도 패치가 붙은 뒤 첫 호출에서 잘못된 값·크래시가 남. `PatchPreflight`(사라진 멤버)와 ICF 검사로는 안 잡힘 → `PatchSignatureCheck`(부팅) + `tools/sigcheck`(오프라인). `ResolveMethod`의 이름·개수 대체 경로도 이제 `[Harmony/Resolve]` 경고를 남김(전에는 조용히 대체).
 - **`tools/release.ps1`의 네이티브 stderr 오판 (2026-11-23):** Windows PowerShell 5.1에서 출력을 `2>&1`/파이프로 받으면 `git push`의 정상 stderr(`To https://…`)가 `ErrorActionPreference=Stop` 아래 예외가 되어, 태그는 원격에 올라갔는데 "푸시 실패"로 로컬 태그를 지움 → `Invoke-Native`는 함수 안에서 `Continue`로 두고 종료 코드로만 판정. 같은 증상이면 `git ls-remote --tags origin v<버전>`으로 확인 후 `gh release create`만 다시.
+- **필수 패치가 빠져도 기능 입구(CUSTOM 탭)를 열어 둠 (2026-11-25 이전):** 업데이트로 `GotoPlayScene`/번들 콜백 패치만 빠져도 탭이 생겨 곡을 고르면 로딩 화면에서 멈춤 → 기능 묶음이 모두 붙었을 때만 입구를 연다(`PatchResilience.MissingOf`).
+- **인터롭 필드 읽기를 매 노트 경로에서 사용:** `note._tickData` 같은 참조 필드 읽기는 호출마다 `il2cpp_field_get_offset` + 새 래퍼(GC 핸들)를 만듦 → 오프셋을 한 번 구해 `Marshal.ReadIntPtr`(`NoteEffects.TickPointer`).
 - **기타:** `pe_slice` 네임스페이스 필수(`SixtarGate.BMSConverter`), `Cpp2IL`은 `< NUL` 리디렉션 필수, `AllTracks` 직접 주입 금지, 게임 실행 중 `Mods\SixtarGateMod.dll` 잠금.
 
 ## 6. 빌드, 테스트 및 배포 경로
@@ -67,7 +70,7 @@
   dotnet build mod/SixtarGateMod.csproj
   ```
   - 빌드 후 `$(GameDir)\Mods\`가 있으면 `SixtarGateMod.dll`을 자동 복사함(게임 실행 중 잠겨 있으면 경고만 출력). 복사 생략 시 `-p:SkipDeploy=true`.
-- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 94건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동, CI는 이어서 `tools/bodycheck`도 실행):**
+- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 95건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동, CI는 이어서 `tools/bodycheck`도 실행):**
   ```powershell
   dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
   ```

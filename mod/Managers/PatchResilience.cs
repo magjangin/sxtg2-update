@@ -46,6 +46,24 @@ public static class PatchResilience
     /// </summary>
     public static readonly List<Func<MethodBase?>> DynamicPatchTargets = new();
 
+    // 실제로 붙은 패치 클래스. 기능 묶음(예: 커스텀 곡 플레이 경로)이 반쪽만 붙었을 때 그 기능의 입구를 닫는 데 쓴다.
+    private static readonly HashSet<Type> AppliedPatches = new();
+
+    /// <summary>부팅 때 <paramref name="patchType"/> 패치 클래스가 실제로 붙었는지(사전 검사·ICF·시그니처를 통과하고 Harmony 적용 성공).</summary>
+    public static bool IsApplied(Type patchType) => AppliedPatches.Contains(patchType);
+
+    /// <summary>
+    /// 기능 하나에 필요한 패치 클래스 중 붙지 않은 것의 이름. 모두 붙었으면 빈 배열.
+    /// 업데이트로 그중 하나만 빠져도 그 기능을 쓰면 게임이 멈출 수 있으므로(예: 커스텀 곡이 로딩 화면에서 멈춤) 입구를 닫는 데 쓴다.
+    /// </summary>
+    public static string[] MissingOf(params Type[] requiredPatches)
+    {
+        var missing = new List<string>();
+        foreach (var t in requiredPatches)
+            if (!AppliedPatches.Contains(t)) missing.Add(t.Name);
+        return missing.ToArray();
+    }
+
     /// <summary>
     /// Applies all [HarmonyPatch] classes in the mod assembly one by one: preflight JIT check, runtime ICF guard
     /// (trivial stubs and shared native bodies), then Harmony.
@@ -154,6 +172,7 @@ public static class PatchResilience
                 if (ManualTargets.Contains(type)) PatchManually(harmony, type, targets);
                 else harmony.CreateClassProcessor(type).Patch();
                 patchTimes.Add((type.Name, (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency));
+                AppliedPatches.Add(type);
                 applied++;
             }
             catch (Exception ex)

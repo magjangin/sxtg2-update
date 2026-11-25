@@ -2,6 +2,23 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [2.3.6] - 2026-11-25
+
+### 업데이트 내성
+- 게임 업데이트로 커스텀 곡 플레이 경로의 필수 패치(`GetTracks`·`GotoPlayScene`·번들 콜백·`MikazukiConverter.Parse`·기록 저장 차단) 중 하나라도 빠지면 CUSTOM 탭을 만들지 않음. 전에는 탭이 그대로 생겨 곡을 고르면 로딩 화면에서 멈춰 강제 종료해야 했음. 공식 곡은 그대로 플레이 가능, 빠진 패치 이름은 부팅 로그 패치 요약 바로 아래에 표시(`PatchResilience.IsApplied`/`MissingOf`, `Core.CustomPlayReady`).
+
+### 성능
+- `NoteEffects`(속도 카오스·히든·페이드를 켠 플레이의 노트 위치 훅): 노트·프레임마다 만들던 `_tickData` 인터롭 래퍼(GC 핸들 할당)를 없애고 필드 오프셋으로 포인터만 읽음, `Pointer`(네이티브 호출)를 호출당 최대 4번 → 1번.
+- `RandomNoteSkin`: 노트 스폰마다 렌더러·노트 `Pointer`를 한 번씩만 읽음.
+- `CustomAudioManager.ApplyVolumes`: 장면 페이드 중 매 프레임 불리는데 커스텀 스트림이 없으면 보정 볼륨 getter(IL2CPP 호출)도 부르지 않음.
+
+### 문서·테스트
+- 단위 테스트 94건 → **95건**(`SourceHygieneTests.CustomPlayGatePatchesAreCritical`: CUSTOM 탭 게이트의 패치가 모두 `[CriticalPatch]`인지 고정).
+- [`REVIEW_2026-11-25.md`](docs/03-development/REVIEW_2026-11-25.md) 추가, `AGENTS.md`·`CURRENT_STATUS.md`·`HANDOVER_NOTES.md`·`CODE_STRUCTURE.md`·`ARCHITECTURE.md`·`docs/README.md` 현행화.
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 95건, `tools/bodycheck` 통과, `tools/sigcheck` 통과 114·오류 0·경고 0·대체 해석 0, `tools/lambdascan` `ALL PASS`. 게임 실기는 미실행(다음 실기 때 확인).
+
 ## [2.3.5] - 2026-11-24
 
 ### 업데이트 내성

@@ -74,6 +74,7 @@ docs/
 - [REVIEW_2026-11-19.md](03-development/REVIEW_2026-11-19.md): 코드 리뷰 — 패치 인자 ↔ 훅 대상 시그니처 대조(`PatchSignatureCheck`), 오버로드 생김 대응, 오프라인 대조 도구 `tools/sigcheck`
 - [REVIEW_2026-11-22.md](03-development/REVIEW_2026-11-22.md): 빈 `catch` 12곳 정리, `PngDecoder` 픽셀 상한, 테스트 71건(PNG·AtomicFile·소스 규칙), v2.3.1
 - [REVIEW_2026-11-23.md](03-development/REVIEW_2026-11-23.md): 인자 형식을 지정한 훅 대상의 시그니처 변경 대체 해석(`PickChangedSignature`), 대체 해석 시 점검 결과 경고, 매 프레임·매 노트 Unity null 비교 제거, 테스트 74건, v2.3.2 / 추가 점검: 로더 버전 지문, CUSTOM 대소문자 무시 비교, 테스트 77건, v2.3.3
+- [REVIEW_2026-11-25.md](03-development/REVIEW_2026-11-25.md): 3차 전 파일 감사 — 커스텀 곡 경로 패치가 반쪽이면 CUSTOM 탭 숨김, 노트 위치 훅 래퍼 할당 제거, 페이드 중 볼륨 호출 제거, 테스트 95건, v2.3.6
 - [REVIEW_2026-11-24.md](03-development/REVIEW_2026-11-24.md): `hwa\` 증분 재스캔, 자켓 교체 재시작 없이 반영, v2.3.4 / 2차 전 파일 심층 감사(업데이트 내성·병목·버그·문서 현행화, 테스트 94건), v2.3.5
 
 **04-game-reference**

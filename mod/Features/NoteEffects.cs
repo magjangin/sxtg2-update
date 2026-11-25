@@ -98,7 +98,28 @@ public static class NoteEffects
 
     private static float Lerp(float min, float max) => min + (max - min) * (float)_random.NextDouble();
 
-    private static float Factor(NoteObject note)
+    // NoteObject._tickData의 네이티브 오프셋(처음 한 번 조회, 못 구하면 -1 → 인터롭 필드 읽기로 대체).
+    // 인터롭 필드 읽기(note._tickData)는 호출마다 il2cpp_field_get_offset과 새 래퍼(GC 핸들 할당 + 종료자)를 만들어,
+    // 노트별 속도 카오스에서는 보이는 노트마다 매 프레임 두 번(머리·길이 setter) 그 비용이 들었다.
+    private static int _tickFieldOffset = int.MinValue;
+
+    private static IntPtr TickPointer(NoteObject note, IntPtr notePtr)
+    {
+        if (_tickFieldOffset == int.MinValue)
+        {
+            int off = LambdaTranslator.GetIl2CppFieldOffset(typeof(NoteObject), "_tickData");
+            // 객체 헤더(klass + monitor, 0x10) 뒤의 그럴듯한 범위만 믿는다. 아니면 인터롭 읽기로.
+            _tickFieldOffset = off >= 0x10 && off < 0x1000 ? off : -1;
+            if (_tickFieldOffset < 0)
+                Melon<Core>.Logger.Warning("[NoteEffects] NoteObject._tickData 오프셋을 찾지 못해 느린 경로(인터롭 필드 읽기)로 동작");
+        }
+        if (_tickFieldOffset > 0)
+            return System.Runtime.InteropServices.Marshal.ReadIntPtr(notePtr, _tickFieldOffset);
+        var tick = note._tickData;
+        return tick is not null ? tick.Pointer : IntPtr.Zero;
+    }
+
+    private static float Factor(NoteObject note, IntPtr notePtr)
     {
         if (!ModConfig.NoteSpeedChaos) return 1f;
         float min = ModConfig.NoteSpeedChaosMin, max = ModConfig.NoteSpeedChaosMax;
@@ -107,18 +128,18 @@ public static class NoteEffects
         {
             // Notes are pooled per lane (one parent anchor per lane), so a NoteObject never changes lane: resolve
             // its lane anchor once instead of walking transform.parent every frame.
-            if (!NoteLane.TryGetValue(note.Pointer, out int key))
+            if (!NoteLane.TryGetValue(notePtr, out int key))
             {
                 var parent = note.transform.parent;
-                NoteLane[note.Pointer] = key = parent != null ? parent.GetInstanceID() : 0;
+                NoteLane[notePtr] = key = parent is not null ? parent.GetInstanceID() : 0;
             }
             if (!LaneFactor.TryGetValue(key, out float f)) LaneFactor[key] = f = Lerp(min, max);
             return f;
         }
 
         // Pooled NoteObjects are reused for other notes: key by the note's tick, not by the object.
-        var tick = note._tickData;
-        IntPtr id = tick != null ? tick.Pointer : note.Pointer;
+        IntPtr tick = TickPointer(note, notePtr);
+        IntPtr id = tick != IntPtr.Zero ? tick : notePtr;
         if (!NoteFactor.TryGetValue(id, out float g)) NoteFactor[id] = g = Lerp(min, max);
         return g;
     }
@@ -204,8 +225,10 @@ public static class NoteEffects
         public static void Prefix(NoteObject __instance, ref float value)
         {
             if (!PlayAssist.IsPlaying) return;
-            if (ModConfig.NoteSpeedChaos) value *= Factor(__instance);
-            ApplyLaneCover(__instance, value);
+            // Pointer는 GC 핸들 조회(네이티브 호출)라 노트·프레임마다 한 번만 읽어 넘긴다(전에는 최대 4번).
+            IntPtr ptr = __instance.Pointer;
+            if (ModConfig.NoteSpeedChaos) value *= Factor(__instance, ptr);
+            ApplyLaneCover(__instance, ptr, value);
         }
     }
 
@@ -213,7 +236,7 @@ public static class NoteEffects
     {
         public static void Prefix(NoteObject __instance, ref float value)
         {
-            if (PlayAssist.IsPlaying && ModConfig.NoteSpeedChaos) value *= Factor(__instance);
+            if (PlayAssist.IsPlaying && ModConfig.NoteSpeedChaos) value *= Factor(__instance, __instance.Pointer);
         }
     }
 
@@ -223,20 +246,20 @@ public static class NoteEffects
         public float Alpha = -1f;
     }
 
-    private static void ApplyLaneCover(NoteObject note, float head)
+    private static void ApplyLaneCover(NoteObject note, IntPtr notePtr, float head)
     {
         bool active = ModConfig.AnyLaneCover;
         // 속도 카오스만 쓰는 플레이: 가린 노트가 하나도 없으면 노트·프레임마다 사전 조회도 하지 않음
         if (!active && Covers.Count == 0) return;
 
         Cover? cover = null;
-        if (!Covers.TryGetValue(note.Pointer, out cover))
+        if (!Covers.TryGetValue(notePtr, out cover))
         {
             if (!active) return; // never touched, nothing to restore
             var group = note.gameObject.GetComponent<CanvasGroup>() ?? note.gameObject.AddComponent<CanvasGroup>();
             group.interactable = false;
             group.blocksRaycasts = false;
-            Covers[note.Pointer] = cover = new Cover { Group = group };
+            Covers[notePtr] = cover = new Cover { Group = group };
         }
 
         float alpha = 1f;
