@@ -63,6 +63,8 @@
 - **인터롭 필드 읽기를 매 노트 경로에서 사용:** `note._tickData` 같은 참조 필드 읽기는 호출마다 `il2cpp_field_get_offset` + 새 래퍼(GC 핸들)를 만듦 → 오프셋을 한 번 구해 `Marshal.ReadIntPtr`(`NoteEffects.TickPointer`).
 - **실패 결과를 기억하지 않는 매 프레임 생성 경로 (2026-11-25):** `JudgmentBar` 모양 스프라이트는 원시 업로드가 막히면 null인데 기억하지 않아 프레임마다 RGBA 버퍼를 다시 만들었음 → 실패 상태(`MediaOverrideManager.RawUploadAvailable`)를 먼저 확인. 같은 이유로 동기 자켓 경로는 진행 중인 비동기 해독(`IsLoading`)을 먼저 확인.
 - **기증 곡을 이름 하나로만 찾기 (2026-11-25 이전):** `"Starting Point"`가 없으면 목록 첫 곡을 그대로 써서 `TryCast<TrackData>` 실패 시 속성 없는 커스텀 곡이 조용히 생김 → `Core.PickTemplate`(TrackData 우선, 대체 시 경고).
+- **변경 감지 지문에 폴더 수정 시각 사용 (2026-11-26 이전):** Windows는 하위 폴더 시각을 부모 폴더 색인에 늦게 반영해, `GetDirectories()`로 얻은 값과 새로 연 값이 다름(실측 약 1ms) → 스캔과 탭 진입 확인의 지문이 어긋나 불필요한 재스캔. 지문은 파일 이름·크기·수정 시각만(`Managers/HwaStamp.cs`), 두 계산 경로는 한 곳에서.
+- **설정값을 int 점수 계산에 그대로 곱하기 (2026-11-26 이전):** 큰 `MaxScore`에서 double→int 변환이 넘쳐 음수 점수 → `ScoreMath`(상한 10억, int 포화).
 - **기타:** `pe_slice` 네임스페이스 필수(`SixtarGate.BMSConverter`), `Cpp2IL`은 `< NUL` 리디렉션 필수, `AllTracks` 직접 주입 금지, 게임 실행 중 `Mods\SixtarGateMod.dll` 잠금.
 
 ## 6. 빌드, 테스트 및 배포 경로
@@ -72,7 +74,7 @@
   dotnet build mod/SixtarGateMod.csproj
   ```
   - 빌드 후 `$(GameDir)\Mods\`가 있으면 `SixtarGateMod.dll`을 자동 복사함(게임 실행 중 잠겨 있으면 경고만 출력). 복사 생략 시 `-p:SkipDeploy=true`.
-- **순수 모듈 단위 테스트 (게임 DLL 불필요, 11개 파일 95건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동, CI는 이어서 `tools/bodycheck`도 실행):**
+- **순수 모듈 단위 테스트 (게임 DLL 불필요, 13개 파일 109건, GitHub Actions CI `ubuntu-latest` .NET 8 Release 연동, CI는 이어서 `tools/bodycheck`도 실행):**
   ```powershell
   dotnet test tests/SixtarGateMod.Tests/SixtarGateMod.Tests.csproj
   ```

@@ -2,6 +2,19 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [2.3.8] - 2026-11-26
+
+### 수정
+- hwa 폴더 지문: 곡 폴더 자체의 수정 시각을 빼고 계산을 `HwaStamp` 하나로 통일. Windows가 하위 폴더 시각을 부모 색인에 늦게 반영해 스캔과 CUSTOM 탭 진입 확인이 다른 지문을 낼 수 있었고, 그러면 불필요한 재스캔과 증분 재사용 실패(BMS 재해석)가 났음. 변경 확인 중 예외는 모두 잡음.
+- 큰 `MaxScore`(예: 1e10)에서 점수가 int 범위를 넘어 음수로 나오던 문제: 상한 10억, 0 이하·비정상 값은 1,000,000, 고치면 경고(`ScoreMath`).
+
+### 테스트·문서
+- 단위 테스트 95건 → **109건**(`HwaStampTests` 5, `ScoreMathTests` 9).
+- [`REVIEW_2026-11-26.md`](docs/03-development/REVIEW_2026-11-26.md) 추가, `AGENTS.md`·`CURRENT_STATUS.md`·`HANDOVER_NOTES.md`·`CODE_STRUCTURE.md`·`docs/README.md` 현행화.
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 109건, `tools/bodycheck` 통과, `tools/sigcheck` 통과 114·오류 0·경고 0·대체 해석 0, `tools/lambdascan` `ALL PASS`. 게임 실기는 미실행.
+
 ## [2.3.7] - 2026-11-25
 
 ### 업데이트 내성

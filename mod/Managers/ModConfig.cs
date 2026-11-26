@@ -178,8 +178,10 @@ public static class ModConfig
         AutoPlay = Bool(m, "AutoPlay", false);
         AllPerfect = Bool(m, "AllPerfect", false);
         BlockSave = Bool(m, "BlockSave", true);
-        MaxScore = Float(m, "MaxScore", 1000000f);
-        if (MaxScore <= 0f) MaxScore = 1000000f;
+        float rawMax = Float(m, "MaxScore", 1000000f);
+        MaxScore = ScoreMath.ClampMaxScore(rawMax, out bool maxClamped);
+        if (maxClamped)
+            Melon<Core>.Logger.Warning($"{LOG_PREFIX} MaxScore={rawMax}는 쓸 수 없어 {MaxScore:0}로 맞춤 (0보다 크고 {ScoreMath.MaxScoreLimit:0} 이하)");
         ScoreInvertCountdown = Bool(m, "ScoreInvertCountdown", true);
 
         EnableJudgmentBar = Bool(m, "EnableJudgmentBar", true);

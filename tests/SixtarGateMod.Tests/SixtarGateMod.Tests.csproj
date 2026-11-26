@@ -26,6 +26,8 @@
     <Compile Include="..\..\mod\Managers\NativeLambdaScan.cs" Link="Managers\NativeLambdaScan.cs" />
     <Compile Include="..\..\mod\Managers\PatchSignatureCheck.cs" Link="Managers\PatchSignatureCheck.cs" />
     <Compile Include="..\..\mod\Managers\X64Decoder.cs" Link="Managers\X64Decoder.cs" />
+    <Compile Include="..\..\mod\Managers\ScoreMath.cs" Link="Managers\ScoreMath.cs" />
+    <Compile Include="..\..\mod\Managers\HwaStamp.cs" Link="Managers\HwaStamp.cs" />
   </ItemGroup>
 
 </Project>
