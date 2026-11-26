@@ -219,6 +219,17 @@ public static class PatchSignatureCheck
             var prop = t.GetProperty(name, flags | BindingFlags.DeclaredOnly)
                     ?? t.GetProperty($"_{name}_k__BackingField", flags | BindingFlags.DeclaredOnly);
             if (prop != null) return prop.PropertyType;
+
+            // 업데이트 내성: 언더스코어 접두사 변형(_foo ↔ foo) 지원
+            string altName = name.StartsWith("_", StringComparison.Ordinal) ? name.TrimStart('_') : "_" + name;
+            if (altName.Length > 0)
+            {
+                var fAlt = t.GetField(altName, flags | BindingFlags.DeclaredOnly);
+                if (fAlt != null) return fAlt.FieldType;
+                var propAlt = t.GetProperty(altName, flags | BindingFlags.DeclaredOnly)
+                           ?? t.GetProperty($"_{altName}_k__BackingField", flags | BindingFlags.DeclaredOnly);
+                if (propAlt != null) return propAlt.PropertyType;
+            }
         }
         return null;
     }

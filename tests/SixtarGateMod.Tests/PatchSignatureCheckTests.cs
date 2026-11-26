@@ -17,7 +17,8 @@ public class PatchSignatureCheckTests
     private class Target
     {
         private int field = 0;
-        public Target(int id) { _ = field; }
+        private string _title = "test";
+        public Target(int id) { _ = field; _ = _title; }
         public int Prop { get; set; }
         public void Judge(int lane, float time, Derived data) { }
         public static void StaticCall(int lane) { }
@@ -49,7 +50,7 @@ public class PatchSignatureCheckTests
     private static class ObjectPatch { public static void Prefix(object data) { } }
     private static class ObjectResultPatch { public static void Postfix(object __result) { } }
     private static class RefArgPatch { public static void Prefix(ref int count) { } }
-    private static class SpecialArgsPatch { public static void Prefix(int __state, object[] __args, MethodBase __originalMethod, int ___field) { } }
+    private static class SpecialArgsPatch { public static void Prefix(int __state, object[] __args, MethodBase __originalMethod, int ___field, string ___title) { } }
 
     private static string? Run(Type patch, string target, List<string>? warnings = null)
         => PatchSignatureCheck.Check(patch, new[] { T(target) }, warnings ?? new List<string>());

@@ -21,6 +21,7 @@ public static class TrackInfoParser
 {
     // Apostrophe-like characters a title may carry: ' ’ ‘ ` ＇ ′
     private const string Q = "['’‘`＇′]";
+    private static readonly char[] ApostrophesAndSpaces = { '\'', '’', '‘', '`', '＇', '′', '　' };
     private static readonly Regex RegexOClock = new($@"\b([Oo])\s*{Q}\s*(clock)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     // French/Italian elision with a space before the quote ("D ' Arc", "L ' amour"). The space before the quote is
     // required so "Guns N' Roses" stays, and the word must not end in a quote so "M 'Hello'" stays.
@@ -53,6 +54,10 @@ public static class TrackInfoParser
     public static string NormalizeMetadataText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return "";
+        // Fast-path: 아포스트로피류, 전각 공백, 탭, 연속 공백이 없으면 5개 정규식 검사를 건너뛰어 대량 스캔 시 GC/CPU 낭비를 없앰
+        if (text.IndexOfAny(ApostrophesAndSpaces) < 0 && text.IndexOf('\t') < 0 && !text.Contains("  "))
+            return text.Trim();
+
         string s = text.Replace('　', ' ');
         s = RegexOClock.Replace(s, "$1'$2");
         s = RegexPrefix.Replace(s, "$1'$2");
