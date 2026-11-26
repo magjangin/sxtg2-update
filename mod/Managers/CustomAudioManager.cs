@@ -145,9 +145,12 @@ public static class CustomAudioManager
 
     public static void StopAll()
     {
-        var channels = new List<ISoundModule.SoundChannel>(Streams.Keys);
-        foreach (var ch in channels)
-            StopLocal(ch);
+        while (Streams.Count > 0)
+        {
+            using var enumerator = Streams.Keys.GetEnumerator();
+            if (!enumerator.MoveNext()) break;
+            StopLocal(enumerator.Current);
+        }
     }
 
     [HarmonyPatch(typeof(SoundModuleForFMOD), nameof(SoundModuleForFMOD.Stop))]

@@ -28,6 +28,11 @@ public class TrackInfoParserTests
         Assert.Equal("don't", TrackInfoParser.NormalizeMetadataText("don ' t"));
         Assert.Equal("rock 'n' roll", TrackInfoParser.NormalizeMetadataText("rock '  n '  roll"));
         Assert.Equal("Guns N' Roses", TrackInfoParser.NormalizeMetadataText("Guns N' Roses"));
+        Assert.Equal("Starting Point", TrackInfoParser.NormalizeMetadataText("  Starting Point  "));
+        Assert.Equal("3 o'clock", TrackInfoParser.NormalizeMetadataText("3 o ' clock"));
+        Assert.Equal("D'Arc", TrackInfoParser.NormalizeMetadataText("D ' Arc"));
+        Assert.Equal("Hello World", TrackInfoParser.NormalizeMetadataText("Hello　World"));
+        Assert.Equal("A B C", TrackInfoParser.NormalizeMetadataText("A   B\tC"));
     }
 
     [Fact]

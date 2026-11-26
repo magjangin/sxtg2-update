@@ -14,7 +14,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using SixtarGateMod.Managers;
 using SixtarGateMod.Features;
 
-[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.8", "화영왕 (Hwa-young-wang)")]
+[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.3.9", "화영왕 (Hwa-young-wang)")]
 [assembly: MelonGame("Lyrebird Studio", "Sixtar Gate STARTRAIL")]
 // OnInitializeMelon calls PatchAll itself; without this MelonLoader auto-patches too and every hook runs twice.
 [assembly: HarmonyDontPatchAll]
@@ -108,21 +108,22 @@ public class Core : MelonMod
     // The overlays belong to the play scene only; leaving it (result screen, music select) ends the session.
     public override void OnSceneWasLoaded(int buildIndex, string sceneName)
     {
-        LoggerInstance.Msg($"[Scene] 씬 로드: '{sceneName}'");
-        _inRenewalPlay = string.Equals(sceneName, "Renewal_Play", StringComparison.OrdinalIgnoreCase);
+        string sName = sceneName ?? "";
+        LoggerInstance.Msg($"[Scene] 씬 로드: '{sName}'");
+        _inRenewalPlay = string.Equals(sName, "Renewal_Play", StringComparison.OrdinalIgnoreCase);
         if (!_inRenewalPlay)
         {
-            bool definiteBoundary = string.Equals(sceneName, "Result", StringComparison.OrdinalIgnoreCase)
-                || sceneName.IndexOf("MusicSelect", StringComparison.OrdinalIgnoreCase) >= 0
-                || sceneName.IndexOf("PlayLoading", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool definiteBoundary = string.Equals(sName, "Result", StringComparison.OrdinalIgnoreCase)
+                || sName.IndexOf("MusicSelect", StringComparison.OrdinalIgnoreCase) >= 0
+                || sName.IndexOf("PlayLoading", StringComparison.OrdinalIgnoreCase) >= 0;
             PlayAssist.EndPlay(resetSessionPointer: definiteBoundary);
         }
-        if (sceneName.IndexOf("MusicSelect", StringComparison.OrdinalIgnoreCase) < 0)
+        if (sName.IndexOf("MusicSelect", StringComparison.OrdinalIgnoreCase) < 0)
             CustomJackets.ClearRowCache();
-        CustomMarathon.OnSceneLoaded(sceneName);
+        CustomMarathon.OnSceneLoaded(sName);
         // 커스텀 곡 Renewal_Play → Result를 게임 내부 예외 없이 지나면 이 빌드를 실기 확인으로 기록
         // (IsCustomTrackActive는 결과 화면을 떠나는 GotoMusicSelect Postfix까지 유지됨)
-        UpdateGuard.OnSceneLoaded(sceneName, IsCustomTrackActive,
+        UpdateGuard.OnSceneLoaded(sName, IsCustomTrackActive,
             CustomTrackManager.CurrentSelectedAlbum?.Title ?? (IsCustomTrackActive ? "기본 1노트 곡" : null));
     }
 

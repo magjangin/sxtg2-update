@@ -2,6 +2,24 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [2.3.9] - 2026-11-26
+
+### 성능·병목
+- `TrackInfoParser.NormalizeMetadataText`: 아포스트로피류·전각 공백·탭·다중 공백이 없는 일반 제목·아티스트 문자열에 대해 5개 정규식을 건너뛰는 Fast-Path 추가(수백 곡 대량 스캔 시 정규식 5회 및 불필요한 문자열 복사·GC 부하 제거).
+- `CustomAudioManager.StopAll`: 채널 정지 순회 시 `new List<...>` 힙 할당을 제거하고 내부 사전 순회 해제 루프로 최적화.
+
+### 업데이트 내성·안정성
+- `Core.OnSceneWasLoaded`: `sceneName` null 방어 처리(`sceneName ?? ""`). 특수 씬 전환이나 언로드 시 NRE로 후속 정리/마라톤/UpdateGuard 호출이 중단되는 문제 방어.
+- `PatchSignatureCheck`: 필드 주입 `___fieldName` 확인 시 대상 클래스의 언더스코어 접두사 변형(`_foo` ↔ `foo`) 자동 감지 지원으로 Il2CppInterop 필드/속성 매핑 내성 강화.
+- `BmsParser`: 마지막 노트 시각 계산 시 `float.IsFinite` 검사 추가(비정상 배율/마디로 인한 `NaN`/`Infinity` 오염 방지).
+
+### 테스트·문서
+- 단위 테스트 109건 유지 및 정규화 Fast-Path/언더스코어 필드 주입 케이스 보강.
+- [`REVIEW_2026-11-26.md`](docs/03-development/REVIEW_2026-11-26.md) 2차 감사 항목 갱신, `CURRENT_STATUS.md`·`HANDOVER_NOTES.md`·`AGENTS.md` 현행화.
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 109건, `tools/bodycheck` 통과, `tools/sigcheck` 통과 114·오류 0·경고 0·대체 해석 0.
+
 ## [2.3.8] - 2026-11-26
 
 ### 수정

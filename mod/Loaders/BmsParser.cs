@@ -197,7 +197,7 @@ public static class BmsParser
                 if (isEnd && !pending) continue;
                 pending = n.Type == 2 || n.Type == 4 || (pending && !isEnd);
                 float t = toSeconds(n.Measure, n.Frac);
-                if (t > maxTime) maxTime = t;
+                if (float.IsFinite(t) && t > maxTime) maxTime = t;
             }
         }
         return new ParseResult(baseBpm, maxTime, title, artist);
