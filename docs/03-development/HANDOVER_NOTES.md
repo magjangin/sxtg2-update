@@ -42,8 +42,9 @@
 - **`[IcfShared]` 목록 (2개):**
   - `Features/CustomJackets.cs`: `PlayLoading_JacketCallback_Patch`, `PlayLoading_ThumbnailCallback_Patch` (`MaxShared=2`, Outer Space 판 `DisplayClass35_0`과 `<>4__this` 오프셋 동일)
 
-## 6. 실기 검증 대기 현황 (2026-11-25, v2.3.7)
+## 6. 실기 검증 대기 현황 (2026-11-26, v2.3.8)
 
+- v2.3.8(2026-11-26): hwa 폴더 지문 통일(`HwaStamp`, 폴더 시각 제외)·`MaxScore` 상한. 실기 때 `info.txt` 수정 후 CUSTOM 탭에 두 번 들어가 `변경 감지` 로그가 한 번만 나오는지 확인.
 - v2.3.7(2026-11-25 2차): 판정바 모양 실패 캐시·자켓 이중 해독 제거·랜덤 노트 스킨 setter 축소·기증 곡 선택 내성. 실기 때 랜덤 노트 스킨 플레이의 노트 모양(늘어남·비율), 곡 선택 직후 시작한 커스텀 곡의 로딩 화면 자켓, 부팅 로그에 `[CustomCategory] 기증 곡 … 대신 씀` 경고가 **없는지** 확인.
 - v2.3.6(2026-11-25): 커스텀 곡 경로 게이트·노트 위치 훅 최적화. 실기 때 부팅 로그 `[CustomCategory] 커스텀 곡 플레이 경로 패치 모두 적용됨, CUSTOM 탭 사용 가능`, 속도 카오스(노트별)·히든 켠 커스텀 곡 플레이 → 결과 화면 확인 필요. 오프라인 검증은 xUnit 95건·sigcheck 114·lambdascan 통과.
 - 2026-11-18~24 변경분(v2.3.0~v2.3.5: 파일 분리, `verifiedPlay`, 시그니처 대조·오버로드/바뀐 시그니처 자동 선택, 로더 지문, 증분 재스캔, 2차 전 파일 감사)은 **Release/Debug 빌드(경고/오류 0), xUnit 94건, `tools/bodycheck` 통과, `tools/sigcheck` 114개 통과·오류 0·대체 해석 0, `lambdascan` `ALL PASS`**까지 오프라인 검증 완료 상태.

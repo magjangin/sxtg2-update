@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-25)
+# 현재 상태 (2026-11-26)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 118개(`[Harmony] 패치 118개 모두 적용 완료`, 2026-11-14 3차 정리 전 120개). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -81,6 +81,7 @@
 39. 전 파일 심층 감사·업데이트 내성·병목·문서 현행화·v2.3.5 (2026-11-24, [상세](03-development/REVIEW_2026-11-24.md) 6장): **업데이트 내성** `CustomAudioManager` `CurrectionVolume` 동적 getter 통일, `UpdateGuard` `ListVerified` 변경 시 2번째 부팅 검증 우회 방지, `PatchPreflight` 닫힌 제네릭 사전 JIT, `PatchSignatureCheck`(`ref object`·`bool`↔`byte`·`___field`) + `NoteEffects` 동적 시그니처 검사, `IcfScanner` 미발견 `-1`, `X64Decoder`(`vzeroupper`/SIB index/`0x3C`)·`LambdaTranslator`(`VirtualQuery`). **병목/수정** `PngDecoder` RGBA 행 단위 복사·손상 zlib `false` 반환, `CustomTrackManager` 단일 순회 지문, `MediaOverrideManager` 중복 텍스처 방지·JPG 바이트 재사용, `Overlay.HideAll` 파괴 캔버스 가드·`CustomMarathon.Update` 분리·`CustomBga` 세대 카운터, `BmsParser` 네이티브 채널/`Infinity`/`#TITLE` 구분자, `release.ps1`·`check_update.ps1` stderr 안전 처리. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 94건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
 40. 3차 전 파일 감사·기능 묶음 게이트·v2.3.6 (2026-11-25, [상세](03-development/REVIEW_2026-11-25.md)): **업데이트 내성** 커스텀 곡 플레이 경로 필수 패치 5개 중 하나라도 안 붙으면 CUSTOM 탭을 만들지 않음(전에는 탭이 생겨 곡을 고르면 로딩에서 멈춤), 결과는 부팅 로그 패치 요약 아래에. **병목** `NoteEffects` 노트·프레임당 `_tickData` 래퍼(GC 핸들) 제거·`Pointer` 1회, `RandomNoteSkin` 스폰당 `Pointer` 1회, 페이드 중 `ApplyVolumes` 조기 반환. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 95건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행(사용자 요청으로 미룸).
 41. 2차 점검·v2.3.7 (2026-11-25, [상세](03-development/REVIEW_2026-11-25.md) 6장): **병목** 원시 텍스처 업로드가 막힌 환경에서 판정바 모양 버퍼를 매 프레임 재계산하던 것 제거, 플레이 흐름 자켓이 진행 중인 비동기 해독을 기다려 같은 PNG 이중 해독 제거, `RandomNoteSkin` 스폰당 Image setter 5 → 3. **업데이트 내성** CUSTOM 곡 기증 곡을 "Starting Point"(TrackData) → 첫 TrackData → 첫 곡 순으로 고르고 대체 시 경고. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 95건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
+42. 관리자 점검·테스트로 버그 2건·v2.3.8 (2026-11-26, [상세](03-development/REVIEW_2026-11-26.md)): **버그** hwa 폴더 지문에 들어간 곡 폴더 수정 시각이 Windows 부모 색인 지연으로 스캔과 탭 진입 확인에서 달라 불필요한 재스캔·증분 재사용 실패가 나던 것(지문을 `HwaStamp`로 통일, 폴더 시각 제외), 큰 `MaxScore`에서 점수가 음수로 넘치던 것(`ScoreMath`, 상한 10억). **검증:** Release/Debug 빌드 경고/오류 0, xUnit 109건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
 
 ## 알려진 한계
 

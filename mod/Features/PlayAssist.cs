@@ -179,7 +179,7 @@ public static class PlayAssist
     }
 
     /// <summary>Score at a full combo of BLUESTARs: MaxScore, or the game's 1,000,000.</summary>
-    private static int MaxScoreTotal => ModConfig.IsMaxScoreCustom ? (int)Math.Floor(ModConfig.MaxScore) : ScoreProcessor.MAX_SCORE;
+    private static int MaxScoreTotal => ModConfig.IsMaxScoreCustom ? ScoreMath.Total(ModConfig.MaxScore) : ScoreProcessor.MAX_SCORE;
 
     // UpdateScore computes floor(fraction / notes * 1000000.0) natively (no IL to transpile), then raises
     // OnReverseScoreUpdate (1000000 - points lost so far, for the game's ScoreInvert option) and OnScoreUpdate.
@@ -195,7 +195,7 @@ public static class PlayAssist
         private static int _lastScore;
         private static bool _scored;
 
-        private static int Scale(int v) => ModConfig.IsMaxScoreCustom ? (int)Math.Floor(v * (double)ModConfig.MaxScore / 1000000.0) : v;
+        private static int Scale(int v) => ModConfig.IsMaxScoreCustom ? ScoreMath.Scale(v, ModConfig.MaxScore) : v;
 
         public static void Prefix(ScoreProcessor __instance, out (Il2CppSystem.Action<int>? score, Il2CppSystem.Action<int>? reverse) __state)
         {

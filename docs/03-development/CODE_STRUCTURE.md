@@ -1,6 +1,6 @@
 # 코드 구조
 
-`mod/` 36개 파일, 10,268줄 (2026-11-25 v2.3.7 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(11개 테스트 파일, 95건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
+`mod/` 38개 파일, 10,328줄 (2026-11-26 v2.3.8 갱신). 순수 모듈 단위 테스트는 `tests/SixtarGateMod.Tests/`(13개 테스트 파일, 109건)에 있습니다. 모듈 관계는 [ARCHITECTURE.md](../00-overview/ARCHITECTURE.md), 훅 목록은 [HOOK_TABLE.md](../02-systems/HOOK_TABLE.md).
 
 | 파일 | 줄 | 역할 |
 | --- | ---: | --- |
@@ -39,6 +39,8 @@
 | `Features/CustomMusicSelect.cs` | 70 | 목록 복귀 위치 |
 | `Features/Unlock.cs` | 37 | 전곡 & DLC 클라이언트 해금 오버라이드 |
 | `Managers/AtomicFile.cs` | 58 | 임시 파일(`.tmp`) → `File.Move` 원자적 UTF-8 쓰기 유틸 (`UpdateGuard`·`LambdaTranslator`·`IcfScanner`·`ModConfig` 공용) |
+| `Managers/HwaStamp.cs` | 55 | hwa 폴더 변경 감지 지문(파일 이름·크기·수정 시각, 폴더 시각 제외). 스캔과 탭 진입 확인 공용 |
+| `Managers/ScoreMath.cs` | 38 | `MaxScore` 범위 맞춤과 int 포화 점수 환산(순수 계산) |
 | `Models/CustomAlbumInfo.cs` | 34 | 앨범 정보 |
 
 ## 순수 모듈 테스트 (`tests/SixtarGateMod.Tests/`, 77건)
@@ -55,6 +57,8 @@
 | `TrackInfoParserTests.cs` | 2 | `TrackInfoParser` 다국어 키·전각 구분자·축약형 정규화 |
 | `PngDecoderTests.cs` | 9 | `PngDecoder` 필터 1·2(Sub·Up)·팔레트+tRNS·박스 축소·인터레이스/16비트 거부·잘린 데이터·픽셀 상한(`MaxPixels`) |
 | `AtomicFileTests.cs` | 3 | `AtomicFile` 상위 폴더 생성·`.tmp` 미잔류·덮어쓰기·BOM 없음 |
+| `HwaStampTests.cs` | 5 | 스캔·변경 확인 지문 일치, 제자리/같은 크기 수정·새 폴더 감지, 하위 폴더 정렬 |
+| `ScoreMathTests.cs` | 9 | `MaxScore` 범위 맞춤, 상한에서 넘침 없음, 게임과 같은 내림 |
 | `SourceHygieneTests.cs` | 2 | 이유 없는 빈 `catch` 금지, `csproj` `<Version>`과 `MelonInfo` 버전 일치 |
 
 ## 코드 규칙
