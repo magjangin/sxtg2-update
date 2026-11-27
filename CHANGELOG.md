@@ -2,6 +2,24 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [2.4.0] - 2026-11-27
+
+### 성능·병목
+- `JudgmentBar`: 매 프레임 `HitHistory.RemoveRange(0, expired)`로 발생하던 `Array.Copy` 메모리 이동 병목 제거. 활성 틱 인덱스를 전진시키고 만료 항목이 16개 이상 누적되었을 때만 일괄 정리하도록 최적화.
+- `TextDecoder`: 자주 쓰이는 CJK 코드페이지(Shift-JIS 932, CP949 949, GBK 936, Big5 950)에 대한 `Encoding` 인스턴스를 동시성 캐시에 보관하여 반복 팩토리 조회 및 예외 생성 오버헤드 제거.
+- `SxtgBmsConverter`: 비정상적인 분모 누적으로 인한 과대 해상도(resolution) 폭증을 방지하도록 최대 마디 해상도 상한(`MaxResolution = 3072`) 적용(마디당 거대 `char[]` 할당 방어).
+
+### 기능·업데이트 내성
+- `CustomNoteSkin`: `CustomNotes/` 폴더 실시간 지문 감지 및 자동 핫리로드 지원. 부팅 시 폴더가 비어 있었거나 게임 실행 중 노트를 추가/수정한 경우에도 다음 플레이 준비 시 자동 반영.
+- `PatchSignatureCheck`: `___fieldName` 필드 주입 인자 대조 시 언더스코어 접두사뿐 아니라 대소문자 무시(case-insensitive) 폴백을 추가하여 게임 업데이트 시 프로퍼티/필드 명명 규칙 차이에 대한 내성 극대화.
+
+### 테스트·문서
+- 단위 테스트 109건 → **111건** 통과(`SxtgBmsConverterTests.Convert_LimitsMaxResolution`, `TextDecoderTests.Decode_CachedEncoding_ConsistentOnMultipleCalls` 추가).
+- [`REVIEW_2026-11-27.md`](docs/03-development/REVIEW_2026-11-27.md) 추가, `CURRENT_STATUS.md`·`HANDOVER_NOTES.md`·`AGENTS.md`·`docs/README.md` 현행화.
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 111건, `tools/bodycheck` 통과, `tools/sigcheck` 통과 114·오류 0·경고 0·대체 해석 0.
+
 ## [2.3.9] - 2026-11-26
 
 ### 성능·병목

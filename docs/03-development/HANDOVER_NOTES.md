@@ -42,8 +42,9 @@
 - **`[IcfShared]` 목록 (2개):**
   - `Features/CustomJackets.cs`: `PlayLoading_JacketCallback_Patch`, `PlayLoading_ThumbnailCallback_Patch` (`MaxShared=2`, Outer Space 판 `DisplayClass35_0`과 `<>4__this` 오프셋 동일)
 
-## 6. 실기 검증 대기 현황 (2026-11-26, v2.3.9)
+## 6. 실기 검증 대기 현황 (2026-11-27, v2.4.0)
 
+- v2.4.0(2026-11-27): 판정바 메모리 이동 병목 해소, BMS 최대 해상도 3072 상한 가드, CJK 인코딩 캐싱, 필드 주입 대소문자 내성, 커스텀 노트 실시간 핫리로드.
 - v2.3.9(2026-11-26 2차): 메타데이터 정규화 Fast-Path(단순 곡명 5개 정규식 생략), `StopAll` 무할당 정리, 씬 로드 null-safety(`sceneName ?? ""`), 필드 주입 `_` 접두사 변형 내성, BMS MaxTime `float.IsFinite` 가드.
 - v2.3.8(2026-11-26 1차): hwa 폴더 지문 통일(`HwaStamp`, 폴더 시각 제외)·`MaxScore` 상한. 실기 때 `info.txt` 수정 후 CUSTOM 탭에 두 번 들어가 `변경 감지` 로그가 한 번만 나오는지 확인.
 - v2.3.7(2026-11-25 2차): 판정바 모양 실패 캐시·자켓 이중 해독 제거·랜덤 노트 스킨 setter 축소·기증 곡 선택 내성. 실기 때 랜덤 노트 스킨 플레이의 노트 모양(늘어남·비율), 곡 선택 직후 시작한 커스텀 곡의 로딩 화면 자켓, 부팅 로그에 `[CustomCategory] 기증 곡 … 대신 씀` 경고가 **없는지** 확인.

@@ -75,7 +75,8 @@ docs/
 - [REVIEW_2026-11-22.md](03-development/REVIEW_2026-11-22.md): 빈 `catch` 12곳 정리, `PngDecoder` 픽셀 상한, 테스트 71건(PNG·AtomicFile·소스 규칙), v2.3.1
 - [REVIEW_2026-11-23.md](03-development/REVIEW_2026-11-23.md): 인자 형식을 지정한 훅 대상의 시그니처 변경 대체 해석(`PickChangedSignature`), 대체 해석 시 점검 결과 경고, 매 프레임·매 노트 Unity null 비교 제거, 테스트 74건, v2.3.2 / 추가 점검: 로더 버전 지문, CUSTOM 대소문자 무시 비교, 테스트 77건, v2.3.3
 - [REVIEW_2026-11-25.md](03-development/REVIEW_2026-11-25.md): 3차 전 파일 감사 — 커스텀 곡 경로 패치가 반쪽이면 CUSTOM 탭 숨김, 노트 위치 훅 래퍼 할당 제거, 페이드 중 볼륨 호출 제거, 테스트 95건, v2.3.6 / 6장 2차 점검 — 판정바 모양 실패 캐시, 자켓 이중 해독 제거, 랜덤 노트 스킨 setter 축소, 기증 곡 선택 내성, v2.3.7
-- [REVIEW_2026-11-26.md](03-development/REVIEW_2026-11-26.md): 관리자 점검 — hwa 폴더 지문 불일치(Windows 하위 폴더 시각 지연)와 `MaxScore` 넘침을 단위 테스트로 찾아 수정, 테스트 109건, v2.3.8
+- [REVIEW_2026-11-26.md](03-development/REVIEW_2026-11-26.md): 관리자 점검 — hwa 폴더 지문 불일치와 `MaxScore` 넘침 수정, 메타데이터 정규화 Fast-Path, v2.3.8~v2.3.9
+- [REVIEW_2026-11-27.md](03-development/REVIEW_2026-11-27.md): 심층 최적화 — 판정바 메모리 복사 제거, BMS 최대 해상도 3072 가드, CJK 인코딩 캐싱, 필드 주입 대소문자 내성, 커스텀 노트 핫리로드, 테스트 111건, v2.4.0
 - [REVIEW_2026-11-24.md](03-development/REVIEW_2026-11-24.md): `hwa\` 증분 재스캔, 자켓 교체 재시작 없이 반영, v2.3.4 / 2차 전 파일 심층 감사(업데이트 내성·병목·버그·문서 현행화, 테스트 94건), v2.3.5
 
 **04-game-reference**

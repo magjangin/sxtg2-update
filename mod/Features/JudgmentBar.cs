@@ -39,6 +39,8 @@ public static class JudgmentBar
 
     private static readonly Dictionary<(int, int, int), Sprite> ShapeCache = new();
 
+    private static int _firstActiveIndex;
+
     public static void RegisterHit(float deltaTimeSeconds, int judge)
     {
         float offsetMs = -deltaTimeSeconds * 1000f;
@@ -55,6 +57,7 @@ public static class JudgmentBar
     public static void Reset()
     {
         HitHistory.Clear();
+        _firstActiveIndex = 0;
         _lastHitTime = -999f;
         _lastHitText = "";
         _labelDirty = false;
@@ -65,9 +68,16 @@ public static class JudgmentBar
         if (!ModConfig.EnableJudgmentBar || !PlayAssist.IsPlaying) return;
 
         // Ticks are appended in time order, so the expired ones are always at the front.
-        int expired = 0;
-        while (expired < HitHistory.Count && now - HitHistory[expired].TimeAdded > Duration) expired++;
-        if (expired > 0) HitHistory.RemoveRange(0, expired);
+        while (_firstActiveIndex < HitHistory.Count && now - HitHistory[_firstActiveIndex].TimeAdded > Duration)
+            _firstActiveIndex++;
+
+        // 매 프레임 RemoveRange로 Array.Copy(메모리 이동)가 일어나는 것을 방지:
+        // 만료된 항목이 16개 이상 쌓였거나 전체의 절반 이상일 때만 한 번에 정리한다.
+        if (_firstActiveIndex >= 16 || (_firstActiveIndex > 0 && _firstActiveIndex * 2 >= HitHistory.Count))
+        {
+            HitHistory.RemoveRange(0, _firstActiveIndex);
+            _firstActiveIndex = 0;
+        }
 
         float screenW = Overlay.ScreenWidth, screenH = Overlay.ScreenHeight;
         bool vertical = ModConfig.JudgmentBarVertical;
@@ -94,8 +104,9 @@ public static class JudgmentBar
 
         Overlay.Rect(vertical ? new Box(cx - barW / 2f - 2f, cy - 1f, barW + 4f, 2f) : new Box(cx - 1f, cy - barH / 2f - 2f, 2f, barH + 4f), CenterLine);
 
-        foreach (var tick in HitHistory)
+        for (int i = _firstActiveIndex; i < HitHistory.Count; i++)
         {
+            var tick = HitHistory[i];
             float off = Math.Clamp(tick.OffsetMs, -maxMs, maxMs) * pxPerMs;
             var c = Overlay.WithAlpha(tick.Color, Overlay.Clamp01(1f - (now - tick.TimeAdded) / Duration) * 0.9f);
             Overlay.Rect(vertical ? new Box(cx - barW / 2f - 1f, cy - off - 1f, barW + 2f, 2f) : new Box(cx + off - 1f, cy - barH / 2f - 1f, 2f, barH + 2f), c);

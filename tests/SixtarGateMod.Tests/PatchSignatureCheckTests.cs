@@ -50,7 +50,7 @@ public class PatchSignatureCheckTests
     private static class ObjectPatch { public static void Prefix(object data) { } }
     private static class ObjectResultPatch { public static void Postfix(object __result) { } }
     private static class RefArgPatch { public static void Prefix(ref int count) { } }
-    private static class SpecialArgsPatch { public static void Prefix(int __state, object[] __args, MethodBase __originalMethod, int ___field, string ___title) { } }
+    private static class SpecialArgsPatch { public static void Prefix(int __state, object[] __args, MethodBase __originalMethod, int ___field, string ___title, string ___Title) { } }
 
     private static string? Run(Type patch, string target, List<string>? warnings = null)
         => PatchSignatureCheck.Check(patch, new[] { T(target) }, warnings ?? new List<string>());

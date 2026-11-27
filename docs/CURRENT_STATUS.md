@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-26, v2.3.9)
+# 현재 상태 (2026-11-27, v2.4.0)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 118개(`[Harmony] 패치 118개 모두 적용 완료`, 2026-11-14 3차 정리 전 120개). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -83,6 +83,7 @@
 41. 2차 점검·v2.3.7 (2026-11-25, [상세](03-development/REVIEW_2026-11-25.md) 6장): **병목** 원시 텍스처 업로드가 막힌 환경에서 판정바 모양 버퍼를 매 프레임 재계산하던 것 제거, 플레이 흐름 자켓이 진행 중인 비동기 해독을 기다려 같은 PNG 이중 해독 제거, `RandomNoteSkin` 스폰당 Image setter 5 → 3. **업데이트 내성** CUSTOM 곡 기증 곡을 "Starting Point"(TrackData) → 첫 TrackData → 첫 곡 순으로 고르고 대체 시 경고. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 95건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
 42. 관리자 점검·테스트로 버그 2건·v2.3.8 (2026-11-26, [상세](03-development/REVIEW_2026-11-26.md)): **버그** hwa 폴더 지문에 들어간 곡 폴더 수정 시각이 Windows 부모 색인 지연으로 스캔과 탭 진입 확인에서 달라 불필요한 재스캔·증분 재사용 실패가 나던 것(지문을 `HwaStamp`로 통일, 폴더 시각 제외), 큰 `MaxScore`에서 점수가 음수로 넘치던 것(`ScoreMath`, 상한 10억). **검증:** Release/Debug 빌드 경고/오류 0, xUnit 109건, bodycheck·sigcheck(통과 114·오류 0)·lambdascan 통과. 실기는 미실행.
 43. 종합 감사·병목 해결·업데이트 내성 강화·v2.3.9 (2026-11-26, [상세](03-development/REVIEW_2026-11-26.md)): **병목** `TrackInfoParser.NormalizeMetadataText` 일반 문자열 5개 정규식 생략 Fast-Path 추가, `CustomAudioManager.StopAll` `new List<...>` 힙 할당 제거. **업데이트 내성/안정성** `Core.OnSceneWasLoaded` `sceneName` null-safety 방어, `PatchSignatureCheck` 필드 주입 `___fieldName` 언더스코어 접두사 변형(`_foo` ↔ `foo`) 감지, `BmsParser` `float.IsFinite` 검사 추가. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 109건, bodycheck·sigcheck(통과 114·오류 0) 통과. 실기는 미실행.
+44. 심층 최적화·BMS 해상도 가드·노트 스킨 핫리로드·v2.4.0 (2026-11-27, [상세](03-development/REVIEW_2026-11-27.md)): **병목** `JudgmentBar` 매 프레임 `RemoveRange` 메모리 이동 제거(인덱스 전진 및 16개 일괄 정리), `TextDecoder` CJK 인코딩 동시성 캐싱. **업데이트 내성/안정성** `SxtgBmsConverter` 최대 해상도 상한(`MaxResolution = 3072`) 가드(과대 char[] 할당 방어), `PatchSignatureCheck` 필드 주입 대소문자 무시(case-insensitive) 폴백 추가. **기능** `CustomNoteSkin` 실시간 핫리로드 지원. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 111건, bodycheck·sigcheck(통과 114·오류 0) 통과. 실기는 미실행.
 
 ## 알려진 한계
 
