@@ -2,6 +2,19 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [2.4.1] - 2026-11-27
+
+### 내성·안정성
+- `BmsParser`: `BuildTimeMapper`의 0/극소 BPM 이벤트(0 나누기 및 `Infinity`/`NaN` 발생 가능성) 원천 방어(`Math.Max(0.1f, curBpm)` 적용). 비정상 마디 번호나 희소 마디 차트 파싱 시 `measureStartPos` 배열 인덱스 초과 예외를 방어하도록 `Math.Clamp` 안전 가드 추가.
+- `CustomMarathon`: 결과 화면 자동 진행(`SixtarGlobal.GotoMusicSelect()`) 실패 시 예외 가드(`try-catch`) 추가 및 상태 플래그(`_autoAdvanced = false`) 복구(연쇄 진행 차단 고착 방지).
+
+### 테스트·문서
+- 단위 테스트 111건 → **113건** 통과(`BmsParserTests.Parse_ZeroOrNearZeroBpm_DoesNotProduceInfiniteOrCrash`, `BmsParserTests.Parse_InvalidOrSparseMeasureIndex_DoesNotThrowIndexOutOfRange` 추가).
+- `CURRENT_STATUS.md` 및 `AGENTS.md` 현행화.
+
+### 검증
+- Release/Debug 빌드 경고/오류 0, xUnit 113건, `tools/bodycheck` 통과, `tools/sigcheck` 통과 114·오류 0·경고 0·대체 해석 0.
+
 ## [2.4.0] - 2026-11-27
 
 ### 성능·병목

@@ -159,7 +159,15 @@ public static class CustomMarathon
         if (auto > 0f && !_autoAdvanced && now - _resultShownAt >= auto)
         {
             _autoAdvanced = true;
-            SixtarGlobal.GotoMusicSelect(); // diverted to the next song by Core's prefix
+            try
+            {
+                SixtarGlobal.GotoMusicSelect(); // diverted to the next song by Core's prefix
+            }
+            catch (Exception ex)
+            {
+                _autoAdvanced = false; // 호출 실패 시 플래그를 복구해 다음 기회나 수동 전환을 허용
+                Melon<Core>.Logger.Warning($"[Marathon] 다음 곡 자동 전환 호출 실패: {ex.Message}");
+            }
         }
     }
 
