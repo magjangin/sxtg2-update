@@ -139,4 +139,33 @@ public class BmsParserTests
 
         Assert.Equal(1.5f, result.MaxTime, 3);
     }
+
+    [Fact]
+    public void Parse_ZeroOrNearZeroBpm_DoesNotProduceInfiniteOrCrash()
+    {
+        var result = BmsParser.Parse(new[]
+        {
+            "#BPM 0",
+            "#BPM01 0.0001",
+            "#00008:0100",
+            "#00116:0100",
+        });
+
+        Assert.True(float.IsFinite(result.MaxTime));
+        Assert.True(result.MaxTime > 0f);
+    }
+
+    [Fact]
+    public void Parse_InvalidOrSparseMeasureIndex_DoesNotThrowIndexOutOfRange()
+    {
+        var result = BmsParser.Parse(new[]
+        {
+            "#BPM 120",
+            "#00002:1.0",
+            "#00516:0100",
+        });
+
+        Assert.True(float.IsFinite(result.MaxTime));
+        Assert.True(result.MaxTime > 0f);
+    }
 }

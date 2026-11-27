@@ -209,6 +209,7 @@ public static class BmsParser
         Dictionary<int, double>? measureScales,
         List<(int Measure, double Frac, int Seq, float Bpm)>? bpmEvents)
     {
+        baseBpm = Math.Max(0.1f, baseBpm);
         if (measureScales == null && (bpmEvents == null || bpmEvents.Count == 0))
             return (m, f) => (float)((m + f) * 240.0 / baseBpm);
 
@@ -241,7 +242,7 @@ public static class BmsParser
                 if (deltaFrac > 0.0)
                     curTime += deltaFrac * scale * 240.0 / curBpm;
                 mFracPos = ev.Frac;
-                curBpm = ev.Bpm;
+                curBpm = Math.Max(0.1f, ev.Bpm);
                 double evPos = mStartPos + ev.Frac * scale;
                 if (segments.Count > 0 && segments[^1].Pos == evPos)
                     segments[^1] = (evPos, curTime, curBpm);
@@ -270,12 +271,14 @@ public static class BmsParser
 
         return (m, f) =>
         {
-            double scale = measureScales != null && measureScales.TryGetValue(m, out double s) ? s : 1.0;
-            double targetPos = measureStartPos[m] + f * scale;
+            int safeM = Math.Clamp(m, 0, measureStartPos.Length - 1);
+            double scale = measureScales != null && measureScales.TryGetValue(safeM, out double s) ? s : 1.0;
+            double targetPos = measureStartPos[safeM] + f * scale;
             int idx = Array.BinarySearch(segPos, targetPos);
             if (idx < 0) idx = (~idx) - 1;
             if (idx < 0) idx = 0;
-            return (float)(segTime[idx] + (targetPos - segPos[idx]) * 240.0 / segBpm[idx]);
+            float bpm = Math.Max(0.1f, segBpm[idx]);
+            return (float)(segTime[idx] + (targetPos - segPos[idx]) * 240.0 / bpm);
         };
     }
 
