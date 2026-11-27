@@ -73,27 +73,67 @@ public static class CustomNoteSkin
         return list;
     }
 
+    private static long _lastNotesStamp = -1;
+
+    private static long ComputeFolderStamp(string folder)
+    {
+        if (!Directory.Exists(folder)) return 0;
+        try
+        {
+            var files = Directory.GetFiles(folder, "*.png");
+            long sum = files.Length;
+            foreach (var f in files)
+            {
+                var fi = new FileInfo(f);
+                sum = sum * 31 + fi.Length + fi.LastWriteTimeUtc.Ticks;
+            }
+            return sum;
+        }
+        catch { return 0; }
+    }
+
     /// <summary>
     /// 플레이 준비(StartrailPatternRenderer.Register, 노트가 나오기 전)에서 부른다: 커스텀 노트를 쓸 플레이면 스프라이트를
-    /// 미리 올려, 텍스처 첫 생성 비용이 첫 노트가 나오는 순간에 걸리지 않게 한다.
+    /// 미리 올려, 텍스처 첫 생성 비용이 첫 노트가 나오는 순간에 걸리지 않게 한다. 폴더 파일이 바뀌었으면 자동 리로드.
     /// </summary>
     public static void PrepareForPlay()
     {
         ResetForNewPlay();
-        if (!_loaded && ModConfig.CustomNotes && !ModConfig.RandomNoteSkin) EnsureLoaded();
+        if (ModConfig.CustomNotes && !ModConfig.RandomNoteSkin)
+        {
+            long stamp = ComputeFolderStamp(FolderPath);
+            if (!_loaded || stamp != _lastNotesStamp)
+            {
+                _lastNotesStamp = stamp;
+                EnsureLoaded(forceReload: _loaded);
+            }
+        }
     }
 
-    /// <summary>해독해 둔 PNG를 스프라이트로 올린다(처음 한 번, 메인 스레드). 스프라이트가 하나라도 있으면 true.</summary>
-    private static bool EnsureLoaded()
+    /// <summary>해독해 둔 PNG를 스프라이트로 올린다(메인 스레드). forceReload 시 폴더를 다시 읽음. 스프라이트가 하나라도 있으면 true.</summary>
+    private static bool EnsureLoaded(bool forceReload = false)
     {
-        if (_loaded) return Sprites.Count > 0;
+        if (_loaded && !forceReload) return Sprites.Count > 0;
         _loaded = true;
         var decode = _decode;
         _decode = null;
-        if (decode == null) return false;
+
+        List<Decoded>? items = null;
+        if (decode != null && !forceReload)
+        {
+            try { items = decode.Result; }
+            catch (Exception) { /* 백그라운드 해독 태스크 실패 시 아래에서 빈 목록으로 안전 폴백 */ }
+        }
+        else if (Directory.Exists(FolderPath))
+        {
+            try { items = DecodeAll(Directory.GetFiles(FolderPath, "*.png")); }
+            catch (Exception) { /* 파일 I/O 실패 시 아래에서 기존 스프라이트 유지 */ }
+        }
+
+        if (items == null) return Sprites.Count > 0;
         try
         {
-            foreach (var d in decode.Result)
+            foreach (var d in items)
             {
                 Sprite? sprite = null;
                 if (d.Rgba != null && MediaOverrideManager.TextureFromRgba(d.Width, d.Height, d.Rgba) is { } tex)

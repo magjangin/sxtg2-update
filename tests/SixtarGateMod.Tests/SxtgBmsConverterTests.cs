@@ -57,6 +57,16 @@ public class SxtgBmsConverterTests
     }
 
     [Fact]
+    public void Convert_LimitsMaxResolution()
+    {
+        // 7, 11, 13, 17, 19, 23 같은 극단적인 분모 조합이 있어도 MaxResolution(3072)을 넘지 않음
+        string sxtg = "#00116:01000000000000\n#00111:0100000000000000000000\n";
+        string converted = SxtgBmsConverter.Convert(sxtg, out int notes);
+        Assert.Equal(2, notes);
+        Assert.NotEmpty(converted);
+    }
+
+    [Fact]
     public void NormalizeValueWidth_RewritesThreeCharWavAndData()
     {
         string sxtg3 = "#WAV001 note.wav\n#WAV010 bgm.ogg\n#00116:001000002003\n";

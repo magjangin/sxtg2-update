@@ -31,6 +31,7 @@ public static class SxtgBmsConverter
     };
 
     private const int OPEN_CHANNEL = 56;
+    private const int MaxResolution = 3072;
 
     private static readonly Regex WavLine = new(@"^#WAV([0-9A-Za-z]{3})(\s.*)?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
@@ -210,6 +211,7 @@ public static class SxtgBmsConverter
         {
             int resolution = 1;
             foreach (var (_, len) in markers) resolution = Lcm(resolution, len);
+            if (resolution > MaxResolution) resolution = MaxResolution;
             char[] slots = new char[resolution * 2];
             Array.Fill(slots, '0');
             foreach (var (index, length) in markers)

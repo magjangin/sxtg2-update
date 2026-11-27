@@ -47,4 +47,16 @@ public class TextDecoderTests
 
         Assert.Equal("Title: 하얀 그리움", text);
     }
+
+    [Fact]
+    public void Decode_CachedEncoding_ConsistentOnMultipleCalls()
+    {
+        byte[] sjis = Encoding.GetEncoding(932).GetBytes("#ARTIST テストアーティスト");
+
+        string text1 = TextDecoder.Decode(sjis, TextDecoder.BmsFallback, out string enc1);
+        string text2 = TextDecoder.Decode(sjis, TextDecoder.BmsFallback, out string enc2);
+
+        Assert.Equal(text1, text2);
+        Assert.Equal(enc1, enc2);
+    }
 }

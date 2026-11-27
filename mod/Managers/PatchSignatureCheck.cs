@@ -230,6 +230,20 @@ public static class PatchSignatureCheck
                            ?? t.GetProperty($"_{altName}_k__BackingField", flags | BindingFlags.DeclaredOnly);
                 if (propAlt != null) return propAlt.PropertyType;
             }
+
+            // 대소문자 무시 폴백 (예: fieldName ↔ FieldName, _fieldName ↔ _FieldName)
+            foreach (var field in t.GetFields(flags | BindingFlags.DeclaredOnly))
+            {
+                if (string.Equals(field.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                    (altName.Length > 0 && string.Equals(field.Name, altName, StringComparison.OrdinalIgnoreCase)))
+                    return field.FieldType;
+            }
+            foreach (var property in t.GetProperties(flags | BindingFlags.DeclaredOnly))
+            {
+                if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                    (altName.Length > 0 && string.Equals(property.Name, altName, StringComparison.OrdinalIgnoreCase)))
+                    return property.PropertyType;
+            }
         }
         return null;
     }

@@ -20,6 +20,7 @@ public static class TextDecoder
 
     private static bool _providerRegistered;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, Encoding> CachedEncodings = new();
 
     public static string ReadAllText(string path, int[] fallbackCodePages)
         => Decode(File.ReadAllBytes(path), fallbackCodePages, out _);
@@ -56,7 +57,11 @@ public static class TextDecoder
             if (codePage <= 0 || codePage == 65001) continue;
             try
             {
-                var enc = Encoding.GetEncoding(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
+                if (!CachedEncodings.TryGetValue(codePage, out var enc))
+                {
+                    enc = Encoding.GetEncoding(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
+                    CachedEncodings[codePage] = enc;
+                }
                 string text = enc.GetString(bytes);
                 encodingName = enc.WebName;
                 return text;
