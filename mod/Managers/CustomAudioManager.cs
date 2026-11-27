@@ -143,15 +143,8 @@ public static class CustomAudioManager
         }
     }
 
-    public static void StopAll()
-    {
-        while (Streams.Count > 0)
-        {
-            using var enumerator = Streams.Keys.GetEnumerator();
-            if (!enumerator.MoveNext()) break;
-            StopLocal(enumerator.Current);
-        }
-    }
+    /// <summary>게임 종료 시: FMOD를 부르지 않고 관리 목록만 비운다(종료 중 FMOD 호출은 크래시, Core.OnDeinitializeMelon 참고).</summary>
+    public static void ForgetAll() => Streams.Clear();
 
     [HarmonyPatch(typeof(SoundModuleForFMOD), nameof(SoundModuleForFMOD.Stop))]
     [CriticalPatch("커스텀 FMOD 스트림 정지 및 핸들 해제")]

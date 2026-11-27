@@ -97,7 +97,9 @@ public class Core : MelonMod
         }
     }
 
-    public override void OnDeinitializeMelon() => CustomAudioManager.StopAll();
+    // 게임 종료 중에는 FMOD를 부르지 않는다: 커스텀 곡 재생(일시정지 포함) 중 창을 닫으면 FMOD RuntimeManager가 이미
+    // 정리되는 중이라 Sound.release가 coreclr 접근 위반으로 크래시했다(2026-11-27 덤프). 프로세스 종료가 핸들을 회수한다.
+    public override void OnDeinitializeMelon() => CustomAudioManager.ForgetAll();
 
     // sxtg2 overlays (judgment bar, key viewer). IMGUI drawing is stripped from this game build
     // ("Method unstripping failed"), so they draw on a pooled uGUI canvas once per frame instead of OnGUI.
@@ -141,7 +143,9 @@ public class Core : MelonMod
                 CustomMarathon.Update(now);
             // 판정바·키뷰어를 둘 다 끄고 마라톤 배너도 없으면 그릴 것이 없다: 캔버스 생성과 매 프레임
             // 화면 크기·배율 조회(IL2CPP 호출 3번)를 건너뛰고, 전에 그린 것만 한 번 숨긴다.
-            bool playOverlay = PlayAssist.IsPlaying && (ModConfig.EnableJudgmentBar || ModConfig.EnableKeyViewer);
+            // 일시정지 메뉴가 열려 있으면 판정바·키뷰어를 숨긴다(메뉴를 가림).
+            bool playOverlay = PlayAssist.IsPlaying && !PauseWatch.IsPaused
+                && (ModConfig.EnableJudgmentBar || ModConfig.EnableKeyViewer);
             if (!playOverlay && !CustomMarathon.IsShowingResultBanner)
             {
                 if (!_overlayIdle) { Overlay.HideAll(); _overlayIdle = true; }

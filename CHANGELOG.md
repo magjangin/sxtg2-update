@@ -2,6 +2,18 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 `mod/SixtarGateMod.csproj`의 `<Version>`입니다. 상세 기록은 `docs/CURRENT_STATUS.md`와 `docs/03-development/REVIEW_*.md`.
 
+## [Unreleased]
+
+### 버그 수정
+- 일시정지 메뉴가 열려 있는 동안 판정바·키뷰어를 숨김(`Features/PauseWatch.cs`). Esc 입력 경로(`CommonPauseProcessor.<SetInput>b__27_0`)는 `Pause()` 본문을 인라인으로 품어 `Pause` 훅을 거치지 않으므로, `CommonPauseProcessor.Initialize`에서 처리기 포인터를 기억하고 매 프레임 `_pauseTime`(≥0 = 일시정지)을 `Marshal`로 직접 읽음.
+- 커스텀 곡 재생(일시정지 포함) 중 게임을 닫으면 크래시하던 문제: `OnDeinitializeMelon`에서 FMOD `Sound.release`를 부르던 `StopAll`을 FMOD 호출 없는 `ForgetAll`로 교체(종료 중 FMOD가 이미 정리돼 coreclr 접근 위반).
+
+### 진단
+- `[Pause]` 로그: 일시정지 메뉴 열림(`PausePopup.Open`, 세 경로 공통), `Pause()`/`Pause(bool)` 호출, 재생 중 플레이어의 창 포커스 변화(곡 시작 전 여부). 게임은 곡 시작 전 포커스를 잃으면 시작하자마자 일시정지함(`StartrailPatternPlayer.OnApplicationFocus` → `StartAndPause`).
+
+### 검증
+- 게임 빌드 `26945073`에서 Esc 일시정지 메뉴 오버레이 숨김·커스텀 곡 재생 중 종료 무크래시 실기 확인. 패치 123개 적용, `tools/sigcheck` 통과 119·오류 0, xUnit 113건, `tools/bodycheck` 통과.
+
 ## [2.4.1] - 2026-11-27
 
 ### 내성·안정성
