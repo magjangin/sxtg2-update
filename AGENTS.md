@@ -5,6 +5,7 @@
 ## 1. 대상 게임 정보 & 버전 고정
 - **게임명:** Sixtar Gate: STARTRAIL (`Steam AppID: 1802720`)
 - **Steam Build ID:** `26455233` (게임 내 표기 `ver 1.1.007 / Release 1 (1027)`, 2026-11-06 업데이트. 이전 기준: `26218612`)
+  - **2026-11-27 17:26 새 빌드 `26945073` 설치됨** (`Release 1 (1028)`). 패치 123개 모두 적용·커스텀 곡 플레이/일시정지/종료 실기 확인, 단 결과 화면까지 플레이 전이라 `UpdateGuard` 미검증 상태. `StartrailPatternPlayer`·`CommonPauseProcessor` RVA는 기존 `il2cpp_dump`와 동일(Assembly-CSharp 코드 배치 유지).
   - `.acf` `AutoUpdateBehavior=0`으로 자동 업데이트 미차단. 업데이트 시 `tools/version_diff/check_update.ps1`로 `cpp2il_out`·`slices/` diff와 패치 시그니처 대조(`tools/sigcheck`)를 확인.
 - **Unity 버전:** `2022.3.50f1` (IL2CPP 메타데이터 `v31` / 31.1)
 - **모드 로더:** MelonLoader 0.7.3 (.NET 6 런타임)
@@ -37,6 +38,7 @@
 - **곡 종료 시점 (`Core.cs`):** `FinishProcessor.Initialize` (`0x63FE10`) + `FinishProcessor.UpdatePatternTime` (`0x6401A0`, `max(album.Duration, FMOD 스트림 길이)`로 연장).
 - **오디오 (`Core.cs`, `Managers/CustomAudioManager.cs`):** `SoundModuleForFMOD.Play` (`0x7E11E0`) → FMOD Core `createStream` 직접 재생 및 `Stop`/`Pause`/`Resume`/`GetTimelinePosition`/`set_CurrectionVolume`/`ChangeVolume` 연동.
 - **BGA & 자켓 (`Features/CustomBga.cs`, `Features/CustomJackets.cs`):** `BackgroundUIProcessor` URL 재적용·`PlayBGA`/`PauseBGA`/`IsVideoPlayable` 대체; `TrackInfoViewer.Set`, `TrackObject.SetTrack`/`<LoadThumbnail>b__1`, `PlayLoadingManager`, `Pause.TrackInfoViewerModule`, `Result.TrackInfoModule`/`TravelBackgroundModule` 비동기/지연 자켓 적용.
+- **일시정지 (`Features/PauseWatch.cs`):** `CommonPauseProcessor.Initialize` (`0x63E7C0`, 처리기 포인터 기억) → 매 프레임 `_pauseTime`(0x50, ≥0 = 일시정지)을 `Marshal`로 읽어 오버레이 숨김. 진단 로그만: `Pause()` (`0x63E950`), `Pause(bool)` (`0x63EA40`), `PausePopup.Open` (`0x682450`, 세 경로 공통), `StartrailPatternPlayer.OnApplicationFocus` (`0x664030`, 씬에 플레이어 컴포넌트 4개라 `_args != null`인 것만).
 - **플레이 보조 & 오버레이 (`Features/PlayAssist.cs`, `Overlay.cs`, `JudgmentBar.cs`, `KeyViewer.cs`, `NoteEffects.cs`, `CustomNoteSkin.cs`, `RandomNoteSkin.cs`, `CustomMarathon.cs`):** `JudgeProcessor.Judge`/`OnTickEvent`/`SetPressedState`, `ScoreProcessor.UpdateScore`, `PlayRecordModule.Record*`, `StartrailPatternRenderer.GetNoteObejct`/`Register`, `AttendanceController` 팝업 생략.
 - **메타데이터 & 설정 (`Loaders/TrackInfoParser.cs`, `TextDecoder.cs`, `Managers/ModConfig.cs`):** `{게임}\hwa\` 스캔(`info.txt` → BMS `#TITLE`/`#ARTIST` → 폴더명), `{게임}\SaveCustomKey\config.txt` 동적 리로드(읽기 성공 후에만 수정 시각 기록), `hwa\` 변경 감지는 곡 폴더 안 파일 크기·수정 시각까지(1초 간격), 재스캔은 폴더 지문이 같은 곡을 재사용(증분), 자켓 캐시 키 = 곡 ID + 자켓 파일 크기·수정 시각.
 
@@ -68,6 +70,9 @@
 - **메타데이터 정규화 시 일반 문자열에도 5개 정규식 무조건 실행 (2026-11-26 이전):** 특수 아포스트로피류·전각 공백이 없는 일반 곡명에도 정규식 5개가 실행되어 대량 스캔 시 병목 → Fast-Path 분기 추가.
 - **판정바 만료 틱을 매 프레임 RemoveRange로 삭제 (2026-11-27 이전):** 매 프레임 `Array.Copy`가 일어나 메모리 대역폭 낭비 → 활성 인덱스 전진 및 16개 이상 모였을 때 일괄 정리.
 - **BMS 변환 시 무제한 해상도(resolution) 확장 (2026-11-27 이전):** 분모 최소공배수가 커지면 마디당 거대 char[] 할당 → `MaxResolution = 3072` 상한 설정.
+- **일시정지를 `CommonPauseProcessor.Pause` 훅으로만 감지 (2026-11-27):** Esc 입력 람다 `<SetInput>b__27_0`이 `Pause()` 본문을 인라인으로 품고 있어 훅을 안 거침 → 메뉴가 열려도 판정바·키뷰어가 남음. 경로를 쫓지 말고 상태 필드(`_pauseTime`)를 읽을 것.
+- **종료 시(`OnDeinitializeMelon`) FMOD 핸들 해제 (2026-11-27 이전):** 커스텀 곡 재생 중 창을 닫으면 FMOD가 이미 정리되는 중이라 `Sound.release`가 coreclr 접근 위반 크래시(덤프 `%LOCALAPPDATA%\CrashDumps`) → 종료 중엔 FMOD를 부르지 않고 관리 목록만 비움(`CustomAudioManager.ForgetAll`).
+- **"곡 시작 시 저절로 일시정지"를 모드 버그로 단정:** 게임 원래 동작으로, 곡 시작 전(`_startTime < 0`) 창 포커스를 잃으면 `Started`에 `StartAndPause`를 걸어 시작 즉시 일시정지함. `[Pause] 창 포커스 잃음 (곡 시작 전=True)` 로그로 구분.
 - **기타:** `pe_slice` 네임스페이스 필수(`SixtarGate.BMSConverter`), `Cpp2IL`은 `< NUL` 리디렉션 필수, `AllTracks` 직접 주입 금지, 게임 실행 중 `Mods\SixtarGateMod.dll` 잠금.
 
 ## 6. 빌드, 테스트 및 배포 경로
@@ -90,11 +95,11 @@
   ```powershell
   dotnet run --project tools/sigcheck -- [mod/bin/Release/net6.0/SixtarGateMod.dll] [게임 폴더]
   ```
-  빌드 `26455233` 기준(2026-11-23): 통과 114, 오류 0, 경고 0, 대상 미확인 4(LambdaTranslator 클로저 콜백 — IL2CPP 런타임 필요, 모두 `Il2CppObjectBase __instance`만 받음), 오버로드로 고름 0, 바뀐 시그니처로 고름 0.
+  빌드 `26945073` 기준(2026-11-27): 통과 119, 오류 0, 경고 0, 대상 미확인 4. 이전 빌드 `26455233` 기준(2026-11-23): 통과 114, 오류 0, 경고 0, 대상 미확인 4(LambdaTranslator 클로저 콜백 — IL2CPP 런타임 필요, 모두 `Il2CppObjectBase __instance`만 받음), 오버로드로 고름 0, 바뀐 시그니처로 고름 0.
 - **릴리즈 (`tools/release.ps1`, 게임 설치 PC에서 실행 — 빌드에 게임 DLL이 필요해 GitHub Actions에서는 불가):**
   ```powershell
   .\tools\release.ps1            # 버전 일치 확인 + Release 빌드 + 단위 테스트 + sigcheck → dist\SixtarGateMod-v<버전>.zip, 노트 초안
   .\tools\release.ps1 -Publish   # 위 + main=origin/main·깨끗한 트리 확인 → 태그 v<버전> 푸시 → gh release create
   ```
   버전 기준은 csproj `<Version>`이며 `Core.cs` `MelonInfo`·`CHANGELOG.md` `## [<버전>]`이 다르면 중단. 릴리즈 노트 = CHANGELOG 해당 항목 + 설치 안내(게임 빌드는 1절에서 읽음) + SHA256. 이미 있는 태그면 중단하므로 먼저 세 곳의 버전을 올릴 것.
-- **로그:** `{GameDir}\MelonLoader\Latest.log` (정상 기동: `[Harmony] 패치 118개 모두 적용 완료`), Unity 예외는 `%USERPROFILE%\AppData\LocalLow\Lyrebird Studio\Sixtar Gate STARTRAIL\Player.log`.
+- **로그:** `{GameDir}\MelonLoader\Latest.log` (정상 기동: `[Harmony] 패치 123개 모두 적용 완료`), Unity 예외는 `%USERPROFILE%\AppData\LocalLow\Lyrebird Studio\Sixtar Gate STARTRAIL\Player.log`.

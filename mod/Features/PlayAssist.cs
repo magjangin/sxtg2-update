@@ -35,6 +35,7 @@ public static class PlayAssist
         if (resetSessionPointer)
             _currentJudgePtr = IntPtr.Zero;
         CurrentJudge = null;
+        PauseWatch.Reset();
         Array.Clear(LanePressed, 0, LanePressed.Length);
         Overlay.HideAll();
         NoteEffects.EndPlay();
