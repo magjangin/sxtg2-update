@@ -1,4 +1,4 @@
-# 현재 상태 (2026-11-27, v2.4.1)
+# 현재 상태 (2026-11-28, v2.4.2)
 
 게임 Steam Build `26455233`(ver 1.1.007, 커스텀 곡 플레이~결과 화면 실기 검증), MelonLoader 0.7.3, 패치 클래스 118개(`[Harmony] 패치 118개 모두 적용 완료`, 2026-11-14 3차 정리 전 120개). 시작 로그의 `[UpdateGuard] 게임 빌드 … (실기 검증된 빌드)`로 빌드 확인.
 
@@ -86,6 +86,7 @@
 44. 심층 최적화·BMS 해상도 가드·노트 스킨 핫리로드·v2.4.0 (2026-11-27, [상세](03-development/REVIEW_2026-11-27.md)): **병목** `JudgmentBar` 매 프레임 `RemoveRange` 메모리 이동 제거(인덱스 전진 및 16개 일괄 정리), `TextDecoder` CJK 인코딩 동시성 캐싱. **업데이트 내성/안정성** `SxtgBmsConverter` 최대 해상도 상한(`MaxResolution = 3072`) 가드(과대 char[] 할당 방어), `PatchSignatureCheck` 필드 주입 대소문자 무시(case-insensitive) 폴백 추가. **기능** `CustomNoteSkin` 실시간 핫리로드 지원. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 111건, bodycheck·sigcheck(통과 114·오류 0) 통과. 실기는 미실행.
 
 45. 심층 엣지 케이스 가드·BMS 극소 BPM 방어·v2.4.1 (2026-11-27, [상세](03-development/REVIEW_2026-11-27.md)): **내성·안정성** `BmsParser` `BuildTimeMapper`의 0/극소 BPM 이벤트(0 나누기 및 Infinity 오염) 원천 방어 및 희소/비정상 마디 인덱스 초과 예외 `Math.Clamp` 가드 추가, `CustomMarathon` 자동 진행 호출 실패 시 예외 가드 및 상태 플래그 복구. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 113건, bodycheck·sigcheck(통과 114·오류 0) 통과. 실기는 미실행.
+46. 일시정지 판정바 숨김·종료 무크래시·PngDecoder 예외 가드·v2.4.2 (2026-11-28): **버그 수정** 일시정지 중 판정바/키뷰어 숨김(`Marshal`로 `_pauseTime` 직접 감지), 커스텀 곡 재생 중 게임 종료 시 FMOD 해제 크래시 방지(`ForgetAll`), `PngDecoder` 압축 해제 시 `IOException` 방어. **검증:** Release/Debug 빌드 경고/오류 0, xUnit 114건, bodycheck·sigcheck 통과.
 
 ## 알려진 한계
 

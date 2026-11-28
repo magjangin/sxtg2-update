@@ -185,4 +185,19 @@ public class PngDecoderTests
         Assert.False(PngDecoder.TryDecode(Png(1, 1, 2, new byte[] { 0, 1, 2, 3 }, trns: new byte[] { 0, 0, 0, 0, 0, 0 }), 0, out _, out _, out _));
         Assert.False(PngDecoder.TryDecode(Png(1, 1, 0, new byte[] { 5, 100 }), 0, out _, out _, out _));
     }
+
+    [Fact]
+    public void CorruptedZlibData_CatchesIOExceptionAndReturnsFalse()
+    {
+        // 유효하지 않은 zlib 바이트가 IDAT에 들어간 경우 예외 없이 false 반환
+        var png = new MemoryStream();
+        png.Write(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 });
+        var ihdr = new byte[13];
+        ihdr[3] = 1; ihdr[7] = 1; ihdr[8] = 8; ihdr[9] = 2; // RGB 1x1
+        png.Write(Chunk("IHDR", ihdr));
+        png.Write(Chunk("IDAT", new byte[] { 0x78, 0x9C, 0xFF, 0xFF, 0x00, 0x00, 0x01 })); // 손상된 zlib 스트림
+        png.Write(Chunk("IEND", Array.Empty<byte>()));
+
+        Assert.False(PngDecoder.TryDecode(png.ToArray(), 0, out _, out _, out _));
+    }
 }

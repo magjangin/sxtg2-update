@@ -14,7 +14,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using SixtarGateMod.Managers;
 using SixtarGateMod.Features;
 
-[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.4.1", "화영왕 (Hwa-young-wang)")]
+[assembly: MelonInfo(typeof(SixtarGateMod.Core), "SixtarGateMod", "2.4.2", "화영왕 (Hwa-young-wang)")]
 [assembly: MelonGame("Lyrebird Studio", "Sixtar Gate STARTRAIL")]
 // OnInitializeMelon calls PatchAll itself; without this MelonLoader auto-patches too and every hook runs twice.
 [assembly: HarmonyDontPatchAll]
