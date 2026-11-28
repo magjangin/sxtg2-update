@@ -94,7 +94,7 @@ public static class PngDecoder
                 read += n;
             }
         }
-        catch (InvalidDataException)
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
         {
             return false;
         }
